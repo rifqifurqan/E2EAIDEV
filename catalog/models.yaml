@@ -23,6 +23,11 @@ models:
   - {id: "multilingual-e5-large", role: embedding, served_by: tei, source: "intfloat/multilingual-e5-large", size_gb: 2.24, mem_gb: 2.6, license: mit, license_class: permissive, languages: "100 languages", dim: 1024}
 
   # --- reranker ---------------------------------------------------------------------------------
+  # GPU-tier only for now. On the CPU TEI image both entries restart-loop: the model loads on Candle
+  # then the process dies ~3-4s into "Warming up model" on a Lite-sized Docker VM (verified
+  # 2026-10-04, gte-multilingual-reranker-base). Lite defaults to reranker "none" (FR-R2). Re-enable
+  # recommendation once reranking is validated on the GPU TEI image. mem_gb below is steady-state,
+  # not the warmup spike.
   - {id: "gte-multilingual-reranker-base", role: reranker, served_by: tei, source: "Alibaba-NLP/gte-multilingual-reranker-base", size_gb: 1.22, mem_gb: 1.6, license: apache-2.0, license_class: permissive, languages: "75 languages"}
   - {id: "bge-reranker-v2-m3", role: reranker, served_by: tei, source: "BAAI/bge-reranker-v2-m3", size_gb: 2.27, mem_gb: 3.0, license: apache-2.0, license_class: permissive, languages: "multilingual"}
 

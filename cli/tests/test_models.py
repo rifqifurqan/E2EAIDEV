@@ -52,8 +52,8 @@ def test_license_warnings():
 def test_recommendations_for_the_owners_laptop():
     rec = models.recommend_all(CATALOG, PC)
     assert rec["chat"] == ["qwen3.5:4b"]          # largest permissive model inside 6 GB VRAM
-    assert rec["embedding"] == ["bge-m3"]         # TEI embedding + reranker don't both fit 4.8 GB
-    assert rec["reranker"] == ["gte-multilingual-reranker-base"]
+    assert rec["embedding"] == ["bge-m3"]         # TEI embedding doesn't fit 4.8 GB; bge-m3 on Ollama/GPU
+    assert rec["reranker"] == []                  # reranker "none" on Lite CPU (FR-R2); see recommend_all
     assert rec["vision"] == [] and rec["safety"] == []
 
 

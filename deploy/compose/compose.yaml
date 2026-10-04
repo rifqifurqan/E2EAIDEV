@@ -102,6 +102,9 @@ services:
     restart: unless-stopped
 
   tei-rerank:
+    # Reranking is GPU-tier only for now: this CPU TEI image restart-loops during warmup for the
+    # catalog rerankers on a Lite-sized Docker VM (verified 2026-10-04). Lite uses reranker "none"
+    # (FR-R2). Enable this profile only with the GPU TEI image once that path is validated.
     profiles: [tei-rerank]
     image: ${E2EAI_IMAGE_TEI:-}
     command: ["--model-id", "${TEI_RERANK_MODEL}"]

@@ -78,15 +78,15 @@ def recommend_all(catalog: dict[str, Model], machine: Machine) -> dict[str, list
     """Hardware-based suggestion only; the user decides. Vision and safety are opt-in add-ons."""
     by_role = {r: [m for m in catalog.values() if m.role == r] for r in ROLES}
     chat = _pick(by_role["chat"], machine, 0)
-    # Embedding + reranker must share Docker memory when both run on TEI: try the pair first.
-    rerank = _pick(by_role["reranker"], machine, 0)
-    used = rerank.mem_gb if rerank else 0.0
-    emb = _pick([m for m in by_role["embedding"] if m.served_by == "tei"], machine, used) or _pick(
-        [m for m in by_role["embedding"] if m.served_by == "ollama"], machine, used)
+    # Reranking is optional (FR-R2 allows "none"). The catalog rerankers only serve on the CPU TEI
+    # image, which restart-loops during warmup on a Lite-sized Docker VM (verified 2026-10-04).
+    # Recommend "none" until a GPU reranker path is validated; the models stay in the catalog to pick.
+    emb = _pick([m for m in by_role["embedding"] if m.served_by == "tei"], machine, 0.0) or _pick(
+        [m for m in by_role["embedding"] if m.served_by == "ollama"], machine, 0.0)
     return {
         "chat": [chat.id] if chat else [],
         "embedding": [emb.id] if emb else [],
-        "reranker": [rerank.id] if rerank else [],
+        "reranker": [],
         "vision": [],
         "safety": [],
     }
