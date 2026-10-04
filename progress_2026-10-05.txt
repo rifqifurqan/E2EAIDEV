@@ -4,8 +4,10 @@ For: the project owner and any builder (human or AI) picking up the work.
 Source of truth: E2EAIDEV_PRD.md (v1.5, Part II design approved D1-D5). Decisions: AGENTS.md.
 
 WHERE WE ARE
-Phase 0 (Foundations): about 65% done. Infrastructure runs on the owner's PC and models answer
+Phase 0 (Foundations): about 80% done. Infrastructure runs on the owner's PC and models answer
 through the gateway. API Phase 0 core is tested, migrated, and exposes health/ready endpoints.
+The OpenFGA T4 model is exported, tested, bootstrappable, and a one-command verify-phase-0 passes
+end to end against the live stack.
 Local auth (argon2id), Valkey sessions, CSRF, a login rate-limit placeholder, the bootstrap admin,
 and the demo org seed are implemented with secret-free unit tests.
 
@@ -52,15 +54,29 @@ DONE AND VERIFIED
     POST `/api/v1/auth/login` -> 200, GET `/api/v1/me` -> `andi@demo.e2eai`, POST `/api/v1/auth/logout`
     with CSRF -> 200, and GET `/api/v1/me` after logout -> 401.
 
-IN PROGRESS
-- OpenFGA store/model live bootstrap test and model file/test export.
+- OpenFGA model export + tests + operator bootstrap + verify-phase-0 (PRD T4, §17 line 921):
+  - deploy/openfga/model.fga: the PRD T4 DSL, verbatim, as the human-readable model copy. The
+    JSON form in authz.py (MODEL/MODEL_HASH) stays the single source of truth the API writes.
+  - tests/test_authz_model.py: model shape vs PRD T4; stable sha256 MODEL_HASH; a drift guard that
+    the .fga file and the JSON MODEL declare the same type set; Authz.check true-only-on-allowed via
+    a fake client; connect() store-create + model-write and idempotent-when-hash-matches via a fake
+    httpx client + fake session; plus one opt-in live test (skipif not E2EAI_LIVE).
+  - manage.py: `e2eai-api bootstrap-authz` (idempotent connect: find/create store, write model if the
+    hash changed, print store_id/model_id) and `e2eai-api verify-phase-0`.
+  - verify.py: `verify-phase-0` runs 8 steps and exits non-zero on any failure. The OpenFGA step uses
+    a throwaway engine inside its own loop (the cached db.py engine binds asyncpg to an earlier step's
+    now-closed loop).
+  - Verified: `cd apps/api && uv run pytest -q` -> 16 passed, 1 skipped (the live test).
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Live authz test: `E2EAI_LIVE=1 uv run pytest -q tests/test_authz_model.py` -> 7 passed.
+    `uv run e2eai-api bootstrap-authz` -> store+model ids printed; idempotent on re-run.
+  - Full stack verify (`cd apps/api && uv run e2eai-api verify-phase-0`), 2026-10-05, ALL PASSED:
+      compose health: 6 services · cli tests: 27 passed, 1 skipped · api tests: 16 passed, 1 skipped
+      alembic upgrade: head · api health/ready: 200/200 · litellm chat qwen3.5:4b: 200
+      litellm embedding bge-m3: 200 dim=1024 · openfga model + fail-closed: deny-unshared=True
 
 NEXT
-1. Add OpenFGA model write/check integration test against the running OpenFGA service.
-2. Add `make` or uv-script equivalent for `verify-phase-0`: compose health, cli tests, api tests,
-   alembic upgrade, API health/ready, LiteLLM chat/embedding smoke, OpenFGA fail-closed.
-3. Secret scan staged files against deploy/compose/.env values; commit + push passing milestone.
-4. Then Phase 1: upload -> Docling -> share -> cited answer -> zero leaks.
+1. Then Phase 1: upload -> Docling -> share -> cited answer -> zero leaks.
 
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.

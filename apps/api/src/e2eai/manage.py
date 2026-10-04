@@ -58,3 +58,22 @@ def seed_demo_cmd() -> None:
         return
     typer.secho("Demo org seeded (Andi, Budi, Intern).", fg=typer.colors.GREEN)
     typer.secho(f"Demo user password (shown once): {password}", fg=typer.colors.YELLOW)
+
+
+@app.command("bootstrap-authz")
+def bootstrap_authz_cmd() -> None:
+    """Create/find the OpenFGA store and write the PRD T4 model if it changed (PRD T4). Idempotent."""
+    from .authz import connect
+    from .core.config import get_settings
+
+    authz = _run(lambda session: connect(get_settings(), session))
+    typer.secho("OpenFGA ready.", fg=typer.colors.GREEN)
+    typer.echo(f"store_id={authz.store_id} model_id={authz.model_id}")
+
+
+@app.command("verify-phase-0")
+def verify_phase0_cmd() -> None:
+    """Exercise the whole Phase 0 slice against the running stack; exit non-zero on any failure."""
+    from .verify import run
+
+    raise typer.Exit(run())

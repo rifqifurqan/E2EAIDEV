@@ -1,0 +1,35 @@
+model
+  schema 1.1
+type user
+type org
+  relations
+    define member: [user]
+type division
+  relations
+    define member: [user]
+type team
+  relations
+    define member: [user]
+type role
+  relations
+    define member: [user]
+type guest            # reserved for external sharing (Q5); unused in the MVP
+type folder
+  relations
+    define parent: [folder]
+    define owner: [user]
+    define editor: [user, team#member, division#member, role#member, org#member, user with non_expired, team#member with non_expired] or owner or editor from parent
+    define viewer: [user, team#member, division#member, role#member, org#member, user with non_expired, team#member with non_expired] or editor or viewer from parent
+type document
+  relations
+    define parent: [folder]
+    define owner: [user]
+    define editor: [user, team#member, division#member, role#member, org#member, user with non_expired, team#member with non_expired] or owner or editor from parent
+    define viewer: [user, team#member, division#member, role#member, org#member, user with non_expired, team#member with non_expired] or editor or viewer from parent
+type bot
+  relations
+    define admin: [user]
+    define user: [user, team#member, division#member, role#member, org#member] or admin
+condition non_expired(current_time: timestamp, expires_at: timestamp) {
+  current_time < expires_at
+}
