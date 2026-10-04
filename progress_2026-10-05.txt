@@ -1,0 +1,51 @@
+E2EAIDEV - PROGRESS 2026-10-05
+==============================
+For: the project owner and any builder (human or AI) picking up the work.
+Source of truth: E2EAIDEV_PRD.md (v1.5, Part II design approved D1-D5). Decisions: AGENTS.md.
+
+WHERE WE ARE
+Phase 0 (Foundations): about 45% done. Infrastructure runs on the owner's PC and models answer
+through the gateway. The API app was just started (code pushed, not tested yet).
+
+DONE AND VERIFIED
+- PRD v1.5: Part I requirements + Part II technical design.
+- Install wizard (cli/): machine check, tier, services, ports (busy ports skipped),
+  usernames/passwords. FR-F5, FR-F19, FR-F21. 27 tests pass.
+- Wizard model step: verified catalog of 17 models (catalog/models.yaml), hardware fit,
+  license gate, recommendations; commands `e2eai init` and `e2eai models`. FR-F5a, FR-F5b.
+- Pinned Lite stack (image digests in deploy/versions.lock): Postgres+pgvector, Valkey, OpenFGA,
+  SeaweedFS, LiteLLM, Ollama 0.35.1 on GPU, TEI reranker.
+- Smoke test on the owner's PC: databases and pgvector 0.8.7 created; Valkey, OpenFGA, S3 and
+  LiteLLM all reject missing or wrong keys.
+- Chat through LiteLLM with qwen3.5:4b on the GPU: answers in Indonesian.
+- Embeddings through LiteLLM with bge-m3: 1024-dimension vectors.
+
+IN PROGRESS
+- Reranker: switched from bge-reranker-v2-m3 (restart-looped because Docker's 4.8 GB limit was
+  exhausted next to the Ollama container) to gte-multilingual-reranker-base (Apache 2.0,
+  75 languages). Container restarted; the live rerank check has NOT been run yet.
+- Wizard memory rule fixed: the Ollama container's ~1.8 GB RAM now counts against Docker's limit
+  (regression test added). Committed fa09d5f.
+- API app (apps/api), written but NOT tested: config loader, UUIDv7, RFC 9457 errors, Phase 0
+  tables (org, users, roles, credentials, audit, settings), hash-chained audit log, OpenFGA client
+  that fails closed, with the PRD T4 permission model.
+
+NEXT
+1. Verify the reranker live.
+2. API: Alembic baseline migration; local login + Valkey sessions + CSRF + login rate limit;
+   bootstrap admin; demo org seed (Andi in Sales, Budi in HR, an intern); tests, including
+   "OpenFGA down -> access denied".
+3. verify-phase-0 script -> Phase 0 exit (PRD section 13). Then Phase 1: upload -> Docling ->
+   share -> cited answer -> zero leaks.
+
+OWNER DECISIONS IN FORCE
+- Commit + push after every milestone whose tests pass.
+- %USERPROFILE%\.wslconfig limits Docker to 5 GB / 4 CPUs on purpose: do not change it.
+- LiteLLM is the gateway; Valkey instead of Redis (license); host ports in the 1xxxx range,
+  bound to 127.0.0.1.
+- Progress files: progress_<date>.txt in the repo root.
+
+HOW TO RESUME
+- Wizard tests:  cd cli && uv run pytest -q
+- Stack status:  cd deploy/compose && docker compose ps
+- Then read AGENTS.md -> Progress.
