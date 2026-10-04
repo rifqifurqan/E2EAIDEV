@@ -89,7 +89,7 @@ class Authz:
             r = await self.client.post(f"/stores/{self.store_id}/check", json=body)
             r.raise_for_status()
             return r.json().get("allowed") is True
-        except (httpx.HTTPError, ValueError) as e:
+        except Exception as e:
             log.warning("authz check failed closed: %s %s %s (%s)", user, relation, obj, e)
             return False
 
@@ -105,13 +105,21 @@ async def connect(settings: Settings, session: AsyncSession) -> Authz:
     saved = await session.get(Setting, "openfga")
     value = dict(saved.value) if saved else {}
     if value.get("store") != settings.openfga_store or not value.get("store_id"):
-        stores = (await http.get("/stores")).raise_for_status().json()["stores"]
+        stores_response = await http.get("/stores")
+        stores_response.raise_for_status()
+        stores = stores_response.json()["stores"]
         match = next((s for s in stores if s["name"] == settings.openfga_store), None)
-        store_id = match["id"] if match else (await http.post("/stores", json={"name": settings.openfga_store})).raise_for_status().json()["id"]
+        if match:
+            store_id = match["id"]
+        else:
+            create_response = await http.post("/stores", json={"name": settings.openfga_store})
+            create_response.raise_for_status()
+            store_id = create_response.json()["id"]
         value = {"store": settings.openfga_store, "store_id": store_id}
     if value.get("model_hash") != MODEL_HASH:
-        r = (await http.post(f"/stores/{value['store_id']}/authorization-models", json=MODEL)).raise_for_status()
-        value |= {"model_id": r.json()["authorization_model_id"], "model_hash": MODEL_HASH}
+        model_response = await http.post(f"/stores/{value['store_id']}/authorization-models", json=MODEL)
+        model_response.raise_for_status()
+        value |= {"model_id": model_response.json()["authorization_model_id"], "model_hash": MODEL_HASH}
     if saved:
         saved.value = value
     else:
