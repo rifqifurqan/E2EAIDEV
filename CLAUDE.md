@@ -8,7 +8,7 @@ Self-hosted **End-to-End Enterprise AI Development Lab**. It covers each lifecyc
 3. `AGENTS.md`: created in Phase 0 (PRD §17.7). It holds setup and conventions plus the **Progress** and **Decisions** sections. Read it at the start of each session.
 
 ## Current status
-- **Planning done, no code yet.** Next: **Phase 0** (PRD §13): repo skeleton, `core` Compose profile, CLI install wizard with model selection, OIDC, org model, OpenFGA, adapter framework, audit log.
+- **Planning done, no code yet.** Next: **Phase 0** (PRD §13): repo skeleton, **Lite tier first** (PRD §12; this PC is Lite-class), CLI install wizard with model selection, OIDC, org model, OpenFGA, adapter framework, audit log.
 - Update this section when a phase completes.
 
 ## Build rules (summary of PRD §17; read the full section)

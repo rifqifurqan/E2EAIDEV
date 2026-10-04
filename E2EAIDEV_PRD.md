@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Product** | E2EAIDEV — End-to-End Enterprise AI Development Lab + Permission-Aware RAG Chatbot |
-| **Version** | 1.0 (final draft for review) |
-| **Date** | 2026-10-03 |
+| **Version** | 1.4 |
+| **Date** | 2026-10-04 |
 | **Owner** | rifqifurqan |
-| **Status** | Ready for review |
+| **Status** | Complete for build. Open owner decisions in §15 all have defaults, so none of them block Phase 0. |
 | **Related** | [README.md](README.md): research, tool catalog, and architecture details. **If this PRD and the README disagree, this PRD wins.** |
 | **Builders** | Human or AI coding agents: read §17 (build contract) before writing code. |
 
@@ -48,7 +48,8 @@ E2EAIDEV solves both:
 | G6 | Teach: every stage explains *why it matters in enterprise* and links to the relevant standards. |
 
 ### 2.2 Non-goals (this version)
-- Omnichannel (WhatsApp Business, Slack, Teams, web widget). Planned later as channel adapters (§8.6).
+- Omnichannel (WhatsApp Business, Slack, Teams, web widget). Planned later as channel adapters (§7.4).
+- Native mobile apps. The web UI is responsive and works in mobile browsers (NFR-13).
 - A multi-tenant SaaS run for many separate companies. One install serves one company.
 - Training foundation models from scratch. Only fine-tuning, distillation, and quantization are in scope (P3).
 - Replacing ERP/HR systems or writing to them without user confirmation.
@@ -87,6 +88,9 @@ E2EAIDEV solves both:
 | US10 | As a **platform admin**, I install a CPU-only `core` profile in under 30 minutes on one machine, air-gapped. | P0 (online) / P2 (air-gapped) |
 | US11 | As a **learner**, I follow the "Build an HR-policy bot end to end" scenario and understand each lifecycle stage. | P2 |
 | US12 | As an **AI PM**, thumbs-down answers flow into an eval dataset so the next release fixes them. | P2 |
+| US13 | As an **admin**, I deactivate Andi when he leaves the company. His sessions and tokens stop working immediately, and his documents transfer to his manager without breaking existing shares. | P0 |
+| US14 | As a **solo developer** with a 16 GB laptop and no server, I pick the Lite tier, skip staging, use Ollama with a small model (or an external API), and still get the full share → ask → cited answer → no-leak flow. | P0 |
+| US15 | As a **maintenance technician**, I ask "How do I replace the spindle bearing on line 3's CNC?" and get the steps with the matching diagram, part numbers, torque values from the spec table, and the manual's safety warnings quoted word for word. | P1 |
 
 ---
 
@@ -98,12 +102,13 @@ E2EAIDEV solves both:
 | FR-F2 | Org model: Organization → Division → Team → User, with roles. Manual management in P0; SCIM sync from the HR system or identity provider in P2. | P0 / P2 |
 | FR-F2a | **Bootstrap admin:** the install wizard creates one local break-glass admin account (strong generated password, shown once, MFA required in P2). It works before SSO is configured and when the identity provider is down. Every use is audited. | P0 |
 | FR-F3 | Platform RBAC with roles Admin, AI Engineer, Evaluator, Compliance, Business User. Roles apply org-wide or per **Project**. A Project is a container for Lab work (datasets, eval suites and runs, bot bundles, comparison reports), owned by a team or division. Document access is **not** governed by Projects; it uses folder/document sharing (§7.1). | P0 |
-| FR-F15 | Default limits, admin-configurable: max upload 100 MB per file, 50 files per batch, 20 GB storage per user. Full quotas arrive with FR-F13. | P0 |
-| FR-F16 | **Upgrades and migrations:**<br>• Versioned, reversible database schema migrations from the first schema (P0).<br>• Upgrade procedure (P2): pre-upgrade backup → migrations → health check → automatic rollback on failure.<br>• Release notes flag breaking changes.<br>• Upgrades skip at most one minor version; the upgrade path is tested in CI. | P0 (migrations) / P2 (upgrade procedure) |
-| FR-F17 | **Secret and certificate rotation:**<br>• Rotate gateway keys, API keys, OIDC client secrets, and database credentials without downtime.<br>• TLS certificates auto-renew (ACME, or the internal CA for air-gapped installs) and alert 14 days before expiry.<br>• Emergency revocation of a leaked key takes effect within 5 minutes. | P2 |
 | FR-F4 | Install profiles: `core`, `lab-<stage>`, `lab-all`, plus GPU/CPU variants, through Docker Compose profiles and Helm values. | P0 |
-| FR-F5 | Install wizard (CLI first, UI later): detect hardware (CPU, RAM, GPU and VRAM, disk) → recommend a profile → choose tools → **choose models** (FR-F5a) → generate config → pull pinned images → download models. | P0 (CLI) / P2 (UI) |
-| FR-F5a | **Model selection is the user's choice.** The platform ships no hardcoded default model. For each role (chat LLM, embedding, reranker, judge, safety classifier), the wizard shows a curated catalog filtered by what fits the detected hardware. Each entry shows size, quantization, estimated RAM/VRAM, expected speed, languages (including Indonesian), license, and a "recommended for your hardware" badge. Users can pick several models per role (for Lab comparisons) or point to an external API through the gateway. Choices can be changed later in Admin → Models without reinstalling. | P0 |
+| FR-F19 | **Install tiers: Lite / Standard / Enterprise** (§12), chosen in the wizard. All tiers run the same codebase; a tier only changes which components are installed, through configuration behind existing interfaces. No feature forks, and the permission model is identical in every tier. | P0 (Lite, Standard) / P2 (Enterprise) |
+| FR-F20 | **Job / workflow engine, chosen in the wizard: Celery or Temporal.**<br>• Background work (ingestion, Docling parsing, VLM enrichment, re-indexing, connector sync, eval and benchmark runs) is written once against one internal job interface. A setting picks the engine.<br>• **Celery** (default, every tier): light, runs on the existing Redis.<br>• **Temporal** (Standard and Enterprise): durable multi-step workflows that survive restarts, with full run history and a workflow UI. It uses the existing Postgres.<br>• **Both engines:** retries with backoff, idempotent steps, progress shown in the UI, cancel, and the same audit events. The job contract tests run against both engines. | P0 (Celery) / P1 (Temporal) |
+| FR-F21 | **Configuration as code:** the whole install (tier, components, models, policies, egress rules, bots) is captured in one validated config file that can be versioned in git, diffed, and re-applied to rebuild an identical install. Invalid config fails at startup with a clear message. Secrets are referenced, never stored in it. | P0 (file + validation) / P1 (export from UI) |
+| FR-F22 | **Documentation deliverables** in `docs/`, in English and Indonesian:<br>• user guide<br>• admin and operator guide (install, tiers, upgrades, backups, runbooks)<br>• API reference (generated from OpenAPI)<br>• adapter developer guide (how to add a Lab tool). | P0 (user, admin) / P1 (API, adapter guide) |
+| FR-F5 | Install wizard (CLI first, UI later): detect hardware (CPU, RAM, GPU and VRAM, disk) → **recommend a tier** (FR-F19) and profile → choose tools → **choose models** (FR-F5a) → choose the job engine (FR-F20) → generate config → pull pinned images → download models. | P0 (CLI) / P2 (UI) |
+| FR-F5a | **Model selection is the user's choice.** The platform ships no hardcoded default model. For each role (chat LLM, embedding, reranker, judge, safety classifier, and optional vision model for FR-D15), the wizard shows a curated catalog filtered by what fits the detected hardware. Each entry shows size, quantization, estimated RAM/VRAM, expected speed, languages (including Indonesian), license, and a "recommended for your hardware" badge. Users can pick several models per role (for Lab comparisons) or point to an external API through the gateway. Choices can be changed later in Admin → Models without reinstalling. | P0 |
 | FR-F5b | Model compatibility check: warn or block when a chosen model won't fit memory, has a non-commercial or restrictive license, or the chosen serving engine doesn't support it (e.g., vLLM on a 6 GB GPU). | P0 |
 | FR-F6 | Air-gapped install bundle: image tarballs, a model mirror, offline documentation. | P2 |
 | FR-F7 | Model gateway (LiteLLM): one OpenAI-compatible endpoint for Ollama, vLLM, and external APIs, with virtual keys, budgets, and fallbacks. | P0 |
@@ -114,6 +119,10 @@ E2EAIDEV solves both:
 | FR-F12 | Public REST API + Python/TypeScript SDK covering chat, documents, sharing, evals, and bots, with API keys scoped by role. | P1 |
 | FR-F13 | Rate limits and quotas per user, team, and division (requests, tokens, storage). | P1 |
 | FR-F14 | UI in Indonesian and English (i18n); WCAG 2.1 AA accessibility for chat and document screens. | P0 (EN+ID) / P2 (WCAG) |
+| FR-F15 | Default limits, admin-configurable: max upload 100 MB per file, 50 files per batch, 20 GB storage per user. Full quotas arrive with FR-F13. | P0 |
+| FR-F16 | **Upgrades and migrations:**<br>• Versioned, reversible database schema migrations from the first schema (P0).<br>• Upgrade procedure (P2): pre-upgrade backup → migrations → health check → automatic rollback on failure.<br>• Release notes flag breaking changes.<br>• Upgrades skip at most one minor version; the upgrade path is tested in CI. | P0 (migrations) / P2 (upgrade procedure) |
+| FR-F17 | **Secret and certificate rotation:**<br>• Rotate gateway keys, API keys, OIDC client secrets, and database credentials without downtime.<br>• TLS certificates auto-renew (ACME, or the internal CA for air-gapped installs) and alert 14 days before expiry.<br>• Emergency revocation of a leaked key takes effect within 5 minutes. | P2 |
+| FR-F18 | **User offboarding:**<br>• Deactivating a user revokes their sessions, API keys, and delegated tokens within 1 minute.<br>• Their owned documents and folders transfer to a chosen owner (default: their manager); existing shares to others stay intact.<br>• Their chats follow the retention policy (NFR-10).<br>• Manual in P0; automatic from SCIM deprovisioning in P2. | P0 / P2 |
 
 ---
 
@@ -129,7 +138,8 @@ Every Lab stage follows **compare mode**:
 | ID | Requirement | Priority |
 |---|---|---|
 | FR-L1 | Compare mode, reusable across all stages. | P1 |
-| FR-L2 | Comparison reports are saved, versioned, exportable (PDF/CSV), and shareable. | P1 |
+| FR-L2 | Comparison reports are saved, versioned, exportable (PDF/CSV), and shareable. Every run records tool versions, model versions, configuration, dataset version, and random seeds, so it can be re-run and reproduced. | P1 |
+| FR-L4 | Cost and time estimate before a run starts (judge tokens × price, GPU minutes). Runs over a budget threshold need confirmation. | P1 |
 | FR-L3 | Tool catalog page: every tool with its license, maturity, resource needs, and installed/available status. **License warnings** for AGPL, ELv2, and non-commercial licenses. | P1 |
 
 ### 6.1 Plan and govern
@@ -143,15 +153,18 @@ Every Lab stage follows **compare mode**:
 ### 6.2 Data
 | ID | Requirement | Tools (✅ = default) | Priority |
 |---|---|---|---|
-| FR-D1 | Upload files (PDF, DOCX, PPTX, XLSX, TXT, MD, HTML, images) into folders/spaces, with document versioning. | — | P0 |
+| FR-D1 | Upload files (PDF, DOCX, PPTX, XLSX, TXT, MD, HTML, images) into folders/spaces, with document versioning. Retrieval uses only the latest version; citations in old chats keep pointing to the version they quoted. | — | P0 |
 | FR-D2 | S3-compatible object storage. | SeaweedFS ✅, Garage, RustFS, Ceph, external S3 | P0 |
-| FR-D3 | Parsing with tables, headings, and page anchors for citations. | Docling ✅, Unstructured, MinerU (GPU) | P0 (Docling) / P2 (lab) |
+| FR-D3 | **Baseline document understanding (every tier):**<br>• Layout-aware parsing with headings and page anchors.<br>• **Tables** extracted as structured rows and columns.<br>• **OCR** for scanned pages (CPU), with Indonesian and English language packs by default; more languages are configurable.<br>• **Figures and charts** saved as image crops and indexed with their captions and surrounding text.<br>• Pages with low OCR confidence or complex layout are flagged "low-confidence parse".<br>• Parsing tools: Docling ✅ in P0; Unstructured and MinerU (GPU) as Lab alternatives in P2. | Docling ✅, Unstructured, MinerU (GPU) | P0 (Docling) / P2 (lab) |
+| FR-D15 | **Vision model add-on (optional, per install):** a vision-language model (VLM) chosen in the wizard as its own model role (FR-F5a).<br>• **Routing:** only flagged or figure-heavy pages go to the VLM, never every page, so GPU time stays low. Admins can also force VLM parsing for chosen folders (e.g., "Maintenance manuals").<br>• **Outputs:** page-to-structured-text for hard scans; descriptions of figures, diagrams, and schematics; data extracted from charts (series, values, axes). These are indexed next to the text chunks.<br>• **Labeling:** VLM-derived content is marked "AI-described from figure" and shown alongside the original image crop.<br>• **Permissions:** VLM output is derived content and inherits the document's permissions (FR-C6). Egress policy applies when the VLM is an external API (FR-M9).<br>• **Runs asynchronously:** the document is searchable from baseline parsing first, then enriched when the VLM finishes. | Catalog examples, to re-verify per §17.6: Qwen-VL family (Qwen2.5-VL / Qwen3-VL), Granite-Docling, MinerU VLM backend; external vision APIs | P1 |
+| FR-D16 | **Technical and maintenance manuals** (e.g., factory machine repair and maintenance PDFs):<br>• Keep the links between procedure steps and the figures they reference ("see Fig. 4-2").<br>• Keep part numbers, torque/spec tables, and exploded-diagram callouts as structured, searchable data.<br>• **Safety warnings** (WARNING / CAUTION / DANGER) attached to a procedure are always included **verbatim** in any answer about that procedure.<br>• Numeric values (torque, pressure, clearance) in answers are quoted from source text or tables when available. Values read only by the VLM from a figure are flagged and shown with the figure crop for the user to confirm. | P1 (requires FR-D15 for figures) |
 | FR-D4 | Selectable chunking: structure-aware ✅, recursive, semantic, parent-child. | — | P0 (1) / P1 (all) |
 | FR-D5 | **Sensitivity labels** (Public / Internal / Confidential / Restricted), set manually or suggested automatically. Labels limit sharing (e.g., Restricted can't be shared company-wide). | — | P1 |
 | FR-D6 | PII discovery and optional redaction on ingest. | Presidio ✅ | P1 |
 | FR-D7 | Data quality checks: duplicate detection, near-duplicates, stale documents (no review in N months), unparseable files. | — | P1 |
 | FR-D8 | Document lifecycle: review owner, review date, expiry; expired documents are excluded from retrieval or flagged. | — | P2 |
-| FR-D9 | **Deletion propagation:** deleting a document removes its chunks, embeddings, cache entries, and derived content within 5 minutes. | — | P0 |
+| FR-D9 | **Deletion propagation:**<br>• Deleting a document moves it to **trash**. Within 5 minutes it is excluded from retrieval, caches, and derived content.<br>• The owner can restore it from trash for 30 days (configurable).<br>• After that, or on "delete permanently", its file, chunks, and embeddings are purged.<br>• Legal hold (FR-D13) blocks the purge. | — | P0 |
+| FR-D14 | Malware scanning on upload. Infected files are quarantined and never parsed. | ClamAV ✅ (GPL, runs as a separate service) | P1 |
 | FR-D10 | Dataset versioning and lineage: every index version records its source documents, parser, chunker, and embedding model. | lakeFS / DVC | P2 |
 | FR-D11 | Labeling and annotation for gold sets and fine-tuning data. | built-in ✅, Label Studio, Argilla | P1 |
 | FR-D12 | Synthetic test-data generation: Q&A pairs, adversarial questions, personas. | Ragas ✅, DeepEval Synthesizer | P0 |
@@ -168,6 +181,7 @@ Every Lab stage follows **compare mode**:
 | FR-M6 | Fine-tuning and distillation (LoRA/QLoRA, DPO) with results fed back into benchmarking. | Unsloth, Axolotl, TRL | P3 |
 | FR-M7 | Model registry with lineage, eval scores, approval status. | MLflow | P2 |
 | FR-M8 | Model file security: safetensors preferred, pickle scanning, checksum and signature verification. | — | P2 |
+| FR-M9 | **Data egress policy:**<br>• External model APIs are **off by default**. Enabling them is an install-wide admin setting with a clear warning (P0).<br>• Per sensitivity label, admins choose allowed destinations; for example, Confidential and Restricted content goes only to local models (P1, with FR-D5).<br>• The gateway enforces the policy, and every blocked call is audited. | LiteLLM routing rules | P0 / P1 |
 
 ### 6.4 Build: retrieval
 | ID | Requirement | Tools | Priority |
@@ -178,9 +192,10 @@ Every Lab stage follows **compare mode**:
 | FR-R4 | Hybrid search: dense + sparse/BM25, fused with reciprocal rank fusion (RRF). | — | P0 |
 | FR-R5 | **Permission-filtered retrieval inside the query** (see §7.2). | OpenFGA ✅, SpiceDB | P0 |
 | FR-R6 | Query rewriting and conversation-aware follow-up questions. | — | P0 |
-| FR-R7 | Citations with document, page, and section; click through to the source with the passage highlighted. | — | P0 |
-| FR-R8 | Retrieval metrics: recall@k, MRR, nDCG, with a separate **Indonesian** evaluation set. | — | P1 |
+| FR-R7 | Citations with document, page, and section; click through to the source with the passage highlighted. When an answer uses a table or figure, the citation shows that table or the figure crop. | — | P0 |
+| FR-R8 | Retrieval metrics: recall@k, MRR, nDCG, with separate **Indonesian** and **cross-lingual** (question in Indonesian, source in English, and the reverse) evaluation set. | — | P1 |
 | FR-R9 | Advanced RAG: GraphRAG, multimodal (images and charts), routing across knowledge bases. | — | P3 |
+| FR-R10 | **Structured-data questions:** answers over spreadsheets and CSV (totals, filters, comparisons) by running a computation on the table instead of reading text chunks. Results show the computed table and the source file. | — | P3 |
 
 ### 6.5 Build: prompts, conversation, tools, agents
 | ID | Requirement | Tools | Priority |
@@ -188,7 +203,7 @@ Every Lab stage follows **compare mode**:
 | FR-B1 | Prompt registry with versions, labels (production/staging), playground, diffs. | Langfuse ✅, MLflow | P0 |
 | FR-B2 | **Conversation memory:** short-term (within a session) and optional long-term user memory, which the user can view and delete. | — | P0 (short) / P2 (long) |
 | FR-B3 | Structured-output tests: JSON/schema validity rate per model. | native ✅, Guardrails AI, guided decoding | P1 |
-| FR-B4 | Live tools through MCP: one MCP server per system, generated from OpenAPI (see §8). | MCP ✅ | P1 |
+| FR-B4 | Live tools through MCP: one MCP server per system, generated from OpenAPI (see §7.3). | MCP ✅ | P1 |
 | FR-B5 | Agent workflows (multi-step, tool chains) with agent-trajectory evaluation. | LangGraph | P3 |
 
 ### 6.6 Test: the Eval Lab
@@ -206,16 +221,18 @@ Every Lab stage follows **compare mode**:
 | FR-T10 | Load tests on model endpoints and the full chat API. | guidellm/LLMPerf, k6 ✅, Locust | P2 |
 | FR-T11 | Benchmark runner: model × prompt × dataset leaderboard with quality, p50/p95 latency, time to first token, tokens/s, cost. | built-in ✅, lm-evaluation-harness | P1 |
 | FR-T12 | Run-vs-run comparison with regression highlighting. | — | P0 |
+| FR-T13 | **Document-understanding test set:** table QA, chart QA (values read from charts), figure/diagram QA, OCR accuracy (character error rate) on scans, and "safety warning included" checks for manuals. Used to compare baseline parsing vs baseline plus VLM in the Lab, so a company can see whether the vision add-on is worth its GPU cost. | built-in ✅ | P1 |
 
 ### 6.7 Release
 | ID | Requirement | Priority |
 |---|---|---|
 | FR-RL1 | **The bot as a versioned bundle:** prompt version + model + index version + reranker + guardrails + tools + config. It is released and rolled back as one unit. | P0 |
-| FR-RL2 | Release gates, configurable per risk tier: eval thresholds, zero permission leaks, red-team pass, human sign-off. | P1 |
+| FR-RL2 | Release gates: eval thresholds, zero permission leaks, red-team pass, human sign-off. Configured per bot in P1; set automatically by risk tier once FR-P2 ships (P2). | P1 / P2 |
 | FR-RL3 | CI integration: run eval suites from GitHub Actions / GitLab CI and fail the pipeline on regression. | P1 |
 | FR-RL4 | Rollout strategies: shadow deploy, canary (traffic %), online A/B test with feature flags. | P2 |
 | FR-RL5 | One-click rollback to any previous bundle version. | P1 |
-| FR-RL6 | **Environments: dev → staging → prod.** A bot bundle is promoted between environments, never edited in place in prod. Each environment has its own knowledge index, gateway keys, and budgets. Staging uses test or anonymized documents unless an admin explicitly allows production data. Promotion requires that environment's release gates. Single-node installs may run all three as namespaces on one machine. | P1 |
+| FR-RL6 | **Environments: dev → staging → prod.** A bot bundle is promoted between environments, never edited in place in prod. Each environment has its own knowledge index, gateway keys, and budgets. Staging uses test or anonymized documents unless an admin explicitly allows production data. Promotion requires that environment's release gates. Single-node installs may run all three as namespaces on one machine. **Optional in the Lite tier**: a single environment, where bundles, versions, release gates, and rollback still apply. | P1 |
+| FR-RL7 | **Bot access and knowledge scope:**<br>• Each bot is available only to the users, teams, roles, or divisions it is granted to.<br>• Each bot has a knowledge scope (selected folders or spaces).<br>• **Effective retrieval = bot scope ∩ the asking user's permissions.** A bot never widens what a user can see. | P0 |
 
 ### 6.8 Operate
 | ID | Requirement | Tools | Priority |
@@ -226,7 +243,7 @@ Every Lab stage follows **compare mode**:
 | FR-O4 | Drift detection: shifts in query topics, embedding drift, quality decay. | — | P2 |
 | FR-O5 | SLOs and alerting: latency, error rate, cost per conversation, guardrail trigger rate. | OpenTelemetry → Prometheus/Grafana ✅ | P1 |
 | FR-O6 | FinOps: spend per user, team, division, and bot; budgets, alerts, chargeback reports. | LiteLLM spend | P1 |
-| FR-O7 | **Usage and ROI analytics:** active users, questions per division, answer rate, deflection, top unanswered topics, estimated time saved. | — | P1 |
+| FR-O7 | **Usage and ROI analytics:** active users, questions per division, answer rate, deflection, top unanswered topics, estimated time saved. Shown aggregated by team or division; individual-level views only for the person themself, or for admins with an audited reason. | — | P1 |
 | FR-O8 | AI incident management: report → severity → linked traces → fix → release, with a post-incident record. | — | P2 |
 | FR-O9 | Guardrails at runtime: PII redaction, prompt-injection detection, safety classification, output validation. | NeMo Guardrails ✅, Llama Guard 3 ✅, Guardrails AI | P1 |
 | FR-O10 | GPU scheduling and sharing. | Kubernetes Kueue, NVIDIA MIG/time-slicing | P3 |
@@ -264,6 +281,7 @@ Every Lab stage follows **compare mode**:
 | FR-S7 | Sharing is limited by sensitivity label (FR-D5) and an admin policy (e.g., no external sharing, no company-wide sharing for Confidential). | P1 |
 | FR-S8 | Access changes follow org changes automatically: someone who moves divisions loses or gains access through SCIM sync. | P2 |
 | FR-S9 | Implementation: relationship-based access control (Zanzibar model) with OpenFGA ✅; SpiceDB as the Lab alternative. | P0 |
+| FR-S10 | Document search (title, content, owner, label, date), filtered by permission exactly like chat retrieval. | P1 |
 
 ### 7.2 Permission-aware chat
 | ID | Requirement | Priority |
@@ -276,8 +294,11 @@ Every Lab stage follows **compare mode**:
 | FR-C6 | Derived content (summaries, knowledge graphs, insights) inherits the **strictest** permissions of its sources. | P1 |
 | FR-C7 | Chat history after access is revoked: citations from revoked sources are hidden and replaced with a "source no longer accessible" notice. | P1 |
 | FR-C8 | Retrieved text is treated as untrusted data: documents are scanned on upload and guardrails run on retrieved context. | P1 |
-| FR-C9 | Streaming answers with citations, copy/export, feedback, and "Why this answer?" (FR-O11). | P0 |
+| FR-C9 | Streaming answers with a stop button, citations, copy/export, and feedback. "Why this answer?" (FR-O11) is added in P1. | P0 |
 | FR-C10 | Notification when something is shared with you: "X shared Y with you — ask the AI about it." | P0 |
+| FR-C11 | Conversation history: list, search, rename, and delete your own conversations; retention follows NFR-10. | P0 |
+| FR-C12 | **Grounding and no-existence leaks:**<br>• By default, answers come only from permitted sources and live tools. When nothing relevant is found, the AI says so instead of guessing. Each bot can allow general-knowledge answers, which are then labeled as such.<br>• Answers and errors never reveal that a restricted document exists: no titles, no "you don't have access to X". Hinting at existence counts as a leak in FR-T7. | P0 |
+| FR-C13 | **Answer language:** the AI answers in the language of the question, even when sources are in another language, and keeps quotes and citations in the original language. | P0 |
 
 ### 7.3 Enterprise system connections
 | ID | Requirement | Priority |
@@ -298,7 +319,7 @@ Every Lab stage follows **compare mode**:
 
 ## 8. Non-functional requirements
 
-Targets are for the reference hardware (§12) and must be validated in Phase 1–2 load tests.
+Targets are for the Standard and Enterprise reference hardware (§12) and must be validated in Phase 1–2 load tests. In the **Lite tier**, performance and availability targets (NFR-1 to NFR-5) are best effort: measured and displayed, but not release gates. Security, permission, privacy, and audit requirements (NFR-7 to NFR-11, NFR-18 to NFR-20) apply in full in every tier.
 
 | ID | Category | Requirement |
 |---|---|---|
@@ -307,18 +328,21 @@ Targets are for the reference hardware (§12) and must be validated in Phase 1�
 | NFR-3 | Performance | Ingestion: **≥ 20 pages/min** on CPU and **≥ 100 pages/min** on GPU (Docling). |
 | NFR-4 | Scalability | GPU reference profile supports **≥ 200 concurrent chat users**. Scales horizontally on Kubernetes. pgvector up to ~20M chunks; Qdrant beyond that. |
 | NFR-5 | Availability | Single node: best effort, with backups. HA profile (Kubernetes): **99.9%** monthly for the chat API. |
-| NFR-6 | Durability | Daily backups of Postgres, vector store, object storage, OpenFGA, and Langfuse (ClickHouse traces). Restore tested quarterly. RPO ≤ 24 h, RTO ≤ 4 h (single node); RPO ≤ 1 h (HA). |
+| NFR-6 | Durability | Daily backups of Postgres, vector store, object storage, OpenFGA, and Langfuse (ClickHouse traces). Restore tested quarterly. RPO ≤ 24 h, RTO ≤ 4 h (single node); RPO ≤ 1 h (HA). Backups use documented, open formats and restore onto a fresh install, so the company can always export and leave. |
 | NFR-7 | Security | TLS everywhere; encryption at rest; secrets in Vault or Kubernetes secrets; no plaintext credentials in the database or logs. |
 | NFR-8 | Security | Permission correctness: **0 leaks** in the leak suite is a release gate. Access changes apply in ≤ 5 s. |
 | NFR-9 | Security | Supply chain: pinned image digests, hash-locked dependencies, SBOM per release, dependency and container scanning in CI, signed release artifacts. |
-| NFR-10 | Privacy and compliance | Configurable retention for chats, traces, and documents. Data-subject requests (export or delete a person's data). Legal hold. Data stays on premises by default. Supports UU PDP No. 27/2022 obligations; GDPR-ready. |
+| NFR-10 | Privacy and compliance | Configurable retention, with defaults: chats 1 year, traces 90 days (30 days until FR-O12 masking ships), audit log 1 year, trash 30 days. Data-subject requests (export or delete a person's data). Legal hold. Data stays on premises by default. Supports UU PDP No. 27/2022 obligations; GDPR-ready. |
 | NFR-11 | Auditability | Every access-relevant action is audited, immutable, kept ≥ 1 year (configurable), and exportable to a SIEM. |
-| NFR-12 | Portability | Runs on Linux x86_64 with Docker Compose or Kubernetes 1.29+. Works fully air-gapped. NVIDIA GPU optional. |
-| NFR-13 | Usability | Indonesian + English UI. A new business user can ask a first question within 2 minutes of logging in, with no training. |
+| NFR-12 | Portability | Runs on Linux x86_64 with Docker Compose or Kubernetes 1.29+. Works fully air-gapped. NVIDIA GPU optional. **No outbound telemetry or update checks by default.** |
+| NFR-13 | Usability | Indonesian + English UI. Responsive layout that works in mobile browsers. A new business user can ask a first question within 2 minutes of logging in, with no training. |
 | NFR-14 | Accessibility | WCAG 2.1 AA for the chat, documents, and sharing screens. |
 | NFR-15 | Maintainability | Every Lab adapter has contract tests and a nightly smoke test. Tool versions are pinned and upgraded deliberately. |
-| NFR-16 | Observability | All services emit OpenTelemetry traces, metrics, and logs. Each LLM call has a trace ID shown to admins and linked from feedback. |
+| NFR-16 | Observability | All services emit OpenTelemetry traces, metrics, and logs, and expose health and readiness endpoints. Each LLM call has a trace ID shown to admins and linked from feedback. |
 | NFR-17 | Licensing | Platform code is under a permissive open-source license (proposed: Apache 2.0). AGPL tools run as separate services only. The license of every tool and model is shown before install. |
+| NFR-18 | Application security | The web app and API meet OWASP ASVS Level 2: session timeout (default 8 h idle), CSRF protection, content security policy, login rate limiting, MFA through the identity provider. An external penetration test is run before GA, and its critical/high findings are fixed. |
+| NFR-19 | Resilience | **Permission checks fail closed:** if OpenFGA or the identity provider is unreachable, access is denied, never granted. Every external call (models, tools, stores) has a timeout and retry policy. If the chat model fails, the gateway falls back to a configured backup model or the UI shows a clear error. A failing optional component (Langfuse, VLM, guardrails, Lab tools) degrades its feature without taking chat down, except guardrails marked mandatory for a bot, which block that bot instead. |
+| NFR-20 | API and data standards | REST API versioned under `/api/v1`, with OpenAPI generated from code, cursor pagination, idempotency keys for create operations, and one error format (RFC 9457 problem details) with messages in EN/ID. IDs are UUIDv7. Timestamps are stored in UTC and displayed in the user's time zone (default Asia/Jakarta). Every record has created/updated by and at. User-facing errors never expose stack traces or internal names. |
 
 ---
 
@@ -349,12 +373,13 @@ Full research and comparisons are in [README.md §3](README.md).
 | API / UI | FastAPI (Python 3.12) / Next.js (TypeScript) | — |
 | System of record | PostgreSQL | — |
 | Queue / cache | Redis | — |
+| Job / workflow engine | Celery (on Redis) | Temporal (FR-F20) |
 | Identity / SSO | OIDC (Keycloak bundled optional), SCIM | Azure AD, Google Workspace |
 | Document authorization | OpenFGA | SpiceDB |
 | Model gateway | LiteLLM (pinned, digest-verified) | Portkey, Kong AI |
 | Serving | Ollama (CPU), vLLM (GPU) | SGLang, TensorRT-LLM |
 | Object storage | SeaweedFS | Garage, RustFS, Ceph, external S3 |
-| Parsing | Docling | Unstructured, MinerU |
+| Parsing | Docling (every tier, FR-D3) | Unstructured, MinerU (Lab comparison only) |
 | Chat LLM | *User's choice in the wizard* (FR-F5a) | Catalog: Qwen3, Llama, Gemma, Mistral families (quantized variants), external APIs |
 | Embeddings | *User's choice in the wizard*; BGE-M3 is often recommended | Catalog: Qwen3-Embedding, jina-v3, e5, APIs |
 | Reranker | *User's choice in the wizard*; bge-reranker-v2-m3 is often recommended | Catalog: Qwen3-Reranker, APIs, none |
@@ -387,13 +412,37 @@ Full research and comparisons are in [README.md §3](README.md).
 
 ---
 
-## 12. Reference hardware (for sizing and NFR targets)
+## 12. Install tiers and reference hardware
 
-| Profile | Hardware | Intended use |
+The wizard recommends a tier from the detected hardware (FR-F19). The user can override the recommendation.
+
+| Tier | For | Reference hardware | Use |
+|---|---|---|---|
+| **Lite** | A solo developer or learner on a laptop or PC, with no server | 4+ cores, 16 GB RAM, 50 GB free disk. GPU optional (≥ 6 GB VRAM speeds up local models). | Learning, prototyping, demos, ≤ 5 users |
+| **Lite + API** | Same, but with no capacity for local models | Same as Lite; no GPU needed | Models run on external APIs (OpenAI, Anthropic, Gemini, …) through the gateway. Requires the egress setting (FR-M9) to be enabled. |
+| **Standard (CPU)** | Team pilot on one server | 16 vCPU, 64 GB RAM, 500 GB SSD, no GPU | Pilot, ≤ 30 concurrent users, quantized models ≤ 4B |
+| **Standard (GPU)** | Department production | 32 vCPU, 128 GB RAM, 1 TB NVMe, 1× 48–80 GB GPU (e.g., L40S / A100 / H100) | ≤ 200 concurrent users, 8B–32B models |
+| **Enterprise HA** | Company-wide | Kubernetes, 3+ nodes, GPU node pool | 99.9% availability |
+
+**What changes in the Lite tier:**
+
+| Concern | Standard / Enterprise | Lite |
 |---|---|---|
-| **CPU-lite** | 16 vCPU, 64 GB RAM, 500 GB SSD, no GPU | Pilot, learning, ≤ 30 concurrent users, quantized models ≤ 4B |
-| **GPU-standard** | 32 vCPU, 128 GB RAM, 1 TB NVMe, 1× 48–80 GB GPU (e.g., L40S / A100 / H100) | Department production, ≤ 200 concurrent users, 8B–32B models |
-| **Enterprise HA** | Kubernetes, 3+ nodes, GPU node pool | Company-wide, 99.9% availability |
+| Model serving | Ollama (CPU) or vLLM (GPU); SGLang later | **Ollama only**, or a llama.cpp server, or external APIs. Small quantized models (≤ 4B on CPU or 6 GB GPUs). |
+| Environments | dev → staging → prod (FR-RL6) | **Single environment** |
+| Login | Keycloak (OIDC SSO) | **Built-in local accounts** plus the bootstrap admin; OIDC can be connected later |
+| Tracing | Langfuse (needs ClickHouse) | **Built-in trace table in Postgres** with a basic viewer; Langfuse is an opt-in Lab tool |
+| Infra metrics | Prometheus + Grafana | Off; a built-in health page instead |
+| Guardrails | NeMo Guardrails + Llama Guard | Llama Guard through Ollama, optional |
+| Vision add-on (FR-D15) | GPU-served VLM (e.g., through vLLM) | A small VLM through Ollama (fits 6 GB VRAM, slower), or an external vision API for non-confidential documents; baseline parsing works without it |
+| Lab tools | Any `lab-*` profile | Opt-in, one stage at a time, to fit memory |
+| Job engine | Celery or Temporal (FR-F20) | **Celery only** (Temporal adds a server the laptop does not need) |
+| Backups | Scheduled backups of every store | `make backup` (database dump + files), run manually or by cron |
+| Deployment | Compose or Helm | Docker Compose only |
+
+**Never removed in any tier:** Postgres with pgvector, Redis, OpenFGA permissions, the LiteLLM gateway, SeaweedFS, the permission-leak suite, the audit log, pinned versions, and secret handling. Every tier has the same chat, sharing, and permission behavior.
+
+**Lite resource target:** the platform stack, excluding model memory, uses ≤ 6 GB RAM. This target must be validated in Phase 0.
 
 ---
 
@@ -401,9 +450,9 @@ Full research and comparisons are in [README.md §3](README.md).
 
 | Phase | Duration | Scope | Exit criteria |
 |---|---|---|---|
-| **0: Foundations** | ~2 wks | Monorepo, CI, pinned dependencies; `core` profile (Postgres, Redis, LiteLLM, SeaweedFS, Langfuse, Ollama, OpenFGA); OIDC; org model; adapter framework; audit log; **CLI install wizard with hardware detection and model selection** | The wizard detects hardware, the user picks models, and the `core` profile comes up healthy; login works; the chosen model answers through the gateway |
-| **1: MVP** | ~8 wks | All P0: upload/parse/chunk/embed, sharing, permission-aware chat with citations and scopes, bot bundles, Ragas evals, leak suite, feedback, traces, EN/ID UI | US1–US4 pass on CPU-lite; **0 leaks**; NFR-1/2 met for CPU; an eval report is produced |
-| **2: Lab** | ~6 wks | All P1: Eval Lab (DeepEval, Phoenix, promptfoo, hybrid judging, evaluate-the-evaluators), Retrieval Lab, vLLM, benchmark runner, live tools v1 (read-only), release gates and CI, guardrails, model routing, FinOps, ROI analytics, public API/SDK | US5–US8 pass; comparison reports for evaluation, retrieval, and serving; GPU NFRs met |
+| **0: Foundations** | ~2 wks | Monorepo, CI, pinned dependencies; **Lite tier first** (Postgres, Redis, LiteLLM, SeaweedFS, Ollama, OpenFGA; local accounts plus bootstrap admin), then the Standard additions (Keycloak/OIDC, Langfuse); org model; reversible DB migrations; adapter framework; audit log; **CLI install wizard with hardware detection and model selection** | The wizard detects hardware, recommends a tier, and the user picks models; Lite comes up healthy on a 16 GB laptop within the ≤ 6 GB stack target; login works; the chosen model answers through the gateway |
+| **1: MVP** | ~8 wks | All P0: upload/parse/chunk/embed, sharing, permission-aware chat with citations and scopes, bot bundles, Ragas evals, leak suite, feedback, traces, EN/ID UI | US1–US4, US13, and US14 pass on **both Lite and Standard (CPU)**; **0 leaks** (including no-existence leaks, FR-C12); NFR-1/2 met for CPU; an eval report is produced |
+| **2: Lab** | ~6 wks | All P1: Eval Lab (DeepEval, Phoenix, promptfoo, hybrid judging, evaluate-the-evaluators), Retrieval Lab, vLLM, benchmark runner, live tools v1 (read-only), release gates and CI, guardrails, model routing, FinOps, ROI analytics, public API/SDK | US5–US8 and US15 pass; comparison reports for evaluation, retrieval, and serving; GPU NFRs met |
 | **3: Enterprise** | ~6–8 wks | All P2: knowledge connectors with permission mirroring, SCIM, governance (inventory, risk tiers, cards, approvals), lineage, legal hold, rollouts, online evals, drift, incidents, flywheel, Helm, air-gapped bundle, backup and disaster recovery, SIEM export, WCAG, guided scenarios | US9–US12 pass; HA profile meets 99.9% in a soak test; air-gapped install verified |
 | **4: Advanced** | ongoing | All P3: fine-tuning, distillation, and quantization labs; agents and write actions; GraphRAG and multimodal; SGLang/TensorRT-LLM; GPU scheduling; learning paths; omnichannel | Per feature |
 
@@ -421,7 +470,12 @@ Full research and comparisons are in [README.md §3](README.md).
 | Weak Indonesian retrieval or answers | Medium | Indonesian eval set; multilingual models (BGE-M3, Qwen3) by default; measured in the Lab. |
 | ERP/HR systems lack per-user auth | Medium | Delegated-token adapter pattern; read-only scoped service accounts with *server-side* user filtering as a documented, audited fallback. |
 | License problems (AGPL, ELv2, non-commercial) | Medium | License shown and checked at install; AGPL tools run as separate services. |
-| Langfuse (ClickHouse) too heavy for CPU-lite | Low | Measure; Postgres-only tracing fallback. |
+| Confidential data sent to an external model API | Critical | External APIs off by default; egress policy per sensitivity label enforced at the gateway (FR-M9); blocked calls audited. |
+| VLM misreads a figure (e.g., a wrong torque value from a diagram), causing an unsafe repair | Critical | Numbers quoted from text/tables first; figure-only values flagged and shown with the image crop; safety warnings quoted verbatim (FR-D16); document-understanding tests (FR-T13); human review option for high-risk manual folders. |
+| Malicious uploads (malware, hidden prompt injection) | High | Malware scan and quarantine (FR-D14); retrieved text treated as untrusted (FR-C8); red-team suite (FR-T8). |
+| Langfuse (ClickHouse) too heavy for small machines | Low | Lite tier uses built-in Postgres tracing; Langfuse is opt-in there. |
+| Celery and Temporal behave differently (retries, ordering, cancellation) | Medium | One job interface; idempotent steps; job contract tests run against both engines in CI. |
+| Lite and Standard drift apart (bugs that appear in only one tier) | Medium | One codebase; tiers differ only by configuration behind interfaces; `make verify-phase-N` runs on both Lite and Standard. |
 | CPU-only installs perform poorly | Medium | Quantized small models, model routing, a clear hardware sizing guide. |
 
 ---
@@ -435,7 +489,7 @@ Full research and comparisons are in [README.md §3](README.md).
 | Q3 | Final open-source license for the platform (Apache 2.0 proposed)? | Owner | Phase 0 |
 | ~~Q4~~ | ~~Default local LLM?~~ **Resolved:** no hardcoded default. The user chooses models in the install wizard from a hardware-filtered, license-checked catalog (FR-F5a). Remaining work: curate the initial catalog. | AI eng | Phase 0 |
 | Q5 | Is external sharing (people outside the company, e.g., partners) needed? If yes, which phase? | Product | Phase 1 |
-| Q6 | Should OCR for scanned documents (MinerU, GPU) be in the MVP for target customers? | Product | Phase 1 |
+| ~~Q6~~ | ~~OCR for scanned documents in the MVP?~~ **Resolved:** baseline OCR, tables, and figure crops (Docling) in P0 for every tier; an optional vision-model add-on for complex documents in P1 (FR-D3, FR-D15, FR-D16). | Product | Phase 1 |
 | Q7 | Will there be a hosted demo / training environment? | Owner | Phase 3 |
 
 ---
@@ -444,7 +498,6 @@ Full research and comparisons are in [README.md §3](README.md).
 - **Q2:** Keycloak, bundled, as the OIDC provider. Other providers connect to Keycloak or directly through OIDC later.
 - **Q3:** Apache 2.0.
 - **Q5:** No external sharing in the MVP. The sharing model must not rule it out later (keep a "guest" principal type in the OpenFGA model).
-- **Q6:** No MinerU in the MVP. Scanned PDFs use Docling's built-in CPU OCR, flagged as "low-confidence parse."
 
 ---
 
@@ -463,6 +516,15 @@ Full research and comparisons are in [README.md §3](README.md).
 | **SCIM** | A standard protocol for syncing users and groups from an identity provider. |
 | **UU PDP** | Indonesia's Personal Data Protection Law (Law No. 27 of 2022). |
 | **Air-gapped** | Runs with no internet connection. |
+| **OIDC** | OpenID Connect: the standard login protocol used for SSO. |
+| **RRF** | Reciprocal Rank Fusion: merges the rankings of dense (vector) and keyword search into one list. |
+| **recall@k / MRR / nDCG** | Retrieval metrics: whether the right passage is in the top k, how high the first correct one ranks, and overall ranking quality. |
+| **SLO** | Service Level Objective: a measurable target (e.g., p95 latency ≤ 3 s). |
+| **RPO / RTO** | Recovery Point / Time Objective: maximum data loss and maximum downtime after a failure. |
+| **OWASP ASVS** | Application Security Verification Standard: a checklist of web-app security requirements, by level. |
+| **Data egress** | Data leaving the company's environment, e.g., text sent to an external model API. |
+| **OCR** | Optical character recognition: turning scanned images of text into text. |
+| **VLM** | Vision-language model: an AI model that reads images (figures, charts, scanned pages) together with text. |
 
 ---
 
@@ -479,7 +541,7 @@ This section defines *how* the product is built. It binds every builder, includi
 ```
 apps/api/             FastAPI service (Python 3.12, managed with uv)
 apps/web/             Next.js app (TypeScript, pnpm)
-workers/              ingestion, eval, and benchmark workers (Redis-backed task queue; Celery by default)
+workers/              ingestion, eval, and benchmark jobs behind one job interface (Celery by default; Temporal optional, FR-F20)
 adapters/<stage>/<tool>/   one Lab tool per folder: Dockerfile, adapter code, contract test
 cli/                  install wizard (Python, Typer) — FR-F5
 catalog/models.yaml   model catalog: role, size, quantization, RAM/VRAM, languages, license, engines
@@ -495,7 +557,7 @@ docs/                 operator and user documentation
 ### 17.3 Executable acceptance
 - Each user story has an automated test named after it, for example `tests/e2e/test_us01_share_with_andi.py` and `tests/e2e/test_us03_budi_sees_nothing.py`.
 - `make verify-phase-N` brings up the profile, seeds the test org (Org "Demo"; divisions Sales and HR; users Andi in Sales, Budi in HR, an intern), runs that phase's user-story tests plus the permission-leak suite, and exits non-zero on any failure.
-- A phase is done only when `make verify-phase-N` passes on the reference CPU-lite machine. "It works on my machine" doesn't count.
+- A phase is done only when `make verify-phase-N` passes on both the Lite tier and Standard (CPU) (§12). "It works on my machine" doesn't count.
 
 ### 17.4 Definition of done for each requirement
 1. Code plus unit tests; adapters also pass the adapter contract tests.
@@ -525,11 +587,49 @@ Screens to build. Layout and visual design are the builder's choice, within the 
 |---|---|
 | App shell | Lifecycle navigation, language switch (EN/ID), notifications |
 | Login | OIDC plus the bootstrap admin (FR-F2a) |
-| Chat | Scope selector, streaming answers, citations, feedback, model/bot picker |
-| Documents | My documents / Shared with me / My team; folders; upload |
+| Chat | Scope selector, streaming answers, citations, feedback, model/bot picker, conversation history (FR-C11) |
+| Documents | My documents / Shared with me / My team; folders; upload; trash with restore (FR-D9) |
 | Share dialog | Add a user, team, role, division, or company; set the permission level; see who has access |
 | Document viewer | Open a cited passage with highlighting |
-| Admin → Org | Divisions, teams, users, roles |
-| Admin → Models | Installed models per role, gateway providers, test prompt |
+| Admin → Org | Divisions, teams, users, roles; deactivate a user and transfer ownership (FR-F18) |
+| Admin → Models | Installed models per role, gateway providers, external-API switch (FR-M9), test prompt |
 | Eval | Datasets, run an eval, run results, run-vs-run comparison, leak-suite results |
-| Bots | Bot bundles, versions, release and rollback |
+| Bots | Bot bundles, versions, release and rollback; who can use the bot and its knowledge scope (FR-RL7) |
+
+### 17.9 Developer setup
+- `make dev` starts the Lite tier with hot reload for the API, web, and workers, and seeds the demo org (Andi, Budi, an intern) plus sample documents.
+- `make test` runs everything that doesn't need a model; `make test-all` also runs model-backed tests against a small local model.
+- New contributors are productive in ≤ 30 minutes from `git clone`, following `AGENTS.md`.
+
+### 17.10 Test strategy
+| Level | What | Tooling | When |
+|---|---|---|---|
+| Unit | Pure logic: chunking, permission resolution, config validation, routing rules | pytest, Vitest | Every commit |
+| Integration | Real Postgres, Redis, OpenFGA, SeaweedFS in containers | pytest + Testcontainers | Every commit |
+| Contract | Every adapter, the vector-store/storage/job/tracing interfaces against each implementation (e.g., Celery and Temporal) | pytest | Every commit touching an interface |
+| Permission-leak suite | Personas probing forbidden content, including no-existence leaks | built-in (FR-T7) | Every commit touching documents, retrieval, chat, cache, or sharing; release gate |
+| E2E user stories | `test_usNN_*` through the real UI and API | Playwright + pytest | `make verify-phase-N`, nightly |
+| Quality evals | Ragas and others on gold sets | Eval Lab | Bot release gate |
+| Security | Dependency, container, and secret scanning; SAST; ASVS checks | e.g., Trivy, gitleaks, Semgrep (verify per §17.6) | Every PR; pen test before GA |
+| Load | Chat and retrieval latency/throughput | k6, guidellm | Before each phase exit (Standard and above) |
+
+Coverage target: ≥ 80% lines for API and workers. 100% of permission-resolution and sharing code paths are covered by tests.
+
+### 17.11 CI/CD and versioning
+- **Every PR:** lint, format check, type check (mypy/pyright, tsc), unit + integration + contract tests, leak suite when relevant, security scans, build images.
+- **Every release:** SBOM, signed images, pinned digests written to `deploy/versions.lock`, upgrade test from the previous release (FR-F16), release notes.
+- **Versioning:** the platform uses semantic versioning. Commits follow Conventional Commits and reference requirement IDs. `main` is always releasable; work happens on short-lived branches.
+- **Code standards:** Python with ruff and type hints throughout; TypeScript in strict mode; no secrets in code; structured JSON logs with trace IDs.
+
+---
+
+## 18. Changelog
+
+| Version | Date | Changes |
+|---|---|---|
+| 1.0 | 2026-10-03 | First complete draft: requirements, NFRs, release plan, build contract (§17). Model choice moved to the install wizard. |
+| 1.0.1 | 2026-10-04 | Operations gaps: environments (FR-RL6), upgrades and migrations (FR-F16), PII masking in traces (FR-O12), secret and certificate rotation (FR-F17), runbooks (FR-O13). |
+| 1.1 | 2026-10-04 | Completeness pass. **Added:** user offboarding (FR-F18, US13), Lab reproducibility and cost estimates (FR-L2, FR-L4), trash and restore (FR-D9), malware scanning (FR-D14), data egress policy (FR-M9), bot access and knowledge scope (FR-RL7), conversation history (FR-C11), grounding and no-existence leaks (FR-C12), document search (FR-S10), retention defaults (NFR-10), mobile-responsive UI (NFR-13), application security (NFR-18), 3 risks, glossary terms. **Install tiers** (FR-F19, §12, US14): a Lite tier for solo developers on a laptop (Ollama or external APIs, single environment, local accounts, built-in tracing), built first in Phase 0. **Fixed:** wrong section references, FR-F ordering, "Why this answer?" priority conflict (FR-C9), release gates depending on risk tiers before those exist (FR-RL2), Keycloak and migrations added to Phase 0 scope. |
+| 1.2 | 2026-10-04 | **Documents with images:** baseline tables, OCR, and figure crops in every tier (FR-D3); optional vision-model add-on for complex documents (FR-D15); technical and maintenance manual handling with verbatim safety warnings (FR-D16, US15); figure and table crops in citations (FR-R7); document-understanding test set (FR-T13); Lite-tier vision option; VLM misread risk. Q6 resolved. |
+| 1.3 | 2026-10-04 | Job/workflow engine is selectable: Celery (default, every tier) or Temporal (Standard/Enterprise), behind one job interface (FR-F20). Docling confirmed as the parser in every tier; Unstructured and MinerU are only for Lab comparison. |
+| 1.4 | 2026-10-05 | Exhaustive completeness sweep. **Added:** configuration as code (FR-F21), documentation deliverables (FR-F22), OCR language packs (FR-D3), version handling in retrieval (FR-D1), cross-lingual retrieval tests (FR-R8), spreadsheet questions as P3 (FR-R10), stop button (FR-C9), answer language (FR-C13), exit-friendly backups (NFR-6), no outbound telemetry (NFR-12), health endpoints (NFR-16), resilience and fail-closed permissions (NFR-19), API and data standards (NFR-20), developer setup, test strategy, CI/CD (§17.9–17.11). |
