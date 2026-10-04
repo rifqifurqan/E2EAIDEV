@@ -1,0 +1,22 @@
+[project]
+name = "e2eai-wizard"
+version = "0.1.0"
+description = "E2EAIDEV install wizard: detects hardware, picks services, ports and credentials, writes Docker Compose config (FR-F5, FR-F19, FR-F21)."
+requires-python = ">=3.12"
+dependencies = [
+    "typer>=0.17",
+    "pyyaml>=6.0.2",
+]
+
+[project.scripts]
+e2eai = "e2eai_wizard.cli:app"
+
+[dependency-groups]
+dev = ["pytest>=8.4"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -30,9 +30,10 @@ Self-hosted **End-to-End Enterprise AI Development Lab**. It covers each lifecyc
 `apps/api` (FastAPI, Python 3.12, uv) · `apps/web` (Next.js, TypeScript, pnpm) · `workers/` · `adapters/<stage>/<tool>/` · `cli/` (wizard, Typer) · `catalog/{models,tools}.yaml` · `deploy/{compose,helm,versions.lock}` · `tests/e2e/` (one test per user story, e.g. `test_us03_budi_sees_nothing.py`) · `docs/`
 
 ## Commands
-_Not created yet. Add the real ones here in Phase 0._ Planned:
-- `docker compose --profile core up -d`: start the core stack
-- `make verify-phase-N`: seed the demo org (Andi in Sales, Budi in HR, an intern), run that phase's user-story tests and the leak suite
+- `cd cli && uv run e2eai`: install wizard (services, ports, usernames/passwords → `deploy/compose/.env`, `e2eai.yaml`). `--yes` accepts defaults; `--force` replaces an existing `.env` (a backup is kept).
+- `cd cli && uv run pytest -q`: wizard tests.
+- `cd deploy/compose && docker compose config --quiet`: validate; `docker compose up -d`: start infra (check ports/servers first, per global rules).
+- Planned: `make verify-phase-N` (no `make` on the owner's Windows PC yet; use uv scripts until decided).
 
 ## Dev machine (owner's PC)
 - Windows 11, Docker Desktop with WSL2 (Ubuntu), 16 threads, ~22 GB RAM.

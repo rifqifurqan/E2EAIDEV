@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Product** | E2EAIDEV — End-to-End Enterprise AI Development Lab + Permission-Aware RAG Chatbot |
-| **Version** | 1.4 |
+| **Version** | 1.5 |
 | **Date** | 2026-10-04 |
 | **Owner** | rifqifurqan |
 | **Status** | Complete for build. Open owner decisions in §15 all have defaults, so none of them block Phase 0. |
 | **Related** | [README.md](README.md): research, tool catalog, and architecture details. **If this PRD and the README disagree, this PRD wins.** |
-| **Builders** | Human or AI coding agents: read §17 (build contract) before writing code. |
+| **Builders** | Human or AI coding agents: read §17 (build contract) and **Part II (technical design)** before writing code. |
 
 **Priority key** (maps to the roadmap phases in §13):
 
@@ -299,6 +299,8 @@ Every Lab stage follows **compare mode**:
 | FR-C11 | Conversation history: list, search, rename, and delete your own conversations; retention follows NFR-10. | P0 |
 | FR-C12 | **Grounding and no-existence leaks:**<br>• By default, answers come only from permitted sources and live tools. When nothing relevant is found, the AI says so instead of guessing. Each bot can allow general-knowledge answers, which are then labeled as such.<br>• Answers and errors never reveal that a restricted document exists: no titles, no "you don't have access to X". Hinting at existence counts as a leak in FR-T7. | P0 |
 | FR-C13 | **Answer language:** the AI answers in the language of the question, even when sources are in another language, and keeps quotes and citations in the original language. | P0 |
+| FR-C14 | **Built-in chat UI** in the Next.js app, built with the open-source **assistant-ui** components (MIT): streaming, stop, markdown, attachments, conversation list, and custom citation and figure-crop components. It talks only to our API, so every permission rule applies. | P0 |
+| FR-C15 | **Alternative chat front-ends (optional):** an OpenAI-compatible endpoint exposes each bot as a "model", so LibreChat (MIT) or another OpenAI-compatible client can be used. The client must authenticate **as the end user** (shared OIDC SSO or the user's own API key, never a shared service key). Its own document upload and RAG features are disabled, so all knowledge goes through our permission-filtered pipeline. Open WebUI is not supported on the live path: its license requires keeping its branding above 50 users, and its own RAG and user model would bypass our permissions. | P2 |
 
 ### 7.3 Enterprise system connections
 | ID | Requirement | Priority |
@@ -371,6 +373,7 @@ Full research and comparisons are in [README.md §3](README.md).
 | Layer | Default | Lab alternatives |
 |---|---|---|
 | API / UI | FastAPI (Python 3.12) / Next.js (TypeScript) | — |
+| Chat UI | Built-in, with assistant-ui (FR-C14) | LibreChat through the OpenAI-compatible endpoint (FR-C15) |
 | System of record | PostgreSQL | — |
 | Queue / cache | Redis | — |
 | Job / workflow engine | Celery (on Redis) | Temporal (FR-F20) |
@@ -623,6 +626,340 @@ Coverage target: ≥ 80% lines for API and workers. 100% of permission-resolutio
 
 ---
 
+# Part II — Technical Design
+
+Part I says *what* to build; Part II says *how*. Builders follow Part II unless an entry in the Decisions section of `AGENTS.md` overrides it (§17.5). Library and version choices are re-verified at the start of each phase (§17.6).
+
+## T1. Architecture: a modular monolith plus infrastructure services
+
+**Decision:** one API application (FastAPI) and one worker application share the same Python package and are split into modules. They are not microservices. The only separate processes are infrastructure (databases, gateway, model servers) and Lab tools (one container each, FR-F8).
+**Why:** fewer moving parts to build, deploy, and debug; module boundaries can still be split into services later if needed.
+
+| Process | Lite | Standard | Notes |
+|---|---|---|---|
+| `web` (Next.js) | ✅ | ✅ | UI only; talks to `api`. Chat UI built with assistant-ui (T9, FR-C14) |
+| `api` (FastAPI) | ✅ | ✅ | All HTTP endpoints, SSE chat streaming |
+| `worker` | ✅ Celery | ✅ Celery or Temporal worker | Same job code (T2) |
+| `postgres` (+pgvector ≥ 0.8) | ✅ | ✅ | System of record, vectors, built-in traces (Lite) |
+| `redis` | ✅ | ✅ | Celery broker, cache, sessions, rate limits |
+| `openfga` | ✅ | ✅ | Uses the same Postgres instance (its own database) |
+| `litellm` | ✅ | ✅ | Model gateway; its own database in the same Postgres |
+| `seaweedfs` | ✅ | ✅ | S3 API for files and figure crops |
+| `ollama` | ✅ | ✅ (CPU) | Chat LLM and small VLM |
+| `tei` | ✅ | ✅ | Embedding and reranker serving (Hugging Face Text Embeddings Inference; CPU or GPU image) |
+| `caddy` | ✅ | ✅ | Reverse proxy and TLS (local CA on Lite); the only exposed port |
+| `keycloak` | — | ✅ | OIDC SSO |
+| `langfuse` (+clickhouse) | opt-in | ✅ | Tracing |
+| `temporal` | — | opt-in | Only if chosen in FR-F20 |
+| `vllm` | — | GPU only | GPU chat/VLM serving |
+| `clamav` | P1 | P1 | Malware scanning |
+| `prometheus`, `grafana` | — | ✅ | Infra metrics |
+| `librechat` | — | opt-in (P2) | Alternative chat front-end (FR-C15) |
+| Lab tool containers | opt-in | opt-in | `adapters/<stage>/<tool>` |
+
+**Lite memory budget (excluding model memory):**
+
+| Process | Budget |
+|---|---|
+| postgres | 768 MB |
+| worker (Docling models loaded) | 2 GB |
+| api | 512 MB |
+| litellm | 512 MB |
+| seaweedfs | 256 MB |
+| web | 256 MB |
+| openfga | 128 MB |
+| redis | 64 MB |
+| caddy | 32 MB |
+| **Total** | **≈ 4.5 GB** (target ≤ 6 GB, §12) |
+
+Ollama and TEI memory count as model memory.
+
+## T2. Code structure and swap points
+
+```
+apps/api/src/e2eai/
+  core/        config (FR-F21), db session, errors (RFC 9457), i18n, logging, ids (UUIDv7)
+  ports/       the ONLY interfaces in the codebase (see table below)
+  adapters/    implementations of ports (pgvector.py, qdrant.py, celery_engine.py, temporal_engine.py, ...)
+  modules/
+    auth/      local accounts, OIDC, sessions, API keys
+    org/       organizations, divisions, teams, users, roles, offboarding
+    authz/     OpenFGA client, principal resolution, doc_principals index (T4)
+    documents/ folders, documents, versions, trash, legal hold
+    sharing/   shares, access requests, notifications on share
+    ingest/    parse (Docling), chunk, embed, VLM enrichment (job definitions)
+    retrieval/ hybrid search, rerank, citations
+    chat/      conversations, messages, answer pipeline (T5), OpenAI-compatible bot endpoint (FR-C15)
+    bots/      bundles, versions, release/rollback, access, scope
+    evals/     datasets, runs, judges (via Lab adapters), leak suite
+    admin/     models, settings, egress policy, config export
+    audit/     append-only hash-chained log
+  jobs/        job functions, engine-agnostic (called by Celery or Temporal)
+  main.py      FastAPI app;   worker.py   worker entrypoint
+```
+
+Each module contains `router.py` (HTTP), `service.py` (logic), `repo.py` (SQL), and `schemas.py` (Pydantic). Modules call each other only through `service.py`.
+
+**Ports.** Interfaces exist *only* where a tier, a Lab comparison, or a phase actually swaps the implementation (ponytail rule: no interface with one implementation):
+
+| Port | Implementations | Swapped by |
+|---|---|---|
+| `VectorStore` | pgvector (P0), Qdrant (P1) | Lab, scale |
+| `JobEngine` | Celery (P0), Temporal (P1) | FR-F20 |
+| `TraceSink` | Postgres (P0), Langfuse (P0, Standard) | Tier |
+| `AuthProvider` | Local (P0), OIDC (P0, Standard) | Tier |
+| `Parser` | Docling (P0); other parsers through Lab adapters | Lab |
+
+**Not ports:**
+- **Models:** every model call (chat, embeddings, VLM) goes through LiteLLM as one OpenAI-compatible client. Reranking calls TEI's `/rerank` directly unless LiteLLM's rerank routing is verified to work with TEI (§17.6).
+- **File storage:** one S3 client; SeaweedFS and external S3 differ only in endpoint config.
+- **Authorization:** OpenFGA through the `authz` module. SpiceDB is a Lab comparison only, run through an adapter, never on the live path.
+
+## T3. Data model (PostgreSQL)
+
+Conventions (NFR-20): UUIDv7 `id`; `created_at`/`updated_at` (UTC); `created_by`/`updated_by`; migrations with Alembic, each one reversible (FR-F16).
+
+| Area | Tables (key columns) |
+|---|---|
+| Org | `organizations`; `divisions(org_id)`; `teams(division_id)`; `users(email, display_name, status[active/disabled], division_id, manager_id, locale, time_zone)`; `team_members(team_id, user_id)`; `roles(name)`; `user_roles(user_id, role_id, project_id NULL)`; `projects(owner_team_id/owner_division_id)` |
+| Auth | `local_credentials(user_id, password_hash[argon2id])`; `api_keys(user_id, hash, scopes, expires_at, revoked_at)`; sessions live in Redis |
+| Documents | `folders(parent_id, owner_id, path)`; `documents(folder_id, owner_id, title, sensitivity, status[active/trashed/purged], trashed_at, legal_hold, current_version_id)`; `document_versions(document_id, object_key, sha256, mime, size, parse_status, parse_confidence, scan_status)` |
+| Chunks | `chunks(document_id, version_id, ordinal, kind[text/table/figure/vlm], text, page, section_path, figure_object_key, table_json, tsv tsvector)` |
+| Indexes | `knowledge_indexes(embedding_model, dim, chunker, version, status)`; **one table per index:** `emb_<index_id>(chunk_id PK, embedding vector(dim))` with an HNSW index. The dimension is fixed per table, so changing models means a new index (FR-R1). |
+| Permissions read-index | `doc_principals(document_id, principal, level, expires_at NULL)`, PK on (document_id, principal), index on (principal, document_id); see T4 |
+| Bots | `bots`; `bot_versions(prompt_ref, chat_model, index_id, reranker, guardrails_json, tools_json, released_at)`; `bot_scope(bot_id, folder_id)` |
+| Chat | `conversations(user_id, bot_id, title)`; `messages(conversation_id, role, content, model, tokens, latency_ms)`; `citations(message_id, document_id, version_id, chunk_id, page)` |
+| Evals | `datasets`; `dataset_items(input, expected, persona)`; `eval_runs(bot_version_id, dataset_version, frameworks, config_json, seeds)`; `eval_results(run_id, item_id, framework, metric, score, judge_prompt_ref)`; `human_reviews` |
+| Ops | `audit_log(seq, at, actor, action, target, details_json, prev_hash, hash)`; `outbox(topic, payload, processed_at)`; `traces` (Lite TraceSink); `notifications`; `settings` |
+
+## T4. Permission design (the critical part)
+
+**Source of truth:** OpenFGA holds every sharing relationship and answers point checks: can this user open, share, or delete this document, or use this bot.
+
+**Search filtering:** for chat and search, OpenFGA's own guidance for large result sets is a *local index*, because ListObjects is capped at 1,000 results. That index is `doc_principals`.
+
+**OpenFGA model (DSL):**
+```
+model
+  schema 1.1
+type user
+type org
+  relations
+    define member: [user]
+type division
+  relations
+    define member: [user]
+type team
+  relations
+    define member: [user]
+type role
+  relations
+    define member: [user]
+type guest            # reserved for external sharing (Q5); unused in the MVP
+type folder
+  relations
+    define parent: [folder]
+    define owner: [user]
+    define editor: [user, team#member, division#member, role#member, org#member, user with non_expired, team#member with non_expired] or owner or editor from parent
+    define viewer: [user, team#member, division#member, role#member, org#member, user with non_expired, team#member with non_expired] or editor or viewer from parent
+type document
+  relations
+    define parent: [folder]
+    define owner: [user]
+    define editor: [user, team#member, division#member, role#member, org#member, user with non_expired, team#member with non_expired] or owner or editor from parent
+    define viewer: [user, team#member, division#member, role#member, org#member, user with non_expired, team#member with non_expired] or editor or viewer from parent
+type bot
+  relations
+    define admin: [user]
+    define user: [user, team#member, division#member, role#member, org#member] or admin
+condition non_expired(current_time: timestamp, expires_at: timestamp) {
+  current_time < expires_at
+}
+```
+(Expiring shares, FR-S4, use the `non_expired` condition. The same condition can be added to division, role, and org grants if needed.)
+
+**Read-index rules:**
+1. `doc_principals` stores the *granted principal* (`user:…`, `team:…`, `division:…`, `role:…`, `org:…`), **not** expanded to individual users. Org changes (Andi moves division) therefore need no index update; they change only principal resolution.
+2. Folder grants are expanded onto every document under that folder when written, moved, or added.
+3. **Tighten first, loosen last.** On revoke, delete the `doc_principals` row *before* deleting the OpenFGA tuple. On grant, write OpenFGA *before* inserting the row. A partial failure can therefore only ever be *more restrictive* than the truth, never more permissive (fail closed, NFR-19).
+4. A reconciler job reads OpenFGA's ReadChanges stream every few seconds and repairs any drift in `doc_principals`. Every repair is logged.
+5. Expired shares are filtered at query time (`expires_at > now()`). A cleanup job removes them later.
+
+**User principal set:** computed per request from the org tables and cached in Redis for ≤ 5 s. It is `{user:<id>, org:<id>, division:<id>, team:<ids>, role:<ids>}`. Deactivated users get an empty set (FR-F18).
+
+**Filtered retrieval query (pgvector):**
+```sql
+SET LOCAL hnsw.iterative_scan = relaxed_order;      -- pgvector ≥ 0.8: keeps recall under filters
+SELECT c.id, c.document_id, c.page, c.text, e.embedding <=> :qvec AS dist
+FROM emb_<index> e
+JOIN chunks c     ON c.id = e.chunk_id
+JOIN documents d  ON d.id = c.document_id AND d.status = 'active' AND c.version_id = d.current_version_id
+WHERE c.document_id IN (SELECT document_id FROM doc_principals
+                        WHERE principal = ANY(:principals)
+                          AND (expires_at IS NULL OR expires_at > now()))
+  AND c.document_id IN (SELECT document_id FROM bot_scope_documents WHERE bot_id = :bot)   -- FR-RL7
+ORDER BY dist LIMIT :k;
+```
+The keyword half runs the same filters against `tsv` (or `pg_search` BM25, if verified). The two lists are merged with reciprocal rank fusion (RRF) in Python.
+
+**Qdrant (P1):** each point's payload holds `document_id` and `principals[]`. A share change updates the payload by `document_id` filter. The same tighten-first rule applies.
+
+**Cache keys** include `sha256(sorted principals + bot_version + index_version)` (FR-C5).
+
+## T5. Key flows
+
+**F1 — Upload and ingest (FR-D1, D3, D9, D14)**
+1. `POST /api/v1/documents` (multipart) → check auth, limits (FR-F15), and the caller's folder editor permission (OpenFGA Check).
+2. Store the file in S3 under key `sha256/<hash>`; insert `documents` and `document_versions` rows. In the same transaction: owner `doc_principals` row, audit row, and an outbox event.
+3. Write the OpenFGA owner tuple (an outbox retry covers failures). Enqueue `ingest(version_id)`.
+4. Worker: malware scan (P1) → Docling parse → chunks (text, tables as `table_json` plus text, figures as crops in S3) → embed in batches through TEI → upsert into `emb_<index>` → `parse_status = ready` → notify the owner.
+5. Pages flagged low-confidence or figure-heavy → enqueue `vlm_enrich(version_id, pages)` (P1, FR-D15).
+6. Every job step is idempotent and keyed by `version_id`; retries are safe.
+
+**F2 — Share and revoke (FR-S1–S3, C4)**
+1. `POST /api/v1/documents/{id}/shares` → Check `owner` → policy check (sensitivity label, P1).
+2. Write the OpenFGA tuple → insert `doc_principals` (loosen last) → audit → notify recipients.
+3. `DELETE …/shares/{share_id}` → delete `doc_principals` (tighten first) → delete the OpenFGA tuple → invalidate affected cache keys → audit.
+
+**F3 — Chat answer (FR-C1–C13)**
+1. `POST /api/v1/chat/conversations/{id}/messages` → Check bot `user` → resolve principals.
+2. Rewrite the query using conversation context.
+3. Filtered hybrid retrieval (T4) → rerank → assemble context with citation markers.
+4. Egress check: the highest sensitivity label in the context vs. the chat model's destination (FR-M9). If blocked, use the local fallback model or return a clear error.
+5. Input guardrails (P1) → stream generation through LiteLLM over SSE → output guardrails (P1).
+6. Save the message, citations (with `version_id`), and trace (TraceSink).
+7. If nothing relevant is permitted: a grounded "I couldn't find this in the documents you can access" answer with no hints about other documents (FR-C12).
+
+**F4 — Delete, trash, purge (FR-D9, D13)**
+- Trash sets `status = 'trashed'`. Retrieval filters on `status = 'active'`, so the document disappears **immediately** (well within the 5-minute requirement). Cache entries are invalidated.
+- A daily purge job deletes files, chunks, and embeddings after 30 days, skipping documents under legal hold.
+
+**F5 — Offboarding (FR-F18)**
+1. Set `status = disabled` → delete the user's Redis sessions and revoke their API keys (≤ 1 min).
+2. Transfer ownership: OpenFGA owner tuples plus `documents.owner_id` → remove org memberships → audit.
+
+**F6 — Eval and leak-suite run (FR-T1–T7)**
+1. Job runs each dataset item through the F3 pipeline **as the item's persona**, using that persona's principals; never a bypass.
+2. Judges run in Lab adapter containers through HTTP (T6). Results are stored per framework and metric.
+3. Leak suite: personas ask about forbidden documents. Any forbidden `document_id` in the retrieved set, any forbidden title or content in the answer, or any existence hint fails the run.
+
+**F7 — Alternative chat front-end (FR-C15, P2)**
+1. LibreChat (or another OpenAI-compatible client) sends `POST /api/v1/openai/chat/completions` with `model = <bot id>`.
+2. It authenticates **as the end user**: OIDC SSO shared through Keycloak, or the user's own API key. It never uses a shared service key.
+3. The request runs the same F3 pipeline with that user's principals, so permissions behave exactly as in the built-in UI.
+4. The front-end's own document upload and RAG features are disabled. All knowledge goes through the permission-filtered pipeline.
+
+## T6. Lab adapter contract
+
+Every Lab tool container exposes the same HTTP API, so the platform never imports tool libraries (each tool's dependencies stay in its own container):
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /info` | Tool name, version, license, stage, supported metrics/operations |
+| `GET /health` | Liveness |
+| `POST /run` | Body: `{run_id, operation, inputs[], config, judge: {base_url, model}}`. Returns normalized `{item_id, metric, score, details, judge_prompt}` rows |
+
+Judge and model calls from inside adapters go through LiteLLM, using a per-run virtual key so cost is tracked (FR-L4). Contract tests live in `adapters/_contract/` and every adapter must pass them.
+
+## T7. API surface (v1)
+
+All routes are under `/api/v1`; errors use RFC 9457.
+
+| Group | Main endpoints |
+|---|---|
+| Auth | `POST /auth/login` (local), `GET /auth/oidc/callback`, `POST /auth/logout`, `GET /me` |
+| Org | `/divisions`, `/teams`, `/users` (`POST /users/{id}/deactivate`), `/roles`, `/memberships` |
+| Documents | `/folders`; `/documents` (`?view=mine\|shared\|team\|trash`), `POST /documents` (upload), `/documents/{id}`, `/versions`, `/download`, `POST /restore`, `DELETE ?permanent=true` |
+| Sharing | `/documents/{id}/shares`, `/folders/{id}/shares`, `/access-requests` (P1) |
+| Chat | `/chat/conversations` (CRUD), `POST /chat/conversations/{id}/messages` (SSE stream), `POST /messages/{id}/feedback`, `POST /messages/{id}/stop` |
+| OpenAI-compatible (P2) | `GET /openai/models` (bots the user may use), `POST /openai/chat/completions` (FR-C15) |
+| Bots | `/bots`, `/bots/{id}/versions`, `POST …/release`, `POST …/rollback`, `/bots/{id}/access`, `/bots/{id}/scope` |
+| Search | `GET /search` (P1) |
+| Evals | `/evals/datasets`, `/evals/runs`, `GET /evals/runs/{id}/compare?with=`, `/leak-suite/runs` |
+| Admin | `/admin/models`, `/admin/settings` (egress, limits), `GET /admin/config/export` (P1) |
+| Ops | `/audit` (query, export), `/notifications`, `/health`, `/ready` |
+
+- **Web sessions:** httpOnly, Secure, SameSite=Lax cookie plus a CSRF token.
+- **API clients (P1):** `Authorization: Bearer <api key>`.
+
+## T8. Configuration file (FR-F21)
+
+`e2eai.yaml` is validated with Pydantic at startup. Secrets are only referenced (`env:` or `file:`).
+```yaml
+tier: lite                      # lite | standard | enterprise
+components:
+  auth: local                   # local | oidc
+  job_engine: celery            # celery | temporal
+  vector_store: pgvector        # pgvector | qdrant
+  tracing: postgres             # postgres | langfuse
+  chat_frontends: [builtin]     # builtin | librechat (P2)
+models:                         # chosen in the wizard (FR-F5a); no defaults shipped
+  chat:      [{name: example-chat-4b-q4, served_by: ollama}]
+  embedding: [{name: example-embedding, served_by: tei}]
+  reranker:  [{name: example-reranker, served_by: tei}]
+  vision:    []                 # FR-D15, optional
+egress:
+  external_apis: false          # FR-M9
+limits: {upload_mb: 100, files_per_batch: 50, storage_gb_per_user: 20}
+retention: {chats_days: 365, traces_days: 30, trash_days: 30, audit_days: 365}
+locale: {default_language: id, time_zone: Asia/Jakarta}
+secrets:
+  db_password: env:E2EAI_DB_PASSWORD
+```
+Model names above are placeholders showing the format; the wizard fills in real choices.
+
+## T9. Cross-cutting implementation choices
+
+All of these are re-verified per §17.6 before first use.
+
+| Concern | Choice |
+|---|---|
+| Python tooling | uv, ruff, pyright/mypy; Python 3.12 |
+| API | FastAPI, Pydantic v2, pydantic-settings |
+| Database | SQLAlchemy 2 (async) + asyncpg; Alembic migrations; pgvector ≥ 0.8 |
+| Jobs | Celery 5 (Redis broker); `temporalio` SDK for the Temporal engine |
+| Authorization | OpenFGA server + official Python SDK; model kept in `deploy/openfga/model.fga` with tests (`fga model test`) |
+| Models | `openai` Python SDK pointed at LiteLLM; TEI for embeddings and rerank |
+| Parsing | Docling (in the worker image); figure crops to S3 |
+| S3 | `aioboto3` |
+| Password hashing | argon2id |
+| Audit log | Append-only table; each row stores `hash = sha256(prev_hash + row)`, so tampering breaks the chain (FR-F9). A nightly job verifies the chain. |
+| Outbox | Postgres `outbox` table processed by a worker, for OpenFGA writes, notifications, and webhooks; at-least-once delivery, idempotent consumers |
+| Logging and tracing | Structured JSON logs with trace IDs; OpenTelemetry SDK |
+| Frontend | Next.js (App Router, TypeScript strict), Tailwind CSS + shadcn/ui, next-intl (EN/ID), TanStack Query |
+| Chat UI | **assistant-ui** (MIT, React): message list, streaming, stop button, attachments, markdown, and custom citation components. Connected to our SSE endpoint, so our backend keeps full control of permissions. |
+| Testing | pytest, Testcontainers, Vitest, Playwright |
+| Reverse proxy | Caddy (automatic TLS; local CA on Lite) |
+
+## T10. Phase 0 implementation slice
+
+Phase 0 builds, in this order:
+1. Repo layout (§17.2), `make dev` / `make test`, CI skeleton.
+2. Compose Lite profile (T1), `deploy/versions.lock`.
+3. `core/` (config, errors, ids, logging) with `e2eai.yaml` validation.
+4. Alembic baseline migration: org, auth, audit, settings tables.
+5. Local auth plus bootstrap admin (FR-F2a).
+6. OpenFGA model plus model tests; the `authz` module with principal resolution.
+7. Hash-chained audit log.
+8. CLI wizard: hardware detection, tier recommendation, model selection, config generation (FR-F5, F5a, F5b, F19, F20, F21).
+9. LiteLLM wiring: the chosen model answers.
+10. Port definitions with their first implementations (pgvector, Celery, Postgres TraceSink, local AuthProvider) plus contract-test scaffolding.
+11. Standard additions: Keycloak/OIDC, Langfuse.
+
+**Exit:** `make verify-phase-0` passes (§13).
+
+## T11. Design decisions (approved by the owner, 2026-10-05)
+
+| # | Decision | Status |
+|---|---|---|
+| D1 | Search filtering uses a Postgres read-index (`doc_principals`) synced from OpenFGA, with the tighten-first rule and a reconciler (T4) | ✅ **Approved.** It follows OpenFGA's documented guidance for search, and ListObjects alone caps at 1,000 objects. |
+| D2 | Modular monolith instead of microservices (T1) | ✅ **Approved.** Fewer moving parts. |
+| D3 | TEI serves embeddings and rerankers in every tier, instead of Ollama for embeddings | ✅ **Approved.** One server handles both, and Ollama doesn't serve rerankers. |
+| D4 | One vector table per knowledge index (fixed dimension) | ✅ **Approved.** pgvector indexes need a fixed dimension. |
+| D5 | Chat UI: assistant-ui inside our Next.js app (built-in); LibreChat as an optional alternative front-end; Open WebUI not used on the live path | ✅ **Approved.** Both are MIT. Open WebUI's license requires keeping its branding above 50 users, and its own RAG and user model would bypass our permission pipeline. |
+
+---
+
 ## 18. Changelog
 
 | Version | Date | Changes |
@@ -633,3 +970,4 @@ Coverage target: ≥ 80% lines for API and workers. 100% of permission-resolutio
 | 1.2 | 2026-10-04 | **Documents with images:** baseline tables, OCR, and figure crops in every tier (FR-D3); optional vision-model add-on for complex documents (FR-D15); technical and maintenance manual handling with verbatim safety warnings (FR-D16, US15); figure and table crops in citations (FR-R7); document-understanding test set (FR-T13); Lite-tier vision option; VLM misread risk. Q6 resolved. |
 | 1.3 | 2026-10-04 | Job/workflow engine is selectable: Celery (default, every tier) or Temporal (Standard/Enterprise), behind one job interface (FR-F20). Docling confirmed as the parser in every tier; Unstructured and MinerU are only for Lab comparison. |
 | 1.4 | 2026-10-05 | Exhaustive completeness sweep. **Added:** configuration as code (FR-F21), documentation deliverables (FR-F22), OCR language packs (FR-D3), version handling in retrieval (FR-D1), cross-lingual retrieval tests (FR-R8), spreadsheet questions as P3 (FR-R10), stop button (FR-C9), answer language (FR-C13), exit-friendly backups (NFR-6), no outbound telemetry (NFR-12), health endpoints (NFR-16), resilience and fail-closed permissions (NFR-19), API and data standards (NFR-20), developer setup, test strategy, CI/CD (§17.9–17.11). |
+| 1.5 | 2026-10-05 | **Part II — Technical Design** (T1–T11): process list and Lite memory budget, code structure and the only ports, data model, permission design (OpenFGA plus `doc_principals` read-index, tighten-first rule, filtered pgvector query), key flows F1–F7, Lab adapter HTTP contract, API surface, config file, library choices, Phase 0 slice, decisions D1–D5. **Chat UI:** built-in with assistant-ui (FR-C14); LibreChat as an optional front-end through an OpenAI-compatible endpoint (FR-C15); Open WebUI excluded from the live path. |
