@@ -4,8 +4,10 @@ For: the project owner and any builder (human or AI) picking up the work.
 Source of truth: E2EAIDEV_PRD.md (v1.5, Part II design approved D1-D5). Decisions: AGENTS.md.
 
 WHERE WE ARE
-Phase 0 (Foundations): about 55% done. Infrastructure runs on the owner's PC and models answer
-through the gateway. API Phase 0 core is now tested, migrated, and exposes health/ready endpoints.
+Phase 0 (Foundations): about 65% done. Infrastructure runs on the owner's PC and models answer
+through the gateway. API Phase 0 core is tested, migrated, and exposes health/ready endpoints.
+Local auth (argon2id), Valkey sessions, CSRF, a login rate-limit placeholder, the bootstrap admin,
+and the demo org seed are implemented with secret-free unit tests.
 
 DONE AND VERIFIED
 - PRD v1.5: Part I requirements + Part II technical design.
@@ -33,17 +35,25 @@ DONE AND VERIFIED
   - Async Alembic env uses the existing asyncpg dependency (no psycopg needed).
   - OpenFGA check fails closed on any client/runtime error; `connect()` response handling fixed.
   - Tests added for health endpoint, UUIDv7 shape, OpenFGA fail-closed, and baseline migration coverage.
-  - Verified: `cd apps/api && uv run pytest -q` -> 4 passed, 1 warning.
   - Verified live DB migration: `cd apps/api && uv run alembic upgrade head` -> upgraded to 0001_phase0_baseline.
   - Verified live API: uvicorn on 127.0.0.1:18000 returned `{"status":"ok"}` and `{"status":"ready"}`.
+- API auth/session/bootstrap-admin/demo seed slice (NFR-18, FR-F2a, FR-F3, FR-F9):
+  - auth.py: argon2id hash/verify; Valkey-backed Sessions with an 8 h sliding idle TTL (NFR-18);
+    CSRF synchronizer token (compare_digest) enforced on state-changing routes; a fixed-window
+    login rate-limit placeholder in Valkey (10/5 min; ponytail-marked for a P1 sliding window);
+    POST /auth/login, POST /auth/logout, GET /me wired to DB + Valkey; failed/ok logins audited.
+  - seed.py: idempotent role seed (FR-F3), bootstrap admin (FR-F2a, strong password shown once,
+    never committed), demo org seed (Org "Demo"; Sales/HR; Andi, Budi, Intern) for the leak suite.
+  - manage.py commands: `e2eai-api bootstrap-admin` and `e2eai-api seed-demo` print passwords once.
+  - Tests need no secrets/DB: password+CSRF+rate-limit+session store via a fake Redis; demo persona
+    spec and password charset. Verified: `cd apps/api && uv run pytest -q` -> 10 passed, 1 warning.
+    Regression check: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
 
 IN PROGRESS
-- API auth/session slice: local login, Valkey sessions, CSRF, login rate limit, bootstrap admin.
-- Demo org seed: Org Demo; divisions Sales/HR; users Andi, Budi, intern; roles.
 - OpenFGA store/model live bootstrap test and model file/test export.
 
 NEXT
-1. Finish API auth/session/bootstrap-admin/demo seed with tests.
+1. Live auth smoke (login -> session cookie -> /me -> logout) and demo-seed run against the stack.
 2. Add OpenFGA model write/check integration test against the running OpenFGA service.
 3. Add `make` or uv-script equivalent for `verify-phase-0`: compose health, cli tests, api tests,
    alembic upgrade, API health/ready, LiteLLM chat/embedding smoke, OpenFGA fail-closed.
