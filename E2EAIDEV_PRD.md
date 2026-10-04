@@ -99,6 +99,8 @@ E2EAIDEV solves both:
 | FR-F2a | **Bootstrap admin:** the install wizard creates one local break-glass admin account (strong generated password, shown once, MFA required in P2). It works before SSO is configured and when the identity provider is down. Every use is audited. | P0 |
 | FR-F3 | Platform RBAC with roles Admin, AI Engineer, Evaluator, Compliance, Business User. Roles apply org-wide or per **Project**. A Project is a container for Lab work (datasets, eval suites and runs, bot bundles, comparison reports), owned by a team or division. Document access is **not** governed by Projects; it uses folder/document sharing (§7.1). | P0 |
 | FR-F15 | Default limits, admin-configurable: max upload 100 MB per file, 50 files per batch, 20 GB storage per user. Full quotas arrive with FR-F13. | P0 |
+| FR-F16 | **Upgrades and migrations:**<br>• Versioned, reversible database schema migrations from the first schema (P0).<br>• Upgrade procedure (P2): pre-upgrade backup → migrations → health check → automatic rollback on failure.<br>• Release notes flag breaking changes.<br>• Upgrades skip at most one minor version; the upgrade path is tested in CI. | P0 (migrations) / P2 (upgrade procedure) |
+| FR-F17 | **Secret and certificate rotation:**<br>• Rotate gateway keys, API keys, OIDC client secrets, and database credentials without downtime.<br>• TLS certificates auto-renew (ACME, or the internal CA for air-gapped installs) and alert 14 days before expiry.<br>• Emergency revocation of a leaked key takes effect within 5 minutes. | P2 |
 | FR-F4 | Install profiles: `core`, `lab-<stage>`, `lab-all`, plus GPU/CPU variants, through Docker Compose profiles and Helm values. | P0 |
 | FR-F5 | Install wizard (CLI first, UI later): detect hardware (CPU, RAM, GPU and VRAM, disk) → recommend a profile → choose tools → **choose models** (FR-F5a) → generate config → pull pinned images → download models. | P0 (CLI) / P2 (UI) |
 | FR-F5a | **Model selection is the user's choice.** The platform ships no hardcoded default model. For each role (chat LLM, embedding, reranker, judge, safety classifier), the wizard shows a curated catalog filtered by what fits the detected hardware. Each entry shows size, quantization, estimated RAM/VRAM, expected speed, languages (including Indonesian), license, and a "recommended for your hardware" badge. Users can pick several models per role (for Lab comparisons) or point to an external API through the gateway. Choices can be changed later in Admin → Models without reinstalling. | P0 |
@@ -213,6 +215,7 @@ Every Lab stage follows **compare mode**:
 | FR-RL3 | CI integration: run eval suites from GitHub Actions / GitLab CI and fail the pipeline on regression. | P1 |
 | FR-RL4 | Rollout strategies: shadow deploy, canary (traffic %), online A/B test with feature flags. | P2 |
 | FR-RL5 | One-click rollback to any previous bundle version. | P1 |
+| FR-RL6 | **Environments: dev → staging → prod.** A bot bundle is promoted between environments, never edited in place in prod. Each environment has its own knowledge index, gateway keys, and budgets. Staging uses test or anonymized documents unless an admin explicitly allows production data. Promotion requires that environment's release gates. Single-node installs may run all three as namespaces on one machine. | P1 |
 
 ### 6.8 Operate
 | ID | Requirement | Tools | Priority |
@@ -228,6 +231,8 @@ Every Lab stage follows **compare mode**:
 | FR-O9 | Guardrails at runtime: PII redaction, prompt-injection detection, safety classification, output validation. | NeMo Guardrails ✅, Llama Guard 3 ✅, Guardrails AI | P1 |
 | FR-O10 | GPU scheduling and sharing. | Kubernetes Kueue, NVIDIA MIG/time-slicing | P3 |
 | FR-O11 | Explainability: "Why this answer?" shows the retrieved passages, their scores, the documents considered, and which tools were called. | — | P1 |
+| FR-O12 | **PII masking in traces and logs:**<br>• Prompts, retrieved passages, answers, and tool payloads are masked before reaching Langfuse, app logs, or the SIEM. Masked items: names, IDs (e.g., NIK), phone numbers, emails, account numbers, plus custom patterns.<br>• Unmasked trace access is a separate permission, time-limited and audited.<br>• Until masking ships, trace retention defaults to 30 days. | Presidio ✅ | P1 |
+| FR-O13 | **Operational runbooks** in `docs/runbooks/`, each with symptoms → diagnosis commands → fix → verification. Minimum set:<br>• service down / restart<br>• restore from backup<br>• GPU out of memory<br>• model endpoint failing or slow<br>• vector store degraded<br>• permission-sync (SCIM/OpenFGA) lag<br>• disk full<br>• leaked key<br>Each runbook is exercised at least once in a staging drill before GA. | — | P2 |
 
 ### 6.9 Improve
 | ID | Requirement | Priority |
