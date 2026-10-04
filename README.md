@@ -1,9 +1,14 @@
-# E2EAIDEV — End-to-End AI Development Platform
+# E2EAIDEV — End-to-End Enterprise AI Development Lab
 
-A self-hostable platform that lets a company run the whole AI development lifecycle in one place: prompt engineering, model benchmarking, automated evaluation (LLM-as-a-judge, human, or hybrid), a RAG chatbot builder, pluggable model serving, and observability.
+A self-hostable platform that teaches, and lets a company actually run, the **full enterprise AI development lifecycle**: plan → data → build → test → release → operate → improve.
 
-> **Status:** planning. This document holds the research, architecture, and roadmap. No code yet.
-> Research was done in October 2026. Re-check the versions and licenses before Phase 1 starts.
+It has two layers:
+
+1. **The Lab (primary).** At every lifecycle stage, the tools enterprises actually use can be installed **side by side** and compared on the user's own data: their strengths, weaknesses, cost, and license. Example: run Ragas, DeepEval, Phoenix, and promptfoo on the same dataset and see which one agrees with human reviewers.
+2. **The reference product: a permission-aware RAG chatbot.** Built with the Lab, it's an enterprise assistant where people upload and **share documents like Google Drive** (with a person, team, role, division, or the whole company). The AI only knows what each person is allowed to see, and it can query existing systems (ERP, HR, CRM) through their APIs.
+
+> **Status:** planning. No code yet. Research done October 2026; re-check versions and licenses before each phase.
+> **Out of scope for now:** omnichannel (WhatsApp, Slack, Teams). It will be added later as a channel layer on the same chatbot.
 
 ---
 
@@ -11,306 +16,327 @@ A self-hostable platform that lets a company run the whole AI development lifecy
 
 | Area | Decision |
 |---|---|
-| Deployment | Self-hosted first. Docker Compose for dev and single-node installs, Helm/Kubernetes for prod. Must run **fully air-gapped** with local models only. |
-| Hardware | GPU optional. CPU installs use Ollama with small models; GPU installs can turn on vLLM. |
-| Tenancy | One company per install, with workspaces, projects, RBAC, and SSO (OIDC). |
+| Purpose | Help people understand and practice end-to-end enterprise AI development by comparing real tools, and ship a production-grade RAG chatbot as the result. |
+| Deployment | Self-hosted first. Docker Compose for dev and single-node installs, Helm/Kubernetes for prod. Must run **fully air-gapped** with local models. |
+| Hardware | GPU optional. CPU installs use Ollama with small, quantized models; GPU installs turn on vLLM. |
+| Tenancy | One company per install, with divisions, teams, roles, and users synced from the HR system or identity provider. SSO via OIDC. |
 | Stack | Python 3.12 + FastAPI (API and workers), TypeScript + Next.js (UI), PostgreSQL as the system of record. |
-| Principle | **Integrate, don't rebuild.** The platform is a *control plane* that configures and orchestrates best-in-class OSS components behind stable internal interfaces, so each component can be swapped. |
+| Principles | **Integrate, don't rebuild:** the platform is a control plane over best-in-class OSS tools. **Adapter per tool:** every tool sits behind a stable internal interface, so tools can be swapped and compared. **Isolate tools:** each Lab tool runs in its own container, because their dependencies conflict. **Fair comparison:** same data, same judge or model, same settings. |
 
 ---
 
-## 2. State-of-the-art research by lifecycle stage
+## 2. How the Lab works
 
-Each stage compares the leading options and recommends one default. "Pluggable" means users can pick another option at install time.
-
-### 2.1 Model gateway (one API for every model)
-
-| Option | License | Notes |
-|---|---|---|
-| **LiteLLM** ✅ | MIT | The most widely adopted self-hosted gateway. OpenAI-compatible API over 100+ providers, including vLLM and Ollama. Virtual keys, budgets, cost tracking, fallbacks. |
-| Portkey | OSS gateway + commercial | Stronger guardrails and governance, but the full feature set lives in the managed cloud. |
-| Kong AI Gateway | OSS + enterprise | Only makes sense if Kong already runs your API mesh. |
-
-**Recommendation: LiteLLM proxy**, deployed from a **pinned, digest-verified container image**.
-⚠️ In March 2026, LiteLLM PyPI releases 1.82.7 and 1.82.8 were compromised in a supply-chain attack (credential-stealing `.pth` payload). Rules for us:
-- Never `pip install litellm` unpinned.
-- Pin hashes and scan dependencies in CI.
-- Keep the gateway's secrets isolated from other services.
-
-### 2.2 Model serving
-
-| Option | Best for | Notes |
-|---|---|---|
-| **vLLM** ✅ (GPU) | Multi-user production serving | The most widely deployed engine with the broadest hardware support. PagedAttention and continuous batching. Also serves embedding and reranker models. |
-| SGLang | Agentic / structured-output workloads, many models at once | Often faster than vLLM in H100 benchmarks; RadixAttention shares KV cache. Planned as an optional engine. |
-| **Ollama** ✅ (CPU/dev) | Local, edge, CPU-only installs | The easiest setup and the widest hardware support. Not built for high-concurrency production. |
-| TGI | — | ❌ Hugging Face put it in maintenance mode in December 2025, and the repo was archived in 2026. Don't use it for new builds. |
-| TensorRT-LLM + Triton | 100+ concurrent users, NVIDIA only | Phase 4+ option for large installs. |
-
-**Recommendation:** Ollama for CPU and dev profiles, vLLM for GPU profiles. Both sit behind LiteLLM, so apps never talk to an engine directly.
-
-### 2.3 Prompt engineering and management
-
-| Option | License | Notes |
-|---|---|---|
-| **Langfuse prompt management** ✅ | MIT | Versioned prompts, labels (`production`/`staging`), playground, prompt experiments over datasets. It's already part of the observability stack. |
-| MLflow Prompt Registry | Apache 2.0 | Good if you already run MLflow for classic ML. |
-| Build our own | — | Not worth it for the MVP. |
-
-**Recommendation:** use Langfuse as the prompt registry. Our UI adds A/B test orchestration on top: run prompt versions × models × dataset, then compare scores.
-
-### 2.4 Evaluation (automated testing, LLM-as-a-judge, human, hybrid)
-
-| Option | Strength |
-|---|---|
-| **Ragas** ✅ | Best RAG-specific metrics: faithfulness, context precision and recall, answer relevance. |
-| **DeepEval** ✅ | Broadest metric library (50+), pytest-style CI integration, G-Eval custom judges. |
-| **promptfoo** ✅ | YAML prompt × model matrices, plus **red-teaming** (prompt injection, jailbreak, PII leakage). |
-| Inspect AI | Strong for capability and safety benchmarks. Optional. |
-| Arize Phoenix | Strong for RAG debugging and embedding visualization. Optional add-on. |
-
-**Recommendation:** our own **Eval Runner** service that calls Ragas and DeepEval metrics as libraries and promptfoo for red-team suites, then writes every score to Postgres and Langfuse.
-
-**Judging modes** (configured per test suite):
-1. **LLM-only**: a judge model scores with a rubric (G-Eval style). Supports multiple judges and majority vote.
-2. **Human-only**: items go to an annotation queue (Langfuse annotation queues, or our UI).
-3. **Hybrid**:
-   - The LLM judges every item.
-   - An item goes to the human queue when any of these is true:
-     - judge confidence is below a threshold
-     - two judges disagree
-     - the item falls in a random X% audit sample
-   - Human labels are used to **calibrate the judge**: track the agreement rate and Cohen's κ per rubric, and alert when the judge drifts.
-
-### 2.5 Model benchmarking
-
-- **Custom benchmarks:** the user's own datasets, run through the Eval Runner. Report quality, latency (p50/p95, TTFT), tokens/s, and $/1k requests, using cost data from LiteLLM.
-- **Standard benchmarks (optional):** EleutherAI `lm-evaluation-harness` for academic suites (MMLU and similar). For throughput, use vLLM's built-in benchmark tools.
-- Output is a leaderboard per project: model × prompt version × dataset.
-
-### 2.6 Document storage (file management)
-
-| Option | License | Notes |
-|---|---|---|
-| MinIO CE | AGPLv3 | ❌ Community edition went to maintenance mode in December 2025, and the repo became read-only in April 2026. Avoid it for new builds. |
-| **SeaweedFS** ✅ | Apache 2.0 | S3-compatible, light enough for a single node, scales out. Apache 2.0 makes redistribution easy. |
-| Garage | AGPLv3 | A very good small-cluster default, but AGPL. |
-| RustFS | Apache 2.0 | Newer project; write-heavy single-node workloads. Watch its maturity. |
-| Ceph RGW | LGPL | For large enterprises that already run Ceph. |
-
-**Recommendation:** SeaweedFS as the built-in S3 store, shared with Langfuse for payload storage. Users can point at any S3-compatible endpoint instead (AWS S3, Ceph, Garage).
-For a user-facing file manager, add **connectors** rather than embedding a file manager: S3 bucket, Nextcloud (WebDAV), SharePoint/OneDrive, Google Drive, and Confluence. Connectors sync on a schedule into the ingestion pipeline.
-
-### 2.7 Document parsing and chunking
-
-| Option | License | Notes |
-|---|---|---|
-| **Docling** ✅ | MIT (LF AI & Data) | IBM Research. Layout-aware PDF/DOCX/PPTX → structured Markdown/JSON with tables. Runs well on CPU (~3 s/page). |
-| MinerU | AGPL-3.0 | Best on scanned PDFs and complex tables using VLM layout analysis. Needs a GPU. Optional, and AGPL, so it runs as a separate service. |
-| Unstructured (OSS) | Apache 2.0 | Widest format coverage (25+, including email and HTML), but weaker tables and the slowest on CPU. Used as a fallback for formats Docling doesn't handle. |
-
-**Recommendation:** Docling by default, Unstructured as fallback for other formats, and MinerU as an optional GPU route for scanned documents.
-**Chunking strategies (user-selectable):** structure-aware (headings and sections, default), recursive by token count, semantic, and parent-child (small chunks for retrieval, return the parent).
-
-### 2.8 Embedding models (user-selectable)
-
-| Model | License | Notes |
-|---|---|---|
-| **Qwen3-Embedding (0.6B / 4B / 8B)** ✅ | Apache 2.0 | Top of MTEB multilingual (8B ≈ 70.6). The 0.6B model fits CPU installs. |
-| **BGE-M3** ✅ | MIT | Most downloaded. Returns **dense + sparse + multi-vector** in one model, which is good for hybrid search. Strong multilingual support, including Indonesian. |
-| NV-Embed-v2 | CC-BY-NC | Top of MTEB English, but **non-commercial license**. Exclude it by default. |
-| jina-embeddings-v3, e5 family | varies | Alternatives. |
-| OpenAI / Cohere / Voyage APIs | commercial | Through LiteLLM, for non-air-gapped installs. |
-
-**Recommendation:** BGE-M3 as the default (hybrid-friendly, MIT), Qwen3-Embedding for best accuracy. Serve them with vLLM's pooling runner on GPU, or with Infinity/TEI or Ollama on CPU.
-**Rule:** an index is bound to its embedding model and dimension. Changing the model means re-indexing, handled as a versioned background job.
-
-### 2.9 Rerankers (user-selectable)
-
-| Model | License | Notes |
-|---|---|---|
-| **bge-reranker-v2-m3** ✅ | Apache 2.0 | Light, multilingual, a CPU-friendly default. |
-| **Qwen3-Reranker (0.6B / 4B / 8B)** ✅ | Apache 2.0 | Most accurate open reranker in 2026, with 32K context. |
-| Cohere Rerank / Jina Reranker API | commercial | Through the API for non-air-gapped installs. |
-| None | — | Allowed, for latency-sensitive bots. |
-
-### 2.10 Vector store (user-selectable at install)
-
-| Option | License | Notes |
-|---|---|---|
-| **Postgres + pgvector** ✅ | PostgreSQL | No extra database to run, and it can join with relational data (ACLs, metadata). Fine up to roughly 10–50M vectors. Hybrid search comes from Postgres full-text or BM25 through `pg_search`/ParadeDB. |
-| **Qdrant** ✅ | Apache 2.0 | Fast (Rust), excellent payload filtering, native sparse vectors and hybrid search. The scale-up choice. |
-| Weaviate | BSD-3 | Strongest built-in hybrid search and multi-tenancy. |
-| Milvus | Apache 2.0 | Billion-scale, but heavier to operate. |
-
-**Recommendation:** pgvector by default, Qdrant as the scale-up option. Both sit behind a `VectorStore` interface, so Weaviate and Milvus can be added later.
-
-### 2.11 RAG orchestration
-
-- **Frameworks:** LlamaIndex (strongest ingestion and indexing primitives) or Haystack (clean pipelines). LangChain/LangGraph for agentic flows.
-  **Recommendation:** keep our own thin pipeline layer (retrieve → rerank → assemble context → generate → cite) and use LlamaIndex components inside it, so we aren't locked into a framework.
-- **Reference platforms studied:**
-  - **RAGFlow** (Apache 2.0): deep document understanding and citations.
-  - **Dify:** visual builder. Its modified license restricts multi-tenant use, so we don't build on it.
-  - **Open WebUI:** chat UX.
-- **Retrieval features:**
-  - hybrid search (dense + sparse/BM25 with RRF fusion)
-  - metadata filters
-  - document-level ACL filtering (users only retrieve what they're allowed to read)
-  - query rewriting
-  - citations with page and section anchors
-
-### 2.12 Guardrails and safety
-
-| Option | License | Notes |
-|---|---|---|
-| **NeMo Guardrails** ✅ | Apache 2.0 | Input, dialog, retrieval, execution, and output rails (Colang). |
-| **Llama Guard 3 / similar safety classifiers** ✅ | Llama license | Content-safety classification, served through vLLM or Ollama. |
-| Guardrails AI | Apache 2.0 | Structured-output validation (validator hub). |
-| LLM Guard (Protect AI) | MIT | ⚠️ Repo archived in July 2026. Treat it as frozen. |
-
-**Recommendation:** a guardrail stage in the chat pipeline: PII redaction, prompt-injection detection, safety classification, and output validation. promptfoo red-team suites run in CI before a bot is published.
-
-### 2.13 Observability
-
-| Option | License | Notes |
-|---|---|---|
-| **Langfuse** ✅ | MIT | The most widely adopted OSS LLM observability tool: traces, costs, prompt management, datasets, LLM-as-a-judge, annotation queues. Self-hosting and air-gapped installs are first-class. ClickHouse acquired it in January 2026; the MIT license and self-hosting stay. Needs ClickHouse, Redis, and S3. |
-| Arize Phoenix | Elastic License 2.0 | Best for RAG and embedding debugging. Optional add-on. |
-| MLflow 3 | Apache 2.0 | A strong end-to-end GenAI lifecycle option if MLflow is already the standard. |
-
-**Recommendation:** Langfuse plus **OpenTelemetry** for the platform's own services (Prometheus + Grafana for infra metrics).
-
----
-
-## 3. Architecture
-
-### 3.1 Components
-
-```
-                        ┌────────────────────────────────────────────┐
-  Users / SSO (OIDC) ──▶│  Web UI (Next.js)                          │
-                        │  Prompts · Benchmarks · Evals · RAG Builder│
-                        │  Chat Playground · Admin/Install           │
-                        └──────────────────┬─────────────────────────┘
-                                           │ REST/SSE
-                        ┌──────────────────▼─────────────────────────┐
-                        │  Control Plane API (FastAPI)               │
-                        │  auth/RBAC · projects · registries ·       │
-                        │  provider config · job scheduling          │
-                        └───┬──────────┬───────────┬─────────────┬───┘
-                            │          │           │             │
-               ┌────────────▼──┐ ┌─────▼──────┐ ┌──▼─────────┐ ┌─▼──────────────┐
-               │ Ingestion     │ │ Eval Runner│ │ RAG Runtime│ │ Benchmark      │
-               │ Workers       │ │ (Ragas,    │ │ (retrieve, │ │ Runner         │
-               │ (connectors,  │ │ DeepEval,  │ │ rerank,    │ │ (latency/cost/ │
-               │ Docling,      │ │ promptfoo) │ │ guardrails,│ │ quality)       │
-               │ chunk, embed) │ │            │ │ generate)  │ │                │
-               └──┬─────┬──────┘ └─────┬──────┘ └──┬─────┬───┘ └───────┬────────┘
-                  │     │              │           │     │             │
-                  │     └──────────────┴─────┬─────┘     │             │
-                  │                          │           │             │
-     ┌────────────▼───┐  ┌───────────────────▼──┐  ┌─────▼────────┐    │
-     │ Object Storage │  │ LiteLLM Gateway      │◀─┤ Vector Store │    │
-     │ (SeaweedFS/S3) │  │ keys·budgets·routing │  │ pgvector |   │    │
-     └────────────────┘  └───┬────────┬─────┬───┘  │ Qdrant       │    │
-                             │        │     │      └──────────────┘    │
-                       ┌─────▼──┐ ┌───▼──┐ ┌▼──────────────┐           │
-                       │ vLLM   │ │Ollama│ │External APIs  │◀──────────┘
-                       │ (GPU)  │ │(CPU) │ │(OpenAI, etc.) │
-                       └────────┘ └──────┘ └───────────────┘
-
-  Cross-cutting: PostgreSQL (system of record) · Redis (queue/cache)
-                 Langfuse (traces, prompts, scores) · OTel → Prometheus/Grafana
-```
-
-### 3.2 Key data flows
-
-1. **Ingest:**
-   - Connector sync → raw file to S3 → Docling parse → chunk.
-   - Embed (selected model through LiteLLM or vLLM) → upsert into the vector store with ACL metadata.
-   - Record the version in Postgres.
-2. **Chat (RAG):**
-   - Query → input guardrails → query rewrite → hybrid retrieve (ACL-filtered).
-   - Rerank → assemble context → LLM through LiteLLM → output guardrails → answer with citations.
-   - Full trace to Langfuse.
-3. **Eval:**
-   - Dataset × (prompt version, model, RAG config) → run → judges (LLM, human, or hybrid).
-   - Scores go to Postgres and Langfuse. A regression gate decides whether a release passes.
-4. **Benchmark:** the same runner as Eval, plus latency/throughput sampling and cost from LiteLLM spend logs.
-
-### 3.3 Core domain model (Postgres)
-
-`Workspace → Project → { PromptRef, Dataset(Item), EvalSuite(Rubric, JudgeConfig), EvalRun(Result, HumanReview), KnowledgeBase(Source, Document, IndexVersion{embedding_model, dim, chunking, vector_store}), Bot(kb_ids, prompt_ref, model, reranker, guardrails, version), ProviderConfig(model endpoints, keys via secret store) }`
-
-### 3.4 "Pick what to install": modular deployment
-
-- **Docker Compose profiles:** `core` (api, ui, postgres, redis, litellm, seaweedfs, langfuse) plus optional `qdrant`, `ollama`, `vllm`, `mineru`, `phoenix`, `monitoring`.
-  Example: `docker compose --profile core --profile qdrant --profile vllm up -d`.
+### 2.1 Install profiles ("pick what to install")
+- **`core`:** the minimum to run the chatbot, with one default tool per stage. Light enough for a single CPU machine.
+- **`lab-<stage>`:** extra tools for comparing one stage, for example `lab-eval`, `lab-vector`, `lab-parsing`, `lab-serving`.
+- **`lab-all`:** everything, for training environments.
 - **Install wizard (CLI + UI):**
   1. Detect GPU, RAM, and disk.
-  2. Suggest a profile (CPU-lite / GPU-standard / enterprise).
-  3. Write `.env` and `values.yaml`.
-  4. Pull pinned images.
-  5. Download the selected models (air-gapped: from a local model mirror).
-- **Helm chart** for Kubernetes, with the same toggles as values flags. vLLM runs as a GPU node-pool deployment.
+  2. Suggest a profile.
+  3. Let the user tick which tools to install.
+  4. Write `.env` and `values.yaml`.
+  5. Pull pinned images.
+  6. Download the models (air-gapped: from a local mirror).
 
-### 3.5 Security baseline
+### 2.2 Compare mode (the same pattern at every stage)
+1. **Pick tools** that are installed for the stage.
+2. **Fix the inputs:** same dataset, same documents, same judge or model through the gateway.
+3. **Run:** each tool runs through its adapter, and results are normalized into a common schema.
+4. **Report:**
+   - **measured** results: quality, agreement with human labels, latency, cost, variance across repeated runs
+   - **documented** results: what each tool's metric *really* means (the actual definition and the actual judge prompt), license, maturity, operational weight
+5. **Learn:** each stage has "why this matters in enterprise" notes linked to standards such as OWASP, NIST, and the EU AI Act.
 
-- OIDC SSO (Keycloak bundled optionally), RBAC per workspace and project, audit log.
-- Secrets in a secret store (Vault or Kubernetes secrets); never in plaintext in Postgres.
-- Document-level ACLs enforced *at retrieval time*, not just in the UI.
-- Supply chain:
-  - pinned image digests and lockfiles with hashes
-  - SBOM and dependency scanning in CI
-  - see the LiteLLM incident above
-- PII redaction on ingestion (optional) and in guardrails. Data retention policies for traces.
+### 2.3 Learning layer
+- **Guided scenarios**, for example *"Build an HR-policy bot end to end"* and *"Find out why your bot hallucinates"*. Each comes with sample data, expected results, and explanations at each stage.
+- **Role-based paths:** AI engineer, evaluator/annotator, AI product manager, risk/compliance officer, platform/infra engineer.
+- **Navigation follows the lifecycle** (Plan → Data → Build → Test → Release → Operate → Improve), so using the platform teaches the lifecycle.
 
 ---
 
-## 4. MVP scope and phased roadmap
+## 3. Lifecycle stages and tool catalog
+
+✅ = default in the `core` profile. Every other tool is available in the stage's `lab-*` profile.
+
+### 3.1 Plan and govern
+- **Use-case intake:** business case, success metrics (task success, deflection, time saved), feasibility.
+- **AI risk classification:** EU AI Act risk tiers, the NIST AI Risk Management Framework, and ISO/IEC 42001 (AI management system). Each bot gets a risk tier, which decides its required release gates.
+- **AI inventory:** every model and bot with its owner, risk tier, approval status, **model card**, and **system card**.
+
+### 3.2 Data
+| Need | Tools to compare | Default |
+|---|---|---|
+| Document storage (S3) | SeaweedFS (Apache 2.0), Garage (AGPL), RustFS, Ceph RGW. *MinIO CE is excluded: it went to maintenance mode in December 2025 and was archived in 2026.* | SeaweedFS ✅ |
+| Parsing | Docling (MIT), Unstructured OSS (Apache 2.0), MinerU (AGPL, GPU, best on scanned PDFs) | Docling ✅ |
+| Chunking | structure-aware, recursive by token count, semantic, parent-child | structure-aware ✅ |
+| Dataset versioning and lineage | lakeFS, DVC | lakeFS (Phase 3) |
+| Labeling and annotation | Label Studio, Argilla, built-in review queue | built-in ✅ |
+| Synthetic test data | Ragas test-set generator, DeepEval Synthesizer, LLM persona-based generation | Ragas ✅ |
+| PII discovery and redaction | Microsoft Presidio, GLiNER-based detectors | Presidio ✅ |
+
+Data rules:
+- **Deletion propagation:** deleting a source document removes its chunks, embeddings, caches, and any derived summaries.
+- **Lineage:** every index version records which documents, parser, chunker, and embedding model produced it.
+
+### 3.3 Build: models and serving
+| Need | Tools to compare | Default |
+|---|---|---|
+| Model gateway | LiteLLM (MIT), Portkey (OSS gateway), Kong AI Gateway | LiteLLM ✅ |
+| Serving | Ollama (CPU/dev), vLLM (GPU production), SGLang (agentic, multi-model), TensorRT-LLM (NVIDIA, large scale). *TGI is excluded: archived in 2026.* | Ollama ✅ (CPU) / vLLM ✅ (GPU) |
+| Quantization | AWQ, GPTQ, GGUF (llama.cpp). Compare quality loss vs speed and memory. | GGUF for CPU ✅ |
+| Fine-tuning (Phase 4) | Unsloth, Axolotl, TRL (LoRA/QLoRA, DPO), distillation from a big model into a small one | — |
+| Model registry and experiment tracking | MLflow | MLflow (Phase 3) |
+
+⚠️ **Supply chain:** in March 2026, LiteLLM PyPI releases 1.82.7 and 1.82.8 shipped a credential-stealing payload. Always use pinned, digest-verified images and hash-locked dependencies, and keep the gateway's secrets isolated.
+
+### 3.4 Build: retrieval
+| Need | Tools to compare | Default |
+|---|---|---|
+| Embedding model | BGE-M3 (MIT; dense + sparse, multilingual), Qwen3-Embedding 0.6B/4B/8B (Apache 2.0; tops MTEB multilingual), jina-embeddings-v3, e5, plus APIs (OpenAI, Cohere, Voyage). *NV-Embed-v2 is excluded: non-commercial license.* | BGE-M3 ✅ |
+| Reranker | bge-reranker-v2-m3 (Apache 2.0), Qwen3-Reranker 0.6B/4B/8B (Apache 2.0), Cohere/Jina APIs, none | bge-reranker-v2-m3 ✅ |
+| Vector store | Postgres + pgvector (hybrid search through full-text or `pg_search`), Qdrant (Apache 2.0), Weaviate (BSD-3), Milvus (Apache 2.0) | pgvector ✅ |
+| Embedding/rerank serving | vLLM pooling runner (GPU), Infinity / TEI / Ollama (CPU) | Ollama ✅ (CPU) |
+| RAG orchestration | Our own thin pipeline using LlamaIndex components; Haystack and LangChain as references. Reference platforms studied: RAGFlow, Onyx, Open WebUI. *Dify's license restricts multi-tenant use, so we don't build on it.* | own pipeline ✅ |
+| Advanced RAG (Phase 4) | GraphRAG / knowledge graphs, multimodal (Qwen3-VL embeddings), query routing across knowledge bases | — |
+
+What to compare:
+- **Retrieval quality:** recall@k, MRR (how high the first correct document ranks), nDCG.
+- **Indonesian and multilingual quality**, measured separately.
+- **Speed and operations:** latency, index size, re-index time.
+
+### 3.5 Build: prompts, agents, and tools
+| Need | Tools to compare | Default |
+|---|---|---|
+| Prompt registry | Langfuse prompt management (MIT), MLflow Prompt Registry | Langfuse ✅ |
+| Tool/API integration | MCP servers (one per system), with OpenAPI → MCP generation | MCP ✅ |
+| Agent workflows (Phase 4) | LangGraph, LlamaIndex agents | — |
+| Structured output | Native JSON mode, Guardrails AI validators, vLLM/SGLang guided decoding | native ✅ |
+
+### 3.6 Test: the Eval Lab
+| Framework | Strength | Weakness | License |
+|---|---|---|---|
+| **Ragas** ✅ | Best RAG retrieval metrics (faithfulness, context precision and recall) | Narrow outside RAG | Apache 2.0 |
+| **DeepEval** | 50+ metrics, G-Eval custom judges, pytest-style CI | Code only, no UI | Apache 2.0 |
+| **Arize Phoenix** | Tracing, embedding and retrieval visualizations, eval playground | Heavier; its license forbids offering it as a hosted service | Elastic License 2.0 |
+| **promptfoo** | YAML prompt × model matrix, red-teaming | Limited depth on RAG metrics | MIT |
+| Inspect AI | Capability and safety benchmarks | Less RAG-focused | MIT |
+
+How the Eval Lab works:
+- **Isolated adapters:** each framework runs in its own container (their dependencies conflict) behind `run(dataset, metrics, judge_model) → scores`.
+- **Fair judging:** every framework uses the same judge model through LiteLLM, the same dataset and model outputs, and temperature 0.
+- **Same name, different meaning:** for example, Ragas "faithfulness" checks each claim against the context, while Phoenix "hallucination" is a yes/no verdict. The UI shows each metric's definition and the judge prompt it sends, next to its score.
+- **Evaluate the evaluators:** humans label a gold set, and each framework is ranked on agreement with humans (correlation, Cohen's κ), judge cost per 100 items, latency, and variance across 3 repeated runs.
+- **Judging modes** per test suite:
+  - **LLM-only:** one or more judges, with majority vote.
+  - **Human-only:** items go to a review queue.
+  - **Hybrid:** the LLM judges every item. An item goes to a human when judge confidence is low, when judges disagree, or when it falls in a random audit sample. Judge drift is tracked against human labels.
+
+Other test types:
+
+| Test type | Tools | Default |
+|---|---|---|
+| **Permission-leak tests** (see §4.2) | built-in persona suite | built-in ✅ |
+| Security, OWASP Top 10 for LLM Applications (including indirect prompt injection via uploaded documents) | promptfoo red-team, garak | promptfoo ✅ |
+| Safety and guardrails | NeMo Guardrails, Llama Guard 3, Guardrails AI. *LLM Guard is excluded: archived in July 2026.* | NeMo + Llama Guard ✅ |
+| Bias and fairness | DeepEval bias metrics, custom persona sets | — |
+| Load and performance | guidellm / LLMPerf (model endpoints), k6 / Locust (full chat API) | k6 ✅ |
+| Standard benchmarks | lm-evaluation-harness | optional |
+| Model benchmarking | Built-in runner: model × prompt × dataset leaderboard with quality, latency (p50/p95, time to first token), tokens/s, cost | built-in ✅ |
+
+### 3.7 Release (CI/CD for AI)
+- **The bot as a versioned bundle:** prompt version + model + retrieval config (embedding model, index version, reranker) + guardrails + tools. It is released and rolled back as one unit.
+- **Release gates:** eval thresholds, zero permission leaks, red-team pass, and human sign-off for high-risk bots.
+- **Rollout strategies:** shadow deploys (a new version answers silently alongside the current one), canary releases, online A/B tests with feature flags.
+
+### 3.8 Operate
+| Need | Tools to compare | Default |
+|---|---|---|
+| LLM tracing, cost, prompt analytics | Langfuse (MIT; acquired by ClickHouse in January 2026, still MIT and self-hostable), Arize Phoenix, MLflow 3 | Langfuse ✅ |
+| Infra metrics and alerting | OpenTelemetry → Prometheus + Grafana | ✅ |
+| Online evaluation | Langfuse evaluators on sampled production traffic | ✅ |
+| Drift detection | Query-topic drift, embedding drift, quality decay as documents change | Phase 3 |
+| User feedback | Thumbs up/down with an optional correction, attached to each trace | ✅ |
+| FinOps | LiteLLM spend per team or division, budgets, chargeback | ✅ |
+| GPU scheduling (Phase 4) | Kubernetes Kueue, NVIDIA MIG / time-slicing | — |
+| AI incident management | Incident log, severity, linked traces, and the fix as a new release | Phase 3 |
+
+### 3.9 Improve: the data flywheel
+Production traces → bad answers flagged (thumbs-down, low online-eval score, human review) → curated into eval datasets or fine-tuning data → re-evaluated in the Eval Lab → released as a new bot bundle.
+
+---
+
+## 4. Reference product: permission-aware RAG chatbot
+
+### 4.1 Sharing model ("Google Drive for knowledge")
+- **Who can be shared with:** a person, a team, a role, a division, or the whole company.
+- **Permission levels:**
+  - **Owner:** share, delete
+  - **Editor:** replace, re-upload
+  - **Viewer:** read, and ask the AI about it
+- **Folders and spaces:** sharing a folder shares its contents. Sharing can have an **expiry date** (for temporary project teams).
+- **Implementation:** relationship-based access control with **OpenFGA** (Apache 2.0, CNCF), the same model as Google's Zanzibar. SpiceDB is the alternative to compare.
+- **Org structure** (division, team, role) is synced from the HR system or identity provider over SCIM (Keycloak, Azure AD, Google Workspace). When someone moves divisions, their access changes automatically.
+
+```
+doc:wa-partnership.pdf  #owner   @user:you
+doc:wa-partnership.pdf  #viewer  @user:andi
+doc:wa-partnership.pdf  #viewer  @team:sales#member
+team:sales              #member  @user:andi        ← synced from HR system
+```
+
+### 4.2 Permission-aware retrieval
+**Rule: index each document once, filter by permission inside the query.** Never copy embeddings per user.
+
+Example: you share a WhatsApp-partnership business PDF with Andi from Sales.
+```
+1. Upload → Docling parse → chunk → embed once → vector store (chunks keyed by document_id)
+2. Share with Andi (viewer) → one OpenFGA relationship written; no re-embedding
+   → Andi is notified: "You shared WA Partnership.pdf — ask the AI about it"
+3. Andi asks "What's the revenue share in the WhatsApp partnership?"
+   → resolve Andi's readable documents (own + shared + team/role/division + company-wide)
+   → vector search filtered to those documents → rerank → answer with citation [WA Partnership.pdf, p.4]
+4. Access revoked → the document is excluded from Andi's very next query
+```
+
+**Chat scopes** the user can pick: this document only / my documents / shared with me / my team / everything I can access.
+
+**Leak paths and their fixes** (each one has a test in the permission-leak suite):
+
+| Leak path | Fix |
+|---|---|
+| Filtering *after* top-k retrieval | Filter inside the vector query. With pgvector this is a SQL join on the access table, which is a key reason pgvector is the default. |
+| Semantic cache serves an answer built from a forbidden document | Key the cache on the user's permission set, or cache per user only. |
+| Derived content (summaries, knowledge graphs, team insights) | It inherits the *strictest* permissions of its sources. |
+| Chat history after access is revoked | Hide citations from revoked sources and show a "source no longer accessible" notice. |
+| Prompt injection hidden in a shared document | Treat retrieved text as data, scan on upload, and run guardrails on retrieved context. |
+
+### 4.3 Connecting existing systems (ERP, HR, CRM)
+| | Knowledge connectors | Live system tools |
+|---|---|---|
+| For | Documents: Google Drive, SharePoint/OneDrive, Nextcloud, Confluence | Data and actions: ERP, HR, CRM |
+| How | Sync files into RAG, **mirroring the source system's permissions** | **Call the API at question time** through MCP. This data isn't copied into vectors, because it goes stale and its permissions are too complex. |
+| Example | "Summarize the Q3 sales SOP" | "How many leave days do I have left?" → HR API. "Status of PO-1234?" → ERP API. |
+
+- **Act as the real user:** the AI calls APIs *as the asking employee* through an OAuth token exchange, never with a super-admin account. The source system enforces its own permissions.
+- **Read-only first.** Write actions (for example, submitting a leave request) need explicit user confirmation and are written to the audit log.
+- **Admin flow:** register a system → upload its OpenAPI spec → choose allowed endpoints → configure auth → test in the playground → grant to roles or divisions.
+- **Combined answers:** *"Per WA Partnership.pdf (p.4), revenue share is 70/30; the ERP shows 3 open invoices with that partner."*
+
+### 4.4 Later: omnichannel
+WhatsApp Business, Slack, Teams, and an embeddable web widget. Each is a channel adapter on the same chatbot API, and each needs to link the channel account (phone number, Slack ID) to an employee identity so permissions still apply. Not in the current roadmap.
+
+---
+
+## 5. Architecture
+
+```
+                 ┌──────────────────────────────────────────────────────────┐
+ Users ─ SSO ───▶│ Web UI (Next.js)                                          │
+                 │ Lifecycle nav: Plan · Data · Build · Test · Release ·     │
+                 │ Operate · Improve  |  Chat · My Docs · Shared with me     │
+                 └───────────────────────────┬──────────────────────────────┘
+                                             │ REST/SSE
+                 ┌───────────────────────────▼──────────────────────────────┐
+                 │ Control Plane API (FastAPI)                               │
+                 │ projects · bot bundles · registries · install profiles ·  │
+                 │ jobs · audit log · notifications                          │
+                 └──┬─────────┬──────────┬──────────┬──────────┬────────────┘
+                    │         │          │          │          │
+        ┌───────────▼──┐ ┌────▼──────┐ ┌─▼────────┐ ┌▼────────┐ ┌▼────────────────┐
+        │ Knowledge &  │ │ Ingestion │ │ Chat /   │ │ Lab     │ │ Tool Gateway    │
+        │ Sharing svc  │ │ workers   │ │ RAG      │ │ runners │ │ (MCP servers,   │
+        │ (OpenFGA)    │ │ connectors│ │ runtime  │ │ eval,   │ │ OAuth token     │
+        │ ◀─ SCIM from │ │ parse,    │ │ ACL-     │ │ bench,  │ │ exchange) ──▶   │
+        │ HR system    │ │ chunk,    │ │ filtered │ │ compare │ │ ERP · HR · CRM  │
+        └──────────────┘ │ embed     │ │ retrieve,│ │ (1 ctr  │ └─────────────────┘
+                         └──┬────────┘ │ rerank,  │ │ per tool)│
+                            │          │ guards,  │ └────┬────┘
+                            │          │ generate │      │
+                            │          └──┬───────┘      │
+            ┌───────────────▼─┐   ┌───────▼──────────────▼──┐   ┌─────────────────┐
+            │ Object storage  │   │ LiteLLM gateway          │   │ Vector store    │
+            │ (SeaweedFS/S3)  │   │ keys · budgets · routing │   │ pgvector ✅ /   │
+            └─────────────────┘   └──┬─────────┬─────────┬───┘   │ Qdrant/Weaviate │
+                                     │         │         │       │ /Milvus (lab)   │
+                                ┌────▼──┐ ┌────▼──┐ ┌────▼─────┐ └─────────────────┘
+                                │ vLLM  │ │Ollama │ │ External │
+                                │ (GPU) │ │ (CPU) │ │ APIs     │
+                                └───────┘ └───────┘ └──────────┘
+
+ Cross-cutting: PostgreSQL (system of record) · Redis (queue/cache) · Langfuse (traces,
+ prompts, scores) · OpenTelemetry → Prometheus/Grafana · Vault/K8s secrets · Keycloak (optional)
+```
+
+### Core domain model (Postgres)
+- `Org → Division → Team → User(roles)`, synced from HR or the identity provider.
+- `Folder/Space → Document(owner, versions, source, lineage) → Chunk(document_id)`. Sharing relationships live in OpenFGA.
+- `KnowledgeIndex(embedding_model, dim, chunker, vector_store, version)`
+- `Bot bundle(prompt_ref, model, index_version, reranker, guardrails, tools, version, risk_tier)`
+- `ToolConnection(system, openapi_spec, allowed_endpoints, auth, granted_to)`
+- `Dataset → Item`, `EvalSuite(rubric, judge_mode, frameworks[])`, `EvalRun → Result → HumanReview`, `ComparisonReport`
+- `AIInventoryEntry(model/bot, owner, risk_tier, model_card, approval)`, `Incident`, `Feedback`
+
+### Security baseline
+- OIDC SSO, RBAC for platform features, OpenFGA for document access, and an audit log for every share, query, and tool call.
+- Secrets in Vault or Kubernetes secrets, never in plaintext in the database.
+- Supply chain: pinned image digests, hash-locked dependencies, SBOM and dependency scanning in CI, model files as safetensors (scan pickle files).
+- Encryption at rest, data-retention policies for traces and chats, and PII redaction (Presidio).
+
+---
+
+## 6. Roadmap (phases follow the lifecycle)
 
 ### Phase 0: Foundations (≈2 weeks)
-- Monorepo (`apps/api`, `apps/web`, `workers/`, `deploy/compose`, `deploy/helm`), CI, lint/test, pinned dependencies.
-- Compose `core` profile up: Postgres, Redis, LiteLLM, SeaweedFS, Langfuse, Ollama.
-- Auth (OIDC), workspaces and projects, provider config (add a model endpoint through LiteLLM).
+- Monorepo (`apps/api`, `apps/web`, `workers/`, `adapters/`, `deploy/compose`, `deploy/helm`), CI, pinned dependencies.
+- `core` Compose profile: Postgres, Redis, LiteLLM, SeaweedFS, Langfuse, Ollama, OpenFGA.
+- OIDC auth, org structure (divisions, teams, roles; manual entry first, SCIM in Phase 3).
+- The adapter interface pattern, defined once and reused by every Lab stage.
 
-### Phase 1: MVP, "RAG chatbot with evals" (≈6–8 weeks)
-- **RAG builder:** S3/upload source → Docling → structure-aware chunking → BGE-M3 → pgvector (hybrid) → bge-reranker-v2-m3 → chat with citations.
-- **Chat playground** with model, prompt, and RAG-config pickers. Streaming. Traced in Langfuse.
-- **Prompt registry** through Langfuse, linked into bots.
-- **Eval v1:** datasets (upload CSV/JSONL or generate synthetic Q&A from a KB), LLM-as-a-judge with Ragas metrics plus a custom rubric, a results table, and a comparison of two runs.
-- **Done when:** a user can install on one CPU machine, upload documents, publish a bot, and run an eval suite with scores.
+### Phase 1: MVP, "permission-aware RAG chatbot built and evaluated in the Lab" (≈8 weeks)
+- **Data:** upload, Docling parsing, structure-aware chunking, BGE-M3, pgvector hybrid search.
+- **Sharing:** folders, sharing with a user, team, role, division, or company, viewer/editor/owner levels, notifications.
+- **Chat:** permission-filtered retrieval, bge-reranker-v2-m3, citations, chat scopes, streaming, Langfuse traces, thumbs feedback.
+- **Prompt registry** through Langfuse. **Bot as a versioned bundle.**
+- **Test:** synthetic Q&A generation, Ragas with an LLM judge, the **permission-leak persona suite**, run-vs-run comparison.
+- **Done when:** on one CPU machine, a user uploads a PDF, shares it with Andi, and Andi asks about it and gets a cited answer; a user who wasn't given access gets nothing; and an eval run produces scores.
 
-### Phase 2: Hybrid evaluation and benchmarking (≈4–6 weeks)
-- Human review queue and the hybrid judge (confidence and disagreement routing, audit sampling, judge-agreement metrics).
-- Benchmark runner: model × prompt × dataset leaderboard with latency, throughput, and cost.
-- DeepEval metrics and a CI regression gate (fail the bot release if scores drop).
-- vLLM GPU profile. Qdrant option. Qwen3 embedding and reranker options with re-index jobs.
+### Phase 2: Eval Lab and Build Lab (≈6 weeks)
+- **Eval Lab:** DeepEval, Phoenix, and promptfoo adapters, the human review queue, hybrid judging, the human gold set, and the evaluate-the-evaluators report.
+- **Benchmark runner:** model × prompt × dataset leaderboard (quality, latency, cost).
+- **Retrieval Lab:** Qdrant vs pgvector, BGE-M3 vs Qwen3-Embedding, reranker on vs off, a separate Indonesian retrieval set.
+- **Serving:** vLLM GPU profile. Ollama vs vLLM comparison.
+- **Live tools v1:** an MCP gateway, OpenAPI → tool, read-only HR/ERP calls made as the real user.
+- **Release gates** in CI (eval thresholds, zero leaks).
 
-### Phase 3: Enterprise readiness (≈6 weeks)
-- Connectors: Nextcloud (WebDAV), SharePoint/OneDrive, Google Drive, Confluence. Scheduled sync. Document-level ACL sync.
-- Guardrails stage (NeMo Guardrails + safety classifier) and promptfoo red-team suites.
-- Helm chart, install wizard, air-gapped bundle (image tarballs plus a model mirror).
-- Audit log, retention policies, SSO group → role mapping.
+### Phase 3: Enterprise readiness (≈6–8 weeks)
+- **Data:** Google Drive, SharePoint, Nextcloud, and Confluence connectors with permission mirroring. SCIM sync from the HR system or identity provider. lakeFS lineage. Deletion propagation. Parsing Lab (Docling vs Unstructured vs MinerU).
+- **Test:** guardrails stage (NeMo + Llama Guard), red-teaming (promptfoo, garak), load testing (k6, guidellm).
+- **Release and operate:** shadow and canary rollouts, online evals, drift detection, incident log, FinOps per division.
+- **Govern:** AI inventory, risk tiers, model and system cards, approval workflows. MLflow model registry.
+- **Deploy:** Helm chart, install wizard, air-gapped bundle (image tarballs plus a model mirror). Backup and disaster recovery.
 
-### Phase 4: Scale and advanced (ongoing)
-- SGLang / TensorRT-LLM engines, multi-GPU scheduling, autoscaling.
-- Agentic bots (tools, LangGraph), MinerU scanned-document path, multimodal (Qwen3-VL embeddings).
-- Fine-tuning hooks (LoRA through Unsloth/Axolotl) feeding back into benchmarking.
+### Phase 4: Advanced (ongoing)
+- Fine-tuning and distillation (Unsloth, Axolotl, TRL) and a quantization comparison lab, all feeding back into benchmarking.
+- Agents (LangGraph) with agent-trajectory evaluation. Live-tool write actions with user confirmation.
+- GraphRAG, multimodal RAG, SGLang and TensorRT-LLM engines, GPU scheduling (Kueue, MIG).
+- Omnichannel adapters (WhatsApp Business, Slack, Teams, web widget).
+- Guided scenarios and role-based learning paths across every stage.
 
 ### Key risks
 | Risk | Mitigation |
 |---|---|
-| Too many pluggable options too early | Ship one default per stage in the MVP and add options behind the interfaces later. |
-| Operational weight of Langfuse (ClickHouse) on small installs | Measure on the CPU-lite profile; keep Langfuse optional, with traces falling back to Postgres. |
-| LLM-judge bias and drift | Hybrid mode, human calibration sets, judge-agreement monitoring. |
-| License traps (AGPL MinerU/Garage, NC embedding models, Dify) | Keep a license check in the model and component registry; run AGPL components as separate services only. |
+| Too many tools, so it's heavy to install and slow to build | A light `core` profile; `lab-*` profiles are opt-in; adapters are added stage by stage. |
+| Adapter maintenance as tool APIs change | Pinned versions, nightly smoke test per adapter, an adapter contract test suite. |
+| Permission leaks in RAG | Filtering inside the query, a leak test suite as a release gate, strictest-permission inheritance for derived data. |
+| LLM-judge bias and drift | Hybrid judging, a human gold set, judge-agreement monitoring. |
+| License traps (AGPL MinerU/Garage, Phoenix ELv2, NC models, Dify) | License shown in the tool catalog and checked at install time; AGPL tools run as separate services. |
 | Supply-chain compromise | Pinned digests and hashes, SBOM, isolated gateway secrets. |
+| Langfuse (ClickHouse) is heavy on small installs | Measure on the CPU profile; allow a Postgres-only tracing fallback. |
 
 ---
 
-## 5. Sources
+## 7. Sources
 
 - Evaluation: [Confident AI – LLM eval tools 2026](https://www.confident-ai.com/knowledge-base/compare/best-llm-evaluation-tools), [FutureAGI – OSS eval frameworks 2026](https://futureagi.com/blog/best-open-source-eval-frameworks-2026/), [DeepEval – Top 5 frameworks](https://deepeval.com/blog/top-5-llm-evaluation-frameworks)
 - Gateway: [Requesty – LLM routing platforms 2026](https://www.requesty.ai/blog/best-llm-routing-platforms-compared-2026-requesty-portkey-litellm-openrouter), [Spheron – LiteLLM/Portkey/Kong](https://www.spheron.network/blog/ai-gateway-litellm-portkey-kong-gpu-cloud/), [LiteLLM security update (Mar 2026)](https://docs.litellm.ai/blog/security-update-march-2026), [Datadog – LiteLLM compromise analysis](https://securitylabs.datadoghq.com/articles/litellm-compromised-pypi-teampcp-supply-chain-campaign/)
