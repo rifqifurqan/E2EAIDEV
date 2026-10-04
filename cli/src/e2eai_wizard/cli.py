@@ -66,7 +66,8 @@ def _ask_secret(label: str, prefix: str) -> str:
 def _machine(a: dict, hw: detect.Hardware) -> models.Machine:
     # Host Ollama uses the host GPU directly; the Ollama container only when the GPU override is on.
     gpu = hw.gpu.vram_gb if hw.gpu and (a["host_ollama"] or a["gpu"]) else 0.0
-    return models.Machine(ram_gb=hw.ram_gb, gpu_vram_gb=gpu, docker_mem_gb=detect.docker_mem_gb() or 0.0)
+    return models.Machine(ram_gb=hw.ram_gb, gpu_vram_gb=gpu, docker_mem_gb=detect.docker_mem_gb() or 0.0,
+                          ollama_in_docker=not a["host_ollama"])
 
 
 def _choose_role(role: str, catalog: dict, machine: models.Machine, recommended: list[str], tei_used: float) -> list[str]:

@@ -8,7 +8,8 @@ from e2eai_wizard.cli import app
 
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG = models.load_catalog(ROOT)
-PC = models.Machine(ram_gb=22, gpu_vram_gb=6, docker_mem_gb=4.8)  # the owner's laptop
+PC = models.Machine(ram_gb=22, gpu_vram_gb=6, docker_mem_gb=4.8, ollama_in_docker=True)  # the owner's laptop
+PC_HOST_OLLAMA = models.Machine(ram_gb=22, gpu_vram_gb=6, docker_mem_gb=4.8, ollama_in_docker=False)
 
 
 def test_catalog_entries_are_valid_and_unique():
@@ -23,14 +24,21 @@ def test_catalog_entries_are_valid_and_unique():
 def test_fit_uses_gpu_then_cpu_then_rejects():
     small, big = CATALOG["qwen3:4b"], CATALOG["qwen3:14b"]
     assert models.fit(small, PC) == "gpu"
-    assert models.fit(CATALOG["qwen3:8b"], PC) == "cpu"  # 6.3 GB > 6 GB VRAM, fits in RAM
+    assert models.fit(CATALOG["qwen3:8b"], PC_HOST_OLLAMA) == "cpu"  # 6.3 GB > 6 GB VRAM, fits host RAM
+    assert models.fit(CATALOG["qwen3:8b"], PC) == "too_big"  # in the container it must fit Docker's 4.8 GB
     assert models.fit(big, models.Machine(ram_gb=16, gpu_vram_gb=0, docker_mem_gb=4.8)) == "too_big"
 
 
 def test_tei_models_must_fit_docker_memory_together():
     rerank, emb = CATALOG["bge-reranker-v2-m3"], CATALOG["bge-m3-tei"]
-    assert models.fit(rerank, PC) == "cpu"
-    assert models.fit(rerank, PC, tei_used_gb=emb.mem_gb) == "too_big"
+    assert models.fit(rerank, PC_HOST_OLLAMA) == "cpu"
+    assert models.fit(rerank, PC_HOST_OLLAMA, tei_used_gb=emb.mem_gb) == "too_big"
+
+
+def test_ollama_container_memory_counts_against_docker():
+    # Regression 2026-10-05: bge-reranker-v2-m3 restart-looped next to the Ollama container in 4.8 GB.
+    assert models.fit(CATALOG["bge-reranker-v2-m3"], PC) == "too_big"
+    assert models.fit(CATALOG["gte-multilingual-reranker-base"], PC) == "cpu"
 
 
 def test_license_warnings():
@@ -45,7 +53,7 @@ def test_recommendations_for_the_owners_laptop():
     rec = models.recommend_all(CATALOG, PC)
     assert rec["chat"] == ["qwen3.5:4b"]          # largest permissive model inside 6 GB VRAM
     assert rec["embedding"] == ["bge-m3"]         # TEI embedding + reranker don't both fit 4.8 GB
-    assert rec["reranker"] == ["bge-reranker-v2-m3"]
+    assert rec["reranker"] == ["gte-multilingual-reranker-base"]
     assert rec["vision"] == [] and rec["safety"] == []
 
 

@@ -7,7 +7,8 @@ import yaml
 
 ROLES = ("chat", "embedding", "reranker", "vision", "safety")
 MULTI = {"chat", "vision", "safety"}  # roles where several models can be installed for Lab comparison
-STACK_GB = 1.5        # Docker headroom for the infra stack (measured 0.87 GiB idle)
+STACK_GB = 1.0          # infra stack in Docker (measured 0.3-0.9 GiB)
+OLLAMA_DOCKER_GB = 1.8  # Ollama container RAM with models on the GPU (measured 2026-10-05)
 CPU_RESERVE_GB = 6.0  # RAM kept free for the OS and the platform when a model runs on CPU
 CPU_COMFORT_GB = 4.5  # largest model recommended for CPU-only inference (PRD §12: <= 4B on CPU)
 
@@ -37,6 +38,7 @@ class Machine:
     ram_gb: float
     gpu_vram_gb: float  # GPU available to Ollama (0 = none)
     docker_mem_gb: float
+    ollama_in_docker: bool = False  # the Ollama container shares Docker's memory limit
 
 
 def load_catalog(root: Path) -> dict[str, Model]:
@@ -46,10 +48,13 @@ def load_catalog(root: Path) -> dict[str, Model]:
 
 def fit(m: Model, machine: Machine, tei_used_gb: float = 0.0) -> str:
     """'gpu', 'cpu', or 'too_big'. TEI runs inside Docker, so it must fit Docker's memory limit."""
+    docker_free = machine.docker_mem_gb - STACK_GB - (OLLAMA_DOCKER_GB if machine.ollama_in_docker else 0.0)
     if m.served_by == "tei":
-        return "cpu" if m.mem_gb + tei_used_gb + STACK_GB <= machine.docker_mem_gb else "too_big"
+        return "cpu" if m.mem_gb + tei_used_gb <= docker_free else "too_big"
     if m.mem_gb <= machine.gpu_vram_gb:
         return "gpu"
+    if machine.ollama_in_docker:  # CPU inference inside the Ollama container uses Docker's memory
+        return "cpu" if m.mem_gb + STACK_GB <= machine.docker_mem_gb else "too_big"
     return "cpu" if m.mem_gb <= machine.ram_gb - CPU_RESERVE_GB else "too_big"
 
 

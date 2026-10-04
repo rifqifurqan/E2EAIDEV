@@ -2,7 +2,8 @@
 # hardware and the user chooses. Verified 2026-10-05: Ollama tags exist in registry.ollama.ai,
 # licenses read from the Hugging Face model cards. Re-verify before each phase (PRD §17.6).
 #
-# mem_gb = memory needed to run (Ollama: download size x 1.2 + 0.5 GB context; TEI: fp32 weights on CPU).
+# mem_gb = memory needed to run (Ollama: download size x 1.2 + 0.5 GB context; TEI: fp32 weights on CPU plus load
+# overhead; bge-reranker-v2-m3 failed to start with ~2.9 GB free on 2026-10-05).
 # license_class: permissive | restrictive (usable commercially, with conditions) | non-commercial
 models:
   # --- chat -----------------------------------------------------------------------------------
@@ -22,7 +23,8 @@ models:
   - {id: "multilingual-e5-large", role: embedding, served_by: tei, source: "intfloat/multilingual-e5-large", size_gb: 2.24, mem_gb: 2.6, license: mit, license_class: permissive, languages: "100 languages", dim: 1024}
 
   # --- reranker ---------------------------------------------------------------------------------
-  - {id: "bge-reranker-v2-m3", role: reranker, served_by: tei, source: "BAAI/bge-reranker-v2-m3", size_gb: 2.27, mem_gb: 2.6, license: apache-2.0, license_class: permissive, languages: "multilingual"}
+  - {id: "gte-multilingual-reranker-base", role: reranker, served_by: tei, source: "Alibaba-NLP/gte-multilingual-reranker-base", size_gb: 1.22, mem_gb: 1.6, license: apache-2.0, license_class: permissive, languages: "75 languages"}
+  - {id: "bge-reranker-v2-m3", role: reranker, served_by: tei, source: "BAAI/bge-reranker-v2-m3", size_gb: 2.27, mem_gb: 3.0, license: apache-2.0, license_class: permissive, languages: "multilingual"}
 
   # --- vision (FR-D15, optional) ------------------------------------------------------------------
   - {id: "granite3.2-vision:2b", role: vision, served_by: ollama, source: "granite3.2-vision:2b", size_gb: 2.27, mem_gb: 3.2, license: apache-2.0, license_class: permissive, languages: "English-first; documents and charts"}
