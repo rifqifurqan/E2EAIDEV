@@ -1,6 +1,7 @@
 import socket
 import stat
 import sys
+from pathlib import Path
 
 import pytest
 import yaml
@@ -85,6 +86,9 @@ def test_config_references_secrets_never_inlines_them():
 def _repo(tmp_path):
     (tmp_path / "deploy" / "compose" / "seaweedfs").mkdir(parents=True)
     (tmp_path / "deploy" / "versions.lock").write_text("images:\n  postgres: pg@sha256:abc\n")
+    (tmp_path / "catalog").mkdir()
+    real = Path(__file__).resolve().parents[2] / "catalog" / "models.yaml"
+    (tmp_path / "catalog" / "models.yaml").write_text(real.read_text())
     return tmp_path
 
 
@@ -116,9 +120,18 @@ def test_cli_yes_mode_writes_working_config(tmp_path, monkeypatch):
     monkeypatch.setattr(detect, "docker_version", lambda: "29.0")
     monkeypatch.setattr(detect, "host_ollama_version", lambda: None)
     monkeypatch.setattr(detect, "docker_volume_exists", lambda _: False)
-    result = CliRunner().invoke(app, ["--yes", "--root", str(root)])
+    monkeypatch.setattr(detect, "docker_mem_gb", lambda: 4.8)
+    result = CliRunner().invoke(app, ["init", "--yes", "--no-pull", "--root", str(root)])
     assert result.exit_code == 0, result.output
     env = (root / "deploy" / "compose" / ".env").read_text()
     assert "E2EAI_IMAGE_POSTGRES=pg@sha256:abc" in env
     assert (root / "deploy" / "compose" / "seaweedfs" / "s3.json").exists()
     assert yaml.safe_load((root / "e2eai.yaml").read_text())["tier"] == "lite"
+
+
+def test_old_host_ollama_is_detected(tmp_path):
+    root = _repo(tmp_path)
+    (root / "deploy" / "versions.lock").write_text("images:\n  ollama: ollama/ollama:0.35.1@sha256:x\n")
+    assert detect.pinned_ollama_version(root) == "0.35.1"
+    assert not detect.version_at_least("0.16.1", "0.35.1")
+    assert detect.version_at_least("0.35.1", "0.35.1") and detect.version_at_least("1.2", "0.35.1")

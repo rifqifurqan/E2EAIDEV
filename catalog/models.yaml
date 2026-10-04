@@ -1,0 +1,33 @@
+# Model catalog for the install wizard (FR-F5a). No model here is a default: the wizard filters by
+# hardware and the user chooses. Verified 2026-10-05: Ollama tags exist in registry.ollama.ai,
+# licenses read from the Hugging Face model cards. Re-verify before each phase (PRD §17.6).
+#
+# mem_gb = memory needed to run (Ollama: download size x 1.2 + 0.5 GB context; TEI: fp32 weights on CPU).
+# license_class: permissive | restrictive (usable commercially, with conditions) | non-commercial
+models:
+  # --- chat -----------------------------------------------------------------------------------
+  - {id: "qwen3:1.7b", role: chat, served_by: ollama, source: "qwen3:1.7b", size_gb: 1.27, mem_gb: 2.0, license: apache-2.0, license_class: permissive, languages: "multilingual incl. Indonesian"}
+  - {id: "granite4:3b", role: chat, served_by: ollama, source: "granite4:3b", size_gb: 1.96, mem_gb: 2.9, license: apache-2.0, license_class: permissive, languages: "multilingual"}
+  - {id: "llama3.2:3b", role: chat, served_by: ollama, source: "llama3.2:3b", size_gb: 1.88, mem_gb: 2.8, license: llama3.2, license_class: restrictive, languages: "multilingual (8 official languages)"}
+  - {id: "qwen3:4b", role: chat, served_by: ollama, source: "qwen3:4b", size_gb: 2.33, mem_gb: 3.3, license: apache-2.0, license_class: permissive, languages: "multilingual incl. Indonesian"}
+  - {id: "gemma3:4b", role: chat, served_by: ollama, source: "gemma3:4b", size_gb: 3.11, mem_gb: 4.2, license: gemma, license_class: restrictive, languages: "multilingual incl. Indonesian"}
+  - {id: "qwen3.5:4b", role: chat, served_by: ollama, source: "qwen3.5:4b", size_gb: 3.10, mem_gb: 4.2, license: apache-2.0, license_class: permissive, languages: "multilingual incl. Indonesian"}
+  - {id: "qwen3:8b", role: chat, served_by: ollama, source: "qwen3:8b", size_gb: 4.87, mem_gb: 6.3, license: apache-2.0, license_class: permissive, languages: "multilingual incl. Indonesian"}
+  - {id: "qwen3:14b", role: chat, served_by: ollama, source: "qwen3:14b", size_gb: 8.64, mem_gb: 10.9, license: apache-2.0, license_class: permissive, languages: "multilingual incl. Indonesian"}
+
+  # --- embedding --------------------------------------------------------------------------------
+  - {id: "bge-m3", role: embedding, served_by: ollama, source: "bge-m3", size_gb: 1.08, mem_gb: 1.8, license: mit, license_class: permissive, languages: "100+ languages", dim: 1024}
+  - {id: "bge-m3-tei", role: embedding, served_by: tei, source: "BAAI/bge-m3", size_gb: 2.27, mem_gb: 2.6, license: mit, license_class: permissive, languages: "100+ languages", dim: 1024}
+  - {id: "qwen3-embedding-0.6b", role: embedding, served_by: tei, source: "Qwen/Qwen3-Embedding-0.6B", size_gb: 2.4, mem_gb: 2.8, license: apache-2.0, license_class: permissive, languages: "100+ languages", dim: 1024}
+  - {id: "multilingual-e5-large", role: embedding, served_by: tei, source: "intfloat/multilingual-e5-large", size_gb: 2.24, mem_gb: 2.6, license: mit, license_class: permissive, languages: "100 languages", dim: 1024}
+
+  # --- reranker ---------------------------------------------------------------------------------
+  - {id: "bge-reranker-v2-m3", role: reranker, served_by: tei, source: "BAAI/bge-reranker-v2-m3", size_gb: 2.27, mem_gb: 2.6, license: apache-2.0, license_class: permissive, languages: "multilingual"}
+
+  # --- vision (FR-D15, optional) ------------------------------------------------------------------
+  - {id: "granite3.2-vision:2b", role: vision, served_by: ollama, source: "granite3.2-vision:2b", size_gb: 2.27, mem_gb: 3.2, license: apache-2.0, license_class: permissive, languages: "English-first; documents and charts"}
+  - {id: "qwen3-vl:4b", role: vision, served_by: ollama, source: "qwen3-vl:4b", size_gb: 3.07, mem_gb: 4.2, license: apache-2.0, license_class: permissive, languages: "multilingual"}
+  - {id: "qwen3-vl:8b", role: vision, served_by: ollama, source: "qwen3-vl:8b", size_gb: 5.72, mem_gb: 7.4, license: apache-2.0, license_class: permissive, languages: "multilingual"}
+
+  # --- safety classifier (FR-O9) ----------------------------------------------------------------------
+  - {id: "llama-guard3:1b", role: safety, served_by: ollama, source: "llama-guard3:1b", size_gb: 1.49, mem_gb: 2.3, license: llama3.2, license_class: restrictive, languages: "8 languages"}

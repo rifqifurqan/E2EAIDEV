@@ -2,6 +2,7 @@
 
 import ctypes
 import json
+import re
 import os
 import shutil
 import socket
@@ -108,3 +109,24 @@ def suggest_port(preferred: int, taken: set[int]) -> int:
 def recommend_tier(ram_gb: float) -> str:
     # PRD §12: Lite targets 16 GB laptops; Standard (CPU) starts at a 64 GB server.
     return "lite" if ram_gb < 48 else "standard"
+
+
+def docker_mem_gb() -> float | None:
+    out = _run("docker", "info", "--format", "{{.MemTotal}}")
+    return round(int(out) / 1024**3, 1) if out and out.isdigit() else None
+
+
+def _vtuple(v: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in re.findall(r"\d+", v)[:3])
+
+
+def version_at_least(version: str, minimum: str) -> bool:
+    return _vtuple(version) >= _vtuple(minimum)
+
+
+def pinned_ollama_version(root: Path) -> str:
+    """Version of the pinned Ollama image in deploy/versions.lock, e.g. '0.35.1'."""
+    for line in (root / "deploy" / "versions.lock").read_text().splitlines():
+        if line.strip().startswith("ollama:"):
+            return line.split(":", 2)[2].split("@")[0]
+    return "0"

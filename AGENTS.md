@@ -19,7 +19,12 @@ Read [E2EAIDEV_PRD.md](E2EAIDEV_PRD.md) (Part I requirements, §17 build contrac
 - **Smoke test passed 2026-10-05 on the owner's PC (Lite, host Ollama):** postgres (openfga/litellm/keycloak DBs + pgvector 0.8.7), valkey (rejects wrong password), openfga (200 with key, 401 without), seaweedfs S3 (read/write with keys, `InvalidAccessKeyId` without), litellm (alive, 200 with master key, 401 without, reaches host Ollama 0.16.3). Stack RAM: 0.87 GiB (target ≤ 6 GiB). Docker VM limit is 4.8 GiB: raise the WSL memory limit before adding the worker (Docling ≈ 2 GB).
 - **Next 3 tasks:** (1) model selection step in the wizard (FR-F5a/F5b), registering chosen models in LiteLLM; (2) app skeleton (`apps/api` core + Alembic baseline); (3) OpenFGA model file + model tests.
 
+## Owner instructions for the build
+- **2026-10-05:** the owner asked to continue until the whole system is developed and testable, and authorized **commit + push after every milestone whose tests pass** (overrides the global "ask before commit/push" rule for this build). Never commit secrets: scan staged files against `deploy/compose/.env` values first.
+- The owner's `%USERPROFILE%\.wslconfig` limits Docker to **5 GB RAM / 4 CPUs** on purpose (other projects share it). Don't change it; run heavy models on the host Ollama (GPU) and run api/worker natively during development.
+
 ## Decisions (newest first)
+- **2026-10-05 · Embeddings may be served by TEI or Ollama (user's choice in the wizard).** D3 keeps TEI as the recommended server. When Docker's memory limit can't fit a TEI model, the wizard recommends the Ollama-served variant (e.g., `bge-m3` on the host GPU). Rerankers stay on TEI (Ollama doesn't serve them).
 - **2026-10-05 · Valkey instead of Redis.** Context: Redis 8 is licensed AGPLv3/RSALv2/SSPLv1. Decision: Valkey 9.1 (BSD-3, Linux Foundation), a drop-in replacement (same protocol, works with Celery/redis-py). Alternative: Redis 8 under AGPL as a separate service.
 - **2026-10-05 · Default host ports in the 1xxxx range** (15432, 16379, 18080, 18333, 14000, 21434, 18081/18082, 18180) and bound to 127.0.0.1. Context: the owner's PC already uses 5432, 6379, 3000, 11434. The wizard skips busy ports automatically.
 - **2026-10-05 · Reuse a host Ollama when detected.** The wizard offers the Ollama already running on the machine (LiteLLM reaches it at `host.docker.internal:11434`) instead of starting a second one.

@@ -1,9 +1,0 @@
-# LiteLLM gateway config. No models are shipped (FR-F5a): the model step adds them
-# (stored in the database because STORE_MODEL_IN_DB=True).
-model_list: []
-
-general_settings:
-  master_key: os.environ/LITELLM_MASTER_KEY
-
-litellm_settings:
-  drop_params: true
