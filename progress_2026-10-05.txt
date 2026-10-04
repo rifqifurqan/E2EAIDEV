@@ -76,24 +76,34 @@ DONE AND VERIFIED
       litellm embedding bge-m3: 200 dim=1024 · openfga model + fail-closed: deny-unshared=True
 
 NEXT
-1. Phase 1 continues: real upload endpoint + object storage, parser/ingest job stub, embedding/index table, chat answer pipeline with citations.
-2. Then complete US1-US4 end-to-end through API/UI path and the permission-leak suite.
+1. Phase 1 continues: parser/ingest job stub, embedding/index table, chat answer pipeline with citations.
+2. Then complete US1-US4 end-to-end through UI path and the permission-leak suite.
 
 PHASE 1 STARTED
 - Backend tracer bullet for US1/US3/US4 (FR-D1, FR-S1, FR-C1, FR-C2, FR-C4, FR-T7):
   - Added documents schema migration `0002_documents`: folders, documents, document_versions, chunks,
     doc_principals read-index with `(principal, document_id)` index.
   - Added ORM models for Folder, Document, DocumentVersion, Chunk, DocPrincipal.
-  - Added `documents.py` service helpers for deterministic seeded documents/chunks, share, revoke,
-    and `visible_chunks()` permission-filtered retrieval.
+  - Added `documents.py` service helpers for deterministic seeded documents/chunks, local content-addressed
+    object storage adapter, text upload document creation, share, revoke, and `visible_chunks()`
+    permission-filtered retrieval.
+  - Added API routes: `POST /api/v1/documents`, `POST /api/v1/documents/{id}/shares`, and
+    `GET /api/v1/documents/visible-chunks`; these are the P1 backend path for upload/share/retrieve.
   - Share order follows T4 loosen-last: OpenFGA write first, then doc_principals insert.
   - Revoke order follows T4 tighten-first: doc_principals delete first, then OpenFGA delete.
   - Added `test_us01_us03_us04_documents.py`: Intern owns a seeded WhatsApp Partnership doc, shares
     it with Andi, Andi sees the page-4 revenue-share chunk, Budi sees no rows/no title/no existence
-    hint, revoke removes Andi's next-query access.
-  - Verified: `cd apps/api && uv run pytest -q` -> 18 passed, 1 skipped, 1 warning.
+    hint, revoke removes Andi's next-query access; text upload stores a sha256 object and indexes the
+    owner-visible chunk.
+  - Fixed the asyncpg/Windows multi-event-loop test failure by using SQLAlchemy NullPool in db.py,
+    so pytest's multiple `asyncio.run()` calls do not reuse connections bound to closed loops.
+  - Claude Code was attempted for this continuation but returned session limit; per owner decision,
+    Hermes/ChatGPT continued directly.
+  - Verified: `cd apps/api && uv run pytest -q` -> 19 passed, 1 skipped, 1 warning.
     Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
     Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED.
+    Live upload endpoint smoke on 127.0.0.1:18001: login as demo user, POST `/api/v1/documents`,
+    then GET `/api/v1/documents/visible-chunks` returned the uploaded text chunk.
 
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.

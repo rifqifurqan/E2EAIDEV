@@ -9,6 +9,7 @@ from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Float, Fo
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.pool import NullPool
 
 from .core.config import get_settings
 from .core.ids import uuid7
@@ -172,7 +173,9 @@ ROLE_NAMES = ("admin", "ai_engineer", "evaluator", "compliance", "business_user"
 
 @lru_cache
 def engine() -> AsyncEngine:
-    return create_async_engine(get_settings().database_url, pool_pre_ping=True)
+    # NullPool avoids reusing asyncpg connections across event loops in pytest's asyncio.run tests
+    # while keeping the app's async engine boundary explicit for the Phase 1 tracer bullet.
+    return create_async_engine(get_settings().database_url, pool_pre_ping=True, poolclass=NullPool)
 
 
 @lru_cache

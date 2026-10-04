@@ -5,7 +5,7 @@ from sqlalchemy import delete, func, select
 
 from e2eai.authz import principals
 from e2eai.db import Chunk, DocPrincipal, Document, DocumentVersion, Folder, User, sessions
-from e2eai.documents import create_seeded_document, revoke_document, share_document, visible_chunks
+from e2eai.documents import LocalObjectStorage, create_seeded_document, create_uploaded_document, revoke_document, share_document, visible_chunks
 from e2eai.seed import seed_demo
 
 
@@ -65,3 +65,28 @@ def test_us01_us03_us04_share_retrieve_and_revoke_without_existence_leak():
 
     _migrate()
     asyncio.run(run())
+
+
+def test_text_upload_service_stores_object_and_indexes_owner_chunk(tmp_path):
+    async def run():
+        async with sessions()() as session:
+            await _reset_documents(session)
+            owner, _andi, _budi = await _users(session)
+            storage = LocalObjectStorage(tmp_path / "objects")
+            doc = await create_uploaded_document(
+                session,
+                owner=owner,
+                title="policy.txt",
+                data=b"Internal leave policy: 12 days.",
+                mime="text/plain",
+                storage=storage,
+            )
+            rows = await visible_chunks(session, await principals(session, owner))
+            assert rows == [("policy.txt", "Internal leave policy: 12 days.", 1)]
+            version = await session.get(DocumentVersion, doc.current_version_id)
+            assert version.object_key.startswith("sha256/")
+            assert (tmp_path / "objects" / version.object_key).exists()
+
+    _migrate()
+    asyncio.run(run())
+
