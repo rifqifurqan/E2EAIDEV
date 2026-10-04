@@ -48,17 +48,19 @@ DONE AND VERIFIED
   - Tests need no secrets/DB: password+CSRF+rate-limit+session store via a fake Redis; demo persona
     spec and password charset. Verified: `cd apps/api && uv run pytest -q` -> 10 passed, 1 warning.
     Regression check: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+  - Live auth smoke against the running stack passed: prepared demo credentials in scratch only,
+    POST `/api/v1/auth/login` -> 200, GET `/api/v1/me` -> `andi@demo.e2eai`, POST `/api/v1/auth/logout`
+    with CSRF -> 200, and GET `/api/v1/me` after logout -> 401.
 
 IN PROGRESS
 - OpenFGA store/model live bootstrap test and model file/test export.
 
 NEXT
-1. Live auth smoke (login -> session cookie -> /me -> logout) and demo-seed run against the stack.
-2. Add OpenFGA model write/check integration test against the running OpenFGA service.
-3. Add `make` or uv-script equivalent for `verify-phase-0`: compose health, cli tests, api tests,
+1. Add OpenFGA model write/check integration test against the running OpenFGA service.
+2. Add `make` or uv-script equivalent for `verify-phase-0`: compose health, cli tests, api tests,
    alembic upgrade, API health/ready, LiteLLM chat/embedding smoke, OpenFGA fail-closed.
-4. Secret scan staged files against deploy/compose/.env values; commit + push passing milestone.
-5. Then Phase 1: upload -> Docling -> share -> cited answer -> zero leaks.
+3. Secret scan staged files against deploy/compose/.env values; commit + push passing milestone.
+4. Then Phase 1: upload -> Docling -> share -> cited answer -> zero leaks.
 
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.
