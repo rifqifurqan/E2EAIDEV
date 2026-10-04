@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from functools import lru_cache
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, func, text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -102,6 +102,69 @@ class Setting(Base):
     __tablename__ = "settings"
     key: Mapped[str] = mapped_column(String(80), primary_key=True)
     value: Mapped[dict] = mapped_column(JSONB)
+
+
+class Folder(Audited, Base):
+    """Shareable container (PRD T3). Sharing a folder shares its contents (FR-S3)."""
+    __tablename__ = "folders"
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("folders.id"))
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    name: Mapped[str] = mapped_column(String(300))
+    path: Mapped[str] = mapped_column(String(1000), default="/")
+
+
+class Document(Audited, Base):
+    """FR-D1. Retrieval uses only the latest version (current_version_id)."""
+    __tablename__ = "documents"
+    __table_args__ = (CheckConstraint("status in ('active', 'trashed', 'purged')", name="documents_status"),)
+    folder_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("folders.id"))
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    title: Mapped[str] = mapped_column(String(500))
+    sensitivity: Mapped[str] = mapped_column(String(32), default="internal")
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    trashed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    legal_hold: Mapped[bool] = mapped_column(Boolean, default=False)
+    # ponytail: plain UUID (no FK) to avoid the documents<->document_versions circular FK; set after the version row exists.
+    current_version_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+
+
+class DocumentVersion(Audited, Base):
+    """FR-D1 versioning: citations in old chats keep pointing to the version they quoted."""
+    __tablename__ = "document_versions"
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    object_key: Mapped[str] = mapped_column(String(300))  # S3 key sha256/<hash>
+    sha256: Mapped[str] = mapped_column(String(64))
+    mime: Mapped[str] = mapped_column(String(160))
+    size: Mapped[int] = mapped_column(BigInteger)
+    parse_status: Mapped[str] = mapped_column(String(16), default="pending")
+    parse_confidence: Mapped[float | None] = mapped_column(Float)
+    scan_status: Mapped[str] = mapped_column(String(16), default="pending")
+
+
+class Chunk(Base):
+    """Derived content (PRD T3). One row per text/table/figure unit. tsv + embeddings land in Phase 1."""
+    __tablename__ = "chunks"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("document_versions.id", ondelete="CASCADE"))
+    ordinal: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(16), default="text")  # text/table/figure/vlm
+    text: Mapped[str] = mapped_column(Text)
+    page: Mapped[int | None] = mapped_column(Integer)
+    section_path: Mapped[str | None] = mapped_column(String(1000))
+    figure_object_key: Mapped[str | None] = mapped_column(String(300))
+    table_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class DocPrincipal(Base):
+    """Read-index for permission-filtered retrieval (PRD T4). Stores the *granted principal*
+    (user:/team:/division:/role:/org:), never expanded to individual users."""
+    __tablename__ = "doc_principals"
+    __table_args__ = (Index("doc_principals_by_principal", "principal", "document_id"),)
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True)
+    principal: Mapped[str] = mapped_column(String(80), primary_key=True)
+    level: Mapped[str] = mapped_column(String(16), default="viewer")  # viewer/editor/owner
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 ROLE_NAMES = ("admin", "ai_engineer", "evaluator", "compliance", "business_user")  # FR-F3
