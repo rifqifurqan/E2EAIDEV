@@ -16,10 +16,13 @@ class RecordingAuthz:
 
 
 class FakeEmbedder:
+    """Deterministic keyword one-hot embedder: proves retrieval ranks by vector distance, not keyword overlap."""
+
     model = "fake-embedding-v1"
+    _axes = ("revenue", "holiday")
 
     async def embed(self, texts):
-        return [[float(len(text)), float(text.lower().count("revenue"))] for text in texts]
+        return [[float(text.lower().count(axis)) for axis in self._axes] for text in texts]
 
 
 class FakeResponse:
@@ -75,19 +78,30 @@ def test_us02_answer_has_page_citation_and_us03_unshared_user_gets_no_leak():
                 text="The WhatsApp partnership revenue share is 30 percent.",
                 page=4,
             )
+            # Distractor chunk in the same version: the holiday schedule is textually similar (same doc/title)
+            # but semantically far. Vector ranking must prefer the revenue chunk for a revenue question;
+            # a keyword-overlap scorer would be tricked by the shared "WhatsApp Partnership" title.
+            version_id = (await session.scalar(select(Document.current_version_id).where(Document.id == doc.id)))
+            session.add(Chunk(document_id=doc.id, version_id=version_id, ordinal=1,
+                              text="The office holiday schedule is posted on the board.", page=1, section_path="seed"))
+            await session.commit()
+
             await share_document(session, RecordingAuthz(), actor=owner, document_id=doc.id, principal=f"user:{andi.id}")
-            await index_document_chunks(session, embedder=FakeEmbedder(), document_id=doc.id)
+            indexed = await index_document_chunks(session, embedder=FakeEmbedder(), document_id=doc.id)
+            assert indexed == 2
 
             embedding_count = await session.scalar(select(func.count()).select_from(ChunkEmbedding))
-            assert embedding_count == 1
+            assert embedding_count == 2
 
-            andi_answer = await answer_question(session, user=andi, question="What's the revenue share in the WhatsApp partnership?")
+            andi_answer = await answer_question(session, embedder=FakeEmbedder(), user=andi,
+                                                question="What's the revenue share in the WhatsApp partnership?")
             assert "30 percent" in andi_answer["answer"]
             assert andi_answer["citations"] == [
                 {"document": "WhatsApp Partnership", "page": 4, "section": "seed"}
             ]
 
-            budi_answer = await answer_question(session, user=budi, question="What's the revenue share in the WhatsApp partnership?")
+            budi_answer = await answer_question(session, embedder=FakeEmbedder(), user=budi,
+                                                question="What's the revenue share in the WhatsApp partnership?")
             assert budi_answer["citations"] == []
             assert "WhatsApp" not in budi_answer["answer"]
             assert "30 percent" not in budi_answer["answer"]

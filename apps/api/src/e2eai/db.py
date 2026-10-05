@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from functools import lru_cache
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
@@ -158,12 +159,19 @@ class Chunk(Base):
 
 
 class ChunkEmbedding(Base):
-    """One embedding vector per chunk/model. Shares never copy embeddings per user (FR-C1)."""
+    """One embedding vector per chunk/model. Shares never copy embeddings per user (FR-C1).
+
+    `vector` is a real pgvector column (filterable/orderable by `<=>`). Dimension is left unspecified
+    so the one embedding model selected at install time sets it; a fixed-dim per-index table with an
+    HNSW index (PRD T3 `emb_<index_id>`) lands with multi-index support (FR-R1/US7).
+    """
     __tablename__ = "chunk_embeddings"
     chunk_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("chunks.id", ondelete="CASCADE"), primary_key=True)
     embedding_model: Mapped[str] = mapped_column(String(160))
     dims: Mapped[int] = mapped_column(Integer)
-    vector: Mapped[list[float]] = mapped_column(JSONB)
+    # ponytail: unspecified-dim vector = exact scan, no HNSW. Fine at tracer-bullet scale; add the
+    # fixed-dim per-index table + HNSW when a second embedding model or >~1M chunks lands.
+    vector: Mapped[list[float]] = mapped_column(Vector())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

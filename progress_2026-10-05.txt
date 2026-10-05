@@ -131,6 +131,35 @@ PHASE 1 STARTED
     Live LiteLLM embedding smoke: indexed 1 seeded chunk with `bge-m3` through LiteLLM and generated a
     cited answer with page 2 citation.
 
+- Real pgvector-backed retrieval (replaces the JSON embedding placeholder) (FR-R1, FR-R3, FR-C1, FR-C2):
+  - `chunk_embeddings.vector` is now a real pgvector `vector` column (pgvector 0.5.0 SQLAlchemy type),
+    not JSONB. Dimension is left unspecified so the installed embedding model sets it (bge-m3 = 1024);
+    the fixed-dim per-index table + HNSW index (PRD T3 `emb_<index_id>`) is deferred to multi-index
+    FR-R1/US7 and marked with a ponytail note in db.py.
+  - Added migration `0004_pgvector_embeddings`: `CREATE EXTENSION IF NOT EXISTS vector` (idempotent,
+    no manual step on a fresh install), truncates the non-durable JSON embeddings, drops the jsonb
+    column and re-adds it as `vector`. Reversible (downgrade restores jsonb).
+  - `retrieval.py`: `retrieve_relevant_chunks`/`answer_question` now embed the question through the same
+    embedder as the chunks and rank by cosine distance (`<=>`). The keyword `_score` placeholder was
+    deleted. doc_principals is filtered in the WHERE clause *before* the ORDER BY/LIMIT (and the
+    ChunkEmbedding join is inner), so the vector search only ever ranks chunks the caller may see and
+    unshared users match no rows — no title/content/citation leak. `/chat/ask` builds the real
+    `LiteLLMEmbedder.from_settings()`; the operator command `index-document` is unchanged and still works.
+  - Tests first: `test_us02_cited_answer.py` now seeds a semantically-distant distractor chunk in the
+    same version and uses a keyword one-hot FakeEmbedder, so the assertions fail unless retrieval ranks
+    by vector distance (a keyword scorer would be tricked by the shared title); Budi still gets no leak.
+    Added `test_pgvector_migration_static.py` locking the extension + vector column + down_revision.
+  - Verified: `cd apps/api && uv run pytest -q` -> 22 passed, 1 skipped, 1 warning.
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED
+      (compose 6 services; cli 27 passed/1 skipped; api 22 passed/1 skipped; alembic head;
+       api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
+       openfga model + deny-unshared=True).
+    Confirmed `\d chunk_embeddings` shows `vector` column type `vector` (not jsonb) after upgrade.
+    Live real-embedder smoke on the running stack (scratch script, removed after): indexed 2 chunks via
+      LiteLLMEmbedder (`bge-m3`, dims=1024) stored in pgvector; Andi got the page-4 "30 percent" citation;
+      Budi got no citations and no WhatsApp/30-percent leak.
+
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.
 - Commit + push after every milestone whose tests pass.

@@ -1,11 +1,11 @@
 """Permission-filtered retrieval and cited-answer tracer bullet for Phase 1.
 
-The production vector path will swap in pgvector/LiteLLM embeddings. This module keeps the important
-P0 invariant now: candidate chunks are filtered by doc_principals in SQL before scoring/answering, so
-unshared users get no document names, snippets, or citations.
+Retrieval is pgvector-backed: the question is embedded through the same embedder as the chunks, and
+candidates are ranked by cosine distance (`<=>`) in SQL. The P0 invariant holds inside that one query:
+doc_principals is filtered in the WHERE clause *before* the ORDER BY/LIMIT, never as a post-top-k pass,
+so unshared users get no document names, snippets, or citations.
 """
 
-import re
 import uuid
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -24,9 +24,6 @@ from .authz import principals
 from .core.config import Settings, get_settings, repo_root
 from .core.errors import AppError
 from .db import Chunk, ChunkEmbedding, DocPrincipal, Document, User, get_session
-
-_WORD = re.compile(r"[A-Za-z0-9]+")
-
 
 class Embedder(Protocol):
     @property
@@ -71,15 +68,6 @@ class LiteLLMEmbedder:
         return vectors
 
 
-def _terms(text: str) -> set[str]:
-    return {w.lower() for w in _WORD.findall(text) if len(w) > 2}
-
-
-def _score(question: str, text: str, title: str) -> int:
-    q = _terms(question)
-    return len(q & _terms(text)) + len(q & _terms(title))
-
-
 async def index_document_chunks(session: AsyncSession, *, embedder: Embedder, document_id: uuid.UUID) -> int:
     """Embed all current chunks for one document once, independent of shares (FR-C1)."""
     rows = (
@@ -110,41 +98,45 @@ async def index_document_chunks(session: AsyncSession, *, embedder: Embedder, do
 async def retrieve_relevant_chunks(
     session: AsyncSession,
     *,
+    embedder: Embedder,
     user_principals: Iterable[str],
     question: str,
     limit: int = 4,
 ) -> list[dict]:
-    """Return candidates only after SQL-level permission filtering (FR-C2)."""
+    """Rank indexed chunks by vector distance, after SQL-level permission filtering (FR-C2).
+
+    The doc_principals join + WHERE restrict candidates *before* the ORDER BY/LIMIT, so the vector
+    search only ever ranks chunks the caller may see. The ChunkEmbedding join is inner: un-indexed
+    chunks are not retrievable, and unshared users match no rows at all.
+    """
     principal_list = sorted(set(user_principals))
     if not principal_list:
         return []
+    qvec = (await embedder.embed([question]))[0]
     rows = await session.execute(
-        select(Document.title, Chunk.text, Chunk.page, Chunk.section_path, Chunk.ordinal)
+        select(Document.title, Chunk.text, Chunk.page, Chunk.section_path)
         .join(Chunk, Chunk.document_id == Document.id)
+        .join(ChunkEmbedding, ChunkEmbedding.chunk_id == Chunk.id)
         .join(DocPrincipal, DocPrincipal.document_id == Document.id)
-        .outerjoin(ChunkEmbedding, ChunkEmbedding.chunk_id == Chunk.id)
         .where(
             Document.status == "active",
             Chunk.version_id == Document.current_version_id,
+            ChunkEmbedding.embedding_model == embedder.model,
             DocPrincipal.principal.in_(principal_list),
         )
-        .order_by(Document.title, Chunk.ordinal)
+        .order_by(ChunkEmbedding.vector.cosine_distance(qvec))
+        .limit(limit)
     )
-    scored = [
-        {
-            "document": title,
-            "text": text,
-            "page": page,
-            "section": section_path,
-            "score": _score(question, text, title),
-        }
-        for title, text, page, section_path, _ordinal in rows.all()
+    return [
+        {"document": title, "text": text, "page": page, "section": section_path}
+        for title, text, page, section_path in rows.all()
     ]
-    return [row for row in sorted(scored, key=lambda r: r["score"], reverse=True) if row["score"] > 0][:limit]
 
 
-async def answer_question(session: AsyncSession, *, user: User, question: str) -> dict:
-    chunks = await retrieve_relevant_chunks(session, user_principals=await principals(session, user), question=question, limit=1)
+async def answer_question(session: AsyncSession, *, embedder: Embedder, user: User, question: str) -> dict:
+    chunks = await retrieve_relevant_chunks(
+        session, embedder=embedder, user_principals=await principals(session, user), question=question, limit=1
+    )
     if not chunks:
         await audit.record(session, f"user:{user.id}", "chat.answer.no_context", "retrieval:visible_chunks", {})
         await session.commit()
@@ -177,4 +169,4 @@ async def ask(body: AskIn, sess: dict = Depends(current_session), db: AsyncSessi
     user = await _current_user(db, sess)
     if not body.question.strip():
         raise AppError(400, "Question is required")
-    return await answer_question(db, user=user, question=body.question)
+    return await answer_question(db, embedder=LiteLLMEmbedder.from_settings(), user=user, question=body.question)
