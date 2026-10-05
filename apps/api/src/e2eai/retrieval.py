@@ -24,6 +24,7 @@ from .authz import principals
 from .core.config import Settings, get_settings, repo_root
 from .core.errors import AppError
 from .db import Chunk, ChunkEmbedding, DocPrincipal, Document, User, get_session
+from .guardrails import PromptGuardPolicy, PromptInjectionDetector, select_prompt_detector
 
 class Embedder(Protocol):
     @property
@@ -133,15 +134,45 @@ async def retrieve_relevant_chunks(
     ]
 
 
-async def answer_question(session: AsyncSession, *, embedder: Embedder, user: User, question: str) -> dict:
+async def answer_question(
+    session: AsyncSession,
+    *,
+    embedder: Embedder,
+    user: User,
+    question: str,
+    prompt_detector: PromptInjectionDetector | None = None,
+    prompt_policy: PromptGuardPolicy | None = None,
+) -> dict:
+    """Answer from permission-filtered chunks, treating retrieved context as untrusted (FR-C8).
+
+    Suspicious retrieved chunks are audited and excluded before answer assembly. The audit stores only
+    reason labels/counts, never the blocked text/title, and the user receives no citation/text if every
+    candidate is blocked.
+    """
+    prompt_policy = prompt_policy or PromptGuardPolicy.from_settings()
+    prompt_detector = prompt_detector or select_prompt_detector(prompt_policy)
     chunks = await retrieve_relevant_chunks(
-        session, embedder=embedder, user_principals=await principals(session, user), question=question, limit=1
+        session, embedder=embedder, user_principals=await principals(session, user), question=question, limit=4
     )
-    if not chunks:
+    safe_chunks = []
+    for chunk in chunks:
+        if prompt_policy.enabled and prompt_policy.block_suspicious_context:
+            result = prompt_detector.detect(chunk["text"])
+            if result.blocked:
+                await audit.record(
+                    session,
+                    f"user:{user.id}",
+                    "retrieval.context.blocked",
+                    "retrieval:visible_chunks",
+                    {"reasons": list(result.reasons), "reason_count": len(result.reasons)},
+                )
+                continue
+        safe_chunks.append(chunk)
+    if not safe_chunks:
         await audit.record(session, f"user:{user.id}", "chat.answer.no_context", "retrieval:visible_chunks", {})
         await session.commit()
         return {"answer": "I don't have access to relevant documents for that question.", "citations": []}
-    top = chunks[0]
+    top = safe_chunks[0]
     await audit.record(session, f"user:{user.id}", "chat.answer", "retrieval:visible_chunks", {"citations": 1})
     await session.commit()
     return {

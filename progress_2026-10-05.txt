@@ -306,6 +306,28 @@ PHASE 1 STARTED
        api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
        openfga model + deny-unshared=True).
 
+- Retrieved-context prompt-injection guardrail (FR-C8, FR-T8, FR-O9, FR-C12):
+  - Claude Code was attempted first but hit the Opus session limit again (reset 2:30pm Asia/Jakarta) and
+    the shell also expanded the backticked audit action in the prompt; Hermes/ChatGPT continued directly
+    from clean commit `c0b669e`.
+  - New `guardrails.py`: `PromptInjectionDetector` protocol, deterministic offline
+    `LocalPromptInjectionDetector` for common indirect prompt injection patterns (ignore previous/system
+    instructions, reveal/leak secrets, exfiltrate data, tool/shell misuse, developer/admin override),
+    `PromptGuardPolicy` safe defaults enabled/block suspicious context, and an external adapter boundary.
+  - `retrieval.py`: `answer_question` now retrieves a small candidate set after the existing SQL permission
+    filter, treats every chunk as untrusted, excludes suspicious chunks before answer assembly, audits
+    `retrieval.context.blocked` with reason labels/counts only (no blocked text/title), and returns
+    no-context if all candidates are blocked. Mixed benign+malicious context returns only the benign citation.
+  - Tests first: `test_us_prompt_injection_guardrail.py` covers detector rules, benign cited answer, malicious
+    shared chunk excluded with no text/title/citation leak, mixed malicious+benign returning benign only, and
+    unshared Budi still receiving no leak.
+  - Verified: `cd apps/api && uv run pytest -q` -> 63 passed, 1 skipped, 1 warning.
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED
+      (compose 6 services; cli 27 passed/1 skipped; api 63 passed/1 skipped; alembic head;
+       api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
+       openfga model + deny-unshared=True).
+
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.
 - Commit + push after every milestone whose tests pass.
