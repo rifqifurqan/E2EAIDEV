@@ -142,6 +142,21 @@ def purge_document_cmd(document_id: str, actor_email: str) -> None:
     typer.secho(f"Purged document {doc_id}", fg=typer.colors.GREEN)
 
 
+@app.command("set-sensitivity")
+def set_sensitivity_cmd(document_id: str, sensitivity: str, actor_email: str) -> None:
+    """Set a document's sensitivity label: public|internal|confidential|restricted (FR-D5)."""
+    from .documents import update_sensitivity
+
+    doc_id = uuid.UUID(document_id)
+
+    async def _do(session):
+        await update_sensitivity(session, actor=await _actor(session, actor_email),
+                                 document_id=doc_id, sensitivity=sensitivity)
+
+    _run(_do)
+    typer.secho(f"Set {doc_id} sensitivity={sensitivity}", fg=typer.colors.GREEN)
+
+
 @app.command("ingest-version")
 def ingest_version_cmd(version_id: str) -> None:
     """Parse a stored document version, chunk, and index it through LiteLLM (Phase 1 FR-D1/FR-D3)."""

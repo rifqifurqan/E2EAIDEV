@@ -23,6 +23,7 @@ from .core.config import repo_root
 from .core.errors import AppError
 from .db import Chunk, DocPrincipal, Document, DocumentVersion, Folder, User
 from .db import get_session
+from .share_policy import SENSITIVITIES, SharePolicy, share_block_reason
 
 
 def _document_object(document_id: uuid.UUID) -> str:
@@ -143,8 +144,19 @@ async def share_document(
     document_id: uuid.UUID,
     principal: str,
     level: str = "viewer",
+    policy: SharePolicy | None = None,
 ) -> None:
-    """Grant access. Loosen last: OpenFGA tuple first, local read-index row second (PRD T4)."""
+    """Grant access. Enforce sensitivity/admin guardrails *before* any write (FR-D5, FR-S7): a blocked
+    share audits and raises without creating an OpenFGA tuple or a doc_principal. Otherwise loosen last:
+    OpenFGA tuple first, local read-index row second (PRD T4)."""
+    policy = policy or SharePolicy()
+    doc = await _load_document(session, document_id)
+    reason = share_block_reason(doc.sensitivity, principal, policy)
+    if reason:
+        await audit.record(session, f"user:{actor.id}", "document.share.blocked", _document_object(document_id),
+                           {"principal": principal, "level": level, "sensitivity": doc.sensitivity, "reason": reason})
+        await session.commit()
+        raise AppError(403, "Share not allowed", reason)
     relation = "viewer" if level == "viewer" else "editor" if level == "editor" else "owner"
     await authz.write(writes=[{"user": principal, "relation": relation, "object": _document_object(document_id)}])
     await session.merge(DocPrincipal(document_id=document_id, principal=principal, level=level))
@@ -173,6 +185,21 @@ async def _load_document(session: AsyncSession, document_id: uuid.UUID) -> Docum
     doc = await session.get(Document, document_id)
     if doc is None or doc.status == "purged":
         raise AppError(404, "Document not found")
+    return doc
+
+
+async def update_sensitivity(
+    session: AsyncSession, *, actor: User, document_id: uuid.UUID, sensitivity: str
+) -> Document:
+    """Set a document's sensitivity label (FR-D5). Audited so the label history is traceable."""
+    if sensitivity not in SENSITIVITIES:
+        raise AppError(400, "Invalid sensitivity", f"Use one of: {', '.join(SENSITIVITIES)}")
+    doc = await _load_document(session, document_id)
+    old = doc.sensitivity
+    doc.sensitivity = sensitivity
+    await audit.record(session, f"user:{actor.id}", "document.sensitivity", _document_object(document_id),
+                       {"from": old, "to": sensitivity})
+    await session.commit()
     return doc
 
 
@@ -278,6 +305,10 @@ class ShareIn(BaseModel):
     level: str = "viewer"
 
 
+class SensitivityIn(BaseModel):
+    sensitivity: str
+
+
 router = APIRouter(prefix="/api/v1", tags=["documents"])
 
 
@@ -320,8 +351,22 @@ async def share_document_api(
     user = await _current_user(db, sess)
     await _require_owner(db, user, document_id)
     await share_document(db, await connect(get_settings(), db), actor=user, document_id=document_id,
-                         principal=body.principal, level=body.level)
+                         principal=body.principal, level=body.level, policy=SharePolicy.from_settings())
     return {"status": "ok"}
+
+
+@router.patch("/documents/{document_id}/sensitivity")
+async def set_sensitivity_api(
+    document_id: uuid.UUID,
+    body: SensitivityIn,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Set a document's sensitivity label (FR-D5). Requires document ownership."""
+    user = await _current_user(db, sess)
+    await _require_owner(db, user, document_id)
+    doc = await update_sensitivity(db, actor=user, document_id=document_id, sensitivity=body.sensitivity)
+    return {"status": "ok", "sensitivity": doc.sensitivity}
 
 
 async def _require_owner(db: AsyncSession, user: User, document_id: uuid.UUID) -> None:

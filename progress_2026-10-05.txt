@@ -217,6 +217,38 @@ PHASE 1 STARTED
        api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
        openfga model + deny-unshared=True).
 
+- Sensitivity labels + share-policy guardrails (FR-D5, FR-S7, FR-M9 kin, FR-C12 held):
+  - No schema change: `documents.sensitivity` (default 'internal') already exists (migration 0002), so
+    upload/create already defaults to internal.
+  - New `share_policy.py`: SENSITIVITIES = public/internal/confidential/restricted; `SharePolicy`
+    (frozen) with safe defaults — `allow_external=False` (local-only), confidential/restricted never
+    external, restricted never company-wide; `SharePolicy.from_settings()` reads an optional
+    `share_policy` block of e2eai.yaml and falls back to the safe defaults when absent (external off);
+    `share_block_reason()` is a pure function so guardrails run before any write.
+  - `documents.py`: `share_document` now loads the doc, computes `share_block_reason` BEFORE touching
+    OpenFGA/doc_principals; a blocked share records a `document.share.blocked` audit row, commits, and
+    raises AppError(403) — no OpenFGA tuple and no doc_principal created. Added `update_sensitivity`
+    service (validates the label, audits `document.sensitivity` from/to). Share API route passes
+    `SharePolicy.from_settings()`; new `PATCH /api/v1/documents/{id}/sensitivity` (owner-only); operator
+    command `e2eai-api set-sensitivity <document_id> <level> <actor_email>`.
+  - Retrieval/visible_chunks/answer_question unchanged — still filter doc_principals before vector
+    scoring, so a blocked org-wide share grants nothing and a same-org user gets no rows/title/content/
+    existence hint (FR-C12).
+  - Tests first (TDD, watched RED then GREEN): `test_us_share_policy.py` — 5 pure policy-branch checks
+    plus DB-backed: upload defaults to internal; allowed user share writes the tuple + read-index row and
+    Andi is cited; restricted org-wide share -> AppError 403, no authz call, no doc_principal, one
+    `document.share.blocked` audit row; confidential external share (even with allow_external=True) ->
+    AppError 403, no grant, audited; label update audited + invalid label rejected; no leak after a
+    blocked org-wide restricted share (Budi sees no rows/citation/WhatsApp/30-percent). Added `.data/` to
+    .gitignore (dev object storage must never be committed).
+  - Verified: `cd apps/api && uv run pytest -q` -> 45 passed, 1 skipped, 1 warning.
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED
+      (compose 6 services; cli 27 passed/1 skipped; api 45 passed/1 skipped; alembic head;
+       api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
+       openfga model + deny-unshared=True).
+    Secret scan: staged diff checked against all 22 .env values >=8 chars -> no leaks.
+
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.
 - Commit + push after every milestone whose tests pass.
