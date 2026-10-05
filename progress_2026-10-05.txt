@@ -76,8 +76,8 @@ DONE AND VERIFIED
       litellm embedding bge-m3: 200 dim=1024 · openfga model + fail-closed: deny-unshared=True
 
 NEXT
-1. Phase 1 continues: replace stub parser/embedding with Docling + LiteLLM embedding calls, add vector operator
-   search/rerank, and connect the UI path.
+1. Phase 1 continues: replace the stub parser with Docling, add pgvector/operator scoring + rerank path,
+   and connect the UI path.
 2. Then complete US1-US4 end-to-end through UI path and the permission-leak suite.
 
 PHASE 1 STARTED
@@ -113,10 +113,23 @@ PHASE 1 STARTED
     scoring, citation-bearing answer generation, and `POST /api/v1/chat/ask`.
   - Added `test_us02_cited_answer.py`: Andi asks the WhatsApp revenue-share question and receives the
     page-4 citation; Budi asks the same question and receives no title/content/citation leak.
-  - Verified: `cd apps/api && uv run pytest -q` -> 20 passed, 1 skipped, 1 warning.
+  - Verified: `cd apps/api && uv run pytest -q` -> 21 passed, 1 skipped, 1 warning.
     Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
     Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED.
     Live chat endpoint smoke on 127.0.0.1:18002: Andi got answer with page 4 citation; Budi got no leak.
+
+- Real LiteLLM embedding bridge for Phase 1 indexing (FR-R1, FR-C1):
+  - Added `LiteLLMEmbedder` against the OpenAI-compatible `/v1/embeddings` endpoint; it reads the
+    selected embedding model from `e2eai.yaml` and sends embeddings through LiteLLM instead of the fake
+    test embedder.
+  - Added operator command `e2eai-api index-document <document_id>` to embed and index current chunks for
+    one document through the configured LiteLLM gateway.
+  - Added a unit test proving request shape and response parsing without exposing the API key.
+  - Verified: `cd apps/api && uv run pytest -q` -> 21 passed, 1 skipped, 1 warning.
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED.
+    Live LiteLLM embedding smoke: indexed 1 seeded chunk with `bge-m3` through LiteLLM and generated a
+    cited answer with page 2 citation.
 
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.

@@ -8,8 +8,11 @@ unshared users get no document names, snippets, or citations.
 import re
 import uuid
 from collections.abc import Iterable, Sequence
-from typing import Protocol
+from dataclasses import dataclass
+from typing import Any, Callable, Protocol
 
+import httpx
+import yaml
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -18,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from . import audit
 from .auth import current_session
 from .authz import principals
+from .core.config import Settings, get_settings, repo_root
 from .core.errors import AppError
 from .db import Chunk, ChunkEmbedding, DocPrincipal, Document, User, get_session
 
@@ -25,9 +29,46 @@ _WORD = re.compile(r"[A-Za-z0-9]+")
 
 
 class Embedder(Protocol):
-    model: str
+    @property
+    def model(self) -> str: ...
 
     async def embed(self, texts: Sequence[str]) -> list[list[float]]: ...
+
+
+@dataclass(frozen=True)
+class LiteLLMEmbedder:
+    """OpenAI-compatible LiteLLM embedding client for the local model gateway (FR-R1/FR-C1)."""
+
+    base_url: str
+    api_key: str
+    model: str
+    timeout: float = 120.0
+    client_factory: Callable[..., Any] = httpx.AsyncClient
+
+    @classmethod
+    def from_settings(cls, settings: Settings | None = None) -> "LiteLLMEmbedder":
+        settings = settings or get_settings()
+        cfg = yaml.safe_load((repo_root() / "e2eai.yaml").read_text(encoding="utf-8"))
+        models = cfg.get("models", {}).get("embedding") or []
+        if not models:
+            raise AppError(503, "No embedding model configured")
+        return cls(base_url=settings.litellm_url, api_key=settings.litellm_key, model=models[0])
+
+    async def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        async with self.client_factory(base_url=self.base_url, timeout=self.timeout) as client:
+            response = await client.post(
+                "/v1/embeddings",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json={"model": self.model, "input": list(texts)},
+            )
+        response.raise_for_status()
+        data = response.json().get("data") or []
+        vectors = [[float(value) for value in row.get("embedding", [])] for row in data]
+        if len(vectors) != len(texts) or any(not vector for vector in vectors):
+            raise AppError(502, "Embedding gateway returned an invalid response")
+        return vectors
 
 
 def _terms(text: str) -> set[str]:

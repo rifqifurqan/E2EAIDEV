@@ -2,6 +2,7 @@
 
 import asyncio
 import subprocess
+import uuid
 from pathlib import Path
 
 import typer
@@ -77,3 +78,13 @@ def verify_phase0_cmd() -> None:
     from .verify import run
 
     raise typer.Exit(run())
+
+
+@app.command("index-document")
+def index_document_cmd(document_id: str) -> None:
+    """Embed and index current chunks for one document through LiteLLM (Phase 1 FR-C1)."""
+    from .retrieval import LiteLLMEmbedder, index_document_chunks
+
+    doc_id = uuid.UUID(document_id)
+    count = _run(lambda session: index_document_chunks(session, embedder=LiteLLMEmbedder.from_settings(), document_id=doc_id))
+    typer.secho(f"Indexed {count} chunk(s) for document {doc_id}", fg=typer.colors.GREEN)
