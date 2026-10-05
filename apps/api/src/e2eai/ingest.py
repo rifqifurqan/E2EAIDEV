@@ -21,6 +21,7 @@ from . import audit
 from .core.errors import AppError
 from .db import Chunk, Document, DocumentVersion
 from .documents import LocalObjectStorage, get_storage
+from .pii import PiiDetector, PiiPolicy, mask_text, pii_counts, select_detector
 from .retrieval import Embedder, index_document_chunks
 from .scan import ScanPolicy, Scanner, select_scanner
 
@@ -117,6 +118,8 @@ async def ingest_version(
     storage: LocalObjectStorage | None = None,
     scanner: Scanner | None = None,
     policy: ScanPolicy | None = None,
+    pii_detector: PiiDetector | None = None,
+    pii_policy: PiiPolicy | None = None,
 ) -> dict:
     """Scan, then parse the stored object for one version, (re)write chunks, index embeddings, set status.
 
@@ -129,6 +132,8 @@ async def ingest_version(
     storage = storage or get_storage()
     policy = policy or ScanPolicy.from_settings()
     scanner = scanner or select_scanner(policy)
+    pii_policy = pii_policy or PiiPolicy.from_settings()
+    pii_detector = pii_detector or select_detector(pii_policy)
     version = await session.get(DocumentVersion, version_id)
     if version is None:
         raise AppError(404, "Document version not found")
@@ -164,6 +169,25 @@ async def ingest_version(
         await session.commit()
         return {"status": "failed", "scan_status": "clean", "chunks": 0, "reason": exc.title}
 
+    pii_total = 0
+    if pii_policy.detect:
+        aggregate: dict[str, int] = {}
+        redacted: list[ParsedChunk] = []
+        for pc in parsed:
+            findings = pii_detector.detect(pc.text)
+            pii_total += len(findings)
+            for typ, count in pii_counts(findings).items():
+                aggregate[typ] = aggregate.get(typ, 0) + count
+            text = mask_text(pc.text, findings) if pii_policy.redact_document_text and findings else pc.text
+            redacted.append(ParsedChunk(text=text, page=pc.page, section_path=pc.section_path, kind=pc.kind))
+        parsed = redacted
+        if pii_total:
+            # Only counts/types and policy decisions are audited — never raw matched values (FR-O12).
+            await audit.record(session, "system:ingest", "document.pii.detected", target,
+                               {"version_id": str(version_id), "counts": aggregate,
+                                "redacted": pii_policy.redact_document_text,
+                                "mask_traces": pii_policy.mask_traces})
+
     await session.execute(delete(Chunk).where(Chunk.version_id == version_id))
     for ordinal, pc in enumerate(parsed):
         session.add(Chunk(document_id=version.document_id, version_id=version_id, ordinal=ordinal,
@@ -175,4 +199,5 @@ async def ingest_version(
     await session.commit()
 
     indexed = await index_document_chunks(session, embedder=embedder, document_id=version.document_id)
-    return {"status": "ready", "scan_status": "clean", "chunks": len(parsed), "indexed": indexed}
+    return {"status": "ready", "scan_status": "clean", "chunks": len(parsed), "indexed": indexed,
+            "pii_findings": pii_total}

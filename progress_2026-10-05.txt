@@ -285,6 +285,27 @@ PHASE 1 STARTED
     Secret scan: staged diff checked against all 22 .env values >=8 chars -> no secrets (only the
     loopback 127.0.0.1 bind address matched, which is not a secret).
 
+- PII discovery/redaction ingest guardrail (FR-D6, FR-O12, FR-O9, FR-C8):
+  - Claude Code was attempted first but hit the Opus session limit; per owner decision, Hermes/ChatGPT
+    continued directly from clean commit `3a7b668`.
+  - New `pii.py`: `PiiDetector` protocol, deterministic offline `RegexPiiDetector` for emails,
+    Indonesian phone-like numbers, NIK-like 16 digit IDs, and account-number-like patterns; `PresidioPiiDetector`
+    adapter boundary raises a clear AppError(503) when Presidio is not installed; `PiiPolicy` safe defaults
+    detect on, document redaction off, trace/log masking on; reusable `mask_text()` helper.
+  - `ingest.py`: after scan+parse and before chunk persistence/indexing, ingest detects PII across parsed chunks.
+    Audit `document.pii.detected` records only counts/types and policy flags — never raw PII. With
+    `redact_document_text=True`, chunks are masked before embedding/retrieval, so cited answers contain masks
+    (`[EMAIL]`, `[NIK]`, etc.) instead of raw values.
+  - Tests first: `test_us_pii_redaction.py` covers detector+masking, Presidio unavailable boundary,
+    detect-only ingest preserving chunk text while audit has no raw PII, redaction-mode ingest producing masked
+    chunks/cited answer, and Budi no-leak.
+  - Verified: `cd apps/api && uv run pytest -q` -> 58 passed, 1 skipped, 1 warning.
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED
+      (compose 6 services; cli 27 passed/1 skipped; api 58 passed/1 skipped; alembic head;
+       api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
+       openfga model + deny-unshared=True).
+
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.
 - Commit + push after every milestone whose tests pass.
