@@ -106,6 +106,8 @@ async def retrieve_relevant_chunks(
     user: User | None = None,
     scope: str = "all",
     document_id: uuid.UUID | None = None,
+    scoped_document_ids: Sequence[uuid.UUID] | None = None,
+    scoped_folder_ids: Sequence[uuid.UUID] | None = None,
 ) -> list[dict]:
     """Rank indexed chunks by vector distance after SQL-level permission and scope filtering (FR-C2/FR-C3).
 
@@ -152,6 +154,17 @@ async def retrieve_relevant_chunks(
         ))
     elif scope not in ("all", "everything"):
         raise AppError(400, "Invalid chat scope")
+    if scoped_document_ids is not None or scoped_folder_ids is not None:
+        doc_ids = list(scoped_document_ids or [])
+        folder_ids = list(scoped_folder_ids or [])
+        if not doc_ids and not folder_ids:
+            return []
+        scope_filters = []
+        if doc_ids:
+            scope_filters.append(Document.id.in_(doc_ids))
+        if folder_ids:
+            scope_filters.append(Document.folder_id.in_(folder_ids))
+        filters.append(or_(*scope_filters))
     rows = await session.execute(
         select(Document.title, Chunk.text, Chunk.page, Chunk.section_path)
         .join(Chunk, Chunk.document_id == Document.id)
@@ -183,6 +196,8 @@ async def answer_question(
     prompt_policy: PromptGuardPolicy | None = None,
     scope: str = "all",
     document_id: uuid.UUID | None = None,
+    scoped_document_ids: Sequence[uuid.UUID] | None = None,
+    scoped_folder_ids: Sequence[uuid.UUID] | None = None,
 ) -> dict:
     """Answer from permission-filtered chunks, treating retrieved context as untrusted (FR-C8).
 
@@ -201,6 +216,8 @@ async def answer_question(
         user=user,
         scope=scope,
         document_id=document_id,
+        scoped_document_ids=scoped_document_ids,
+        scoped_folder_ids=scoped_folder_ids,
     )
     safe_chunks = []
     for chunk in chunks:

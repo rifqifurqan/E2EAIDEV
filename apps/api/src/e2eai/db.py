@@ -284,6 +284,46 @@ class EvalRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class Bot(Base):
+    """FR-RL1/FR-RL7: bot container with one production bundle pointer."""
+    __tablename__ = "bots"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    name: Mapped[str] = mapped_column(String(200))
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    production_bundle_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class BotBundle(Base):
+    """Immutable versioned bot bundle: prompt/model/index/reranker/guardrails/tools/config."""
+    __tablename__ = "bot_bundles"
+    __table_args__ = (Index("bot_bundles_bot_version", "bot_id", "version", unique=True),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    bot_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bots.id", ondelete="CASCADE"))
+    version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(32), default="draft")
+    bundle: Mapped[dict] = mapped_column(JSONB, default=dict)
+    released_by: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class BotGrant(Base):
+    """Principals allowed to use a bot. Grants are not expanded per user."""
+    __tablename__ = "bot_grants"
+    bot_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bots.id", ondelete="CASCADE"), primary_key=True)
+    principal: Mapped[str] = mapped_column(String(80), primary_key=True)
+    level: Mapped[str] = mapped_column(String(32), default="user")
+
+
+class BotScope(Base):
+    """Knowledge scope entries for a bot. Effective retrieval = bot scope ∩ user permissions."""
+    __tablename__ = "bot_scopes"
+    bot_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bots.id", ondelete="CASCADE"), primary_key=True)
+    target_type: Mapped[str] = mapped_column(String(16), primary_key=True)  # document/folder
+    target_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+
+
 ROLE_NAMES = ("admin", "ai_engineer", "evaluator", "compliance", "business_user")  # FR-F3
 
 

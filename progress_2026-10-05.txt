@@ -415,6 +415,32 @@ PHASE 1 STARTED
        openfga model + deny-unshared=True).
     Secret scan: staged diff checked against 14 secret-like .env values -> no secrets.
 
+- Release bundle and bot access/scope P0 slice (FR-RL1, FR-RL5, FR-RL7):
+  - Claude Code was attempted first but hit subscription limit (`resets 12:20am Asia/Jakarta`), so Hermes
+    continued directly per owner preference.
+  - Added migration `0008_bot_release`: `bots`, immutable `bot_bundles`, `bot_grants`, and `bot_scopes`.
+  - Added ORM models `Bot`, `BotBundle`, `BotGrant`, `BotScope`.
+  - New `bot_release.py` service/API:
+    - creates bot containers and immutable versioned bundles;
+    - release creates a new production bundle version and supersedes the previous production bundle;
+    - rollback switches production pointer to an older bundle and marks the prior production as rolled back;
+    - bot access grants use user/team/role/division/org principals without expanding per user;
+    - bot answer path first checks bot access, then retrieves with effective scope = bot scope ∩ user
+      document/folder permissions. A bot scope never widens what the user may see.
+  - Extended retrieval with optional scoped document/folder filters applied inside the SQL predicate before
+    vector ordering/limit.
+  - API endpoints: create bot, release bundle, rollback bundle, grant bot access, set scope, ask bot.
+  - Tests first: `test_us_release_bundle_p0.py` covers bundle versioning + rollback, team-principal bot
+    grant, bot-scope/user-permission intersection, Budi no-leak when bot scope includes Andi-only docs,
+    and scope narrowing to one permitted document.
+  - Verified: targeted release suite -> 4 passed; `cd apps/api && uv run pytest -q` -> 81 passed,
+    1 skipped, 1 warning. Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED
+      (compose 6 services; cli 27 passed/1 skipped; api 81 passed/1 skipped; alembic head;
+       api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
+       openfga model + deny-unshared=True).
+    Secret scan: staged diff checked against 14 secret-like .env values -> no secrets.
+
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.
 - Commit + push after every milestone whose tests pass.
