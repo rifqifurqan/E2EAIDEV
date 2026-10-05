@@ -90,6 +90,58 @@ def index_document_cmd(document_id: str) -> None:
     typer.secho(f"Indexed {count} chunk(s) for document {doc_id}", fg=typer.colors.GREEN)
 
 
+def _actor(session, actor_email: str):
+    from sqlalchemy import func, select
+    from .db import User
+
+    return session.scalar(select(User).where(func.lower(User.email) == actor_email.lower()))
+
+
+@app.command("trash-document")
+def trash_document_cmd(document_id: str, actor_email: str) -> None:
+    """Move a document to trash as the given owner (FR-D9)."""
+    from .documents import trash_document
+
+    doc_id = uuid.UUID(document_id)
+
+    async def _do(session):
+        await trash_document(session, actor=await _actor(session, actor_email), document_id=doc_id)
+
+    _run(_do)
+    typer.secho(f"Trashed document {doc_id}", fg=typer.colors.GREEN)
+
+
+@app.command("restore-document")
+def restore_document_cmd(document_id: str, actor_email: str) -> None:
+    """Restore a document from trash within the retention window (FR-D9)."""
+    from .documents import restore_document
+
+    doc_id = uuid.UUID(document_id)
+
+    async def _do(session):
+        await restore_document(session, actor=await _actor(session, actor_email), document_id=doc_id)
+
+    _run(_do)
+    typer.secho(f"Restored document {doc_id}", fg=typer.colors.GREEN)
+
+
+@app.command("purge-document")
+def purge_document_cmd(document_id: str, actor_email: str) -> None:
+    """Permanently purge a document; blocked under legal hold (FR-D9, FR-D13)."""
+    from .authz import connect
+    from .core.config import get_settings
+    from .documents import purge_document
+
+    doc_id = uuid.UUID(document_id)
+
+    async def _do(session):
+        authz = await connect(get_settings(), session)
+        await purge_document(session, authz, actor=await _actor(session, actor_email), document_id=doc_id)
+
+    _run(_do)
+    typer.secho(f"Purged document {doc_id}", fg=typer.colors.GREEN)
+
+
 @app.command("ingest-version")
 def ingest_version_cmd(version_id: str) -> None:
     """Parse a stored document version, chunk, and index it through LiteLLM (Phase 1 FR-D1/FR-D3)."""

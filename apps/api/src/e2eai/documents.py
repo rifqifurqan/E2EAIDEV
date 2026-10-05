@@ -8,6 +8,7 @@ principals, and revoke by deleting the read-index first (tighten first) before O
 import hashlib
 import uuid
 from collections.abc import Iterable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, UploadFile
@@ -26,6 +27,10 @@ from .db import get_session
 
 def _document_object(document_id: uuid.UUID) -> str:
     return f"document:{document_id}"
+
+
+def _relation(level: str) -> str:
+    return level if level in ("owner", "editor") else "viewer"
 
 
 class LocalObjectStorage:
@@ -49,6 +54,9 @@ class LocalObjectStorage:
 
     async def get_bytes(self, key: str) -> bytes:
         return (self.root / key).read_bytes()
+
+    async def delete(self, key: str) -> None:
+        (self.root / key).unlink(missing_ok=True)
 
 
 def get_storage() -> LocalObjectStorage:
@@ -161,6 +169,81 @@ async def revoke_document(
     await authz.write(deletes=[{"user": principal, "relation": relation, "object": _document_object(document_id)}])
 
 
+async def _load_document(session: AsyncSession, document_id: uuid.UUID) -> Document:
+    doc = await session.get(Document, document_id)
+    if doc is None or doc.status == "purged":
+        raise AppError(404, "Document not found")
+    return doc
+
+
+async def trash_document(session: AsyncSession, *, actor: User, document_id: uuid.UUID) -> None:
+    """Move a document to trash (FR-D9). Retrieval filters `status = 'active'`, so it disappears
+    immediately from everyone's retrieval/chat/citations — no separate cache purge needed yet."""
+    doc = await _load_document(session, document_id)
+    doc.status = "trashed"
+    doc.trashed_at = datetime.now(UTC)
+    await audit.record(session, f"user:{actor.id}", "document.trash", _document_object(document_id), {})
+    await session.commit()
+
+
+async def restore_document(
+    session: AsyncSession, *, actor: User, document_id: uuid.UUID, retention_days: int = 30
+) -> None:
+    """Restore from trash within the retention window (FR-D9, NFR-10 default 30 days)."""
+    doc = await _load_document(session, document_id)
+    if doc.status != "trashed":
+        raise AppError(409, "Document is not in trash")
+    if doc.trashed_at and datetime.now(UTC) - doc.trashed_at > timedelta(days=retention_days):
+        raise AppError(410, "Trash retention expired", "This document can no longer be restored and may be purged.")
+    doc.status = "active"
+    doc.trashed_at = None
+    await audit.record(session, f"user:{actor.id}", "document.restore", _document_object(document_id), {})
+    await session.commit()
+
+
+async def purge_document(
+    session: AsyncSession, authz, *, actor: User, document_id: uuid.UUID, storage: LocalObjectStorage | None = None
+) -> None:
+    """Permanently delete derived content and the stored object (FR-D9). Legal hold blocks it (FR-D13).
+
+    Tighten first (PRD T4): delete the local read-index and derived rows, then delete the OpenFGA tuples.
+    The document row survives as a `purged` tombstone (so citations in old chats resolve to a gone-doc,
+    not a dangling id). Content-addressed objects are only unlinked when no other version still refers
+    to them."""
+    doc = await _load_document(session, document_id)
+    if doc.legal_hold:
+        raise AppError(409, "Legal hold blocks purge", "This document is under legal hold and cannot be permanently deleted.")
+    storage = storage or get_storage()
+
+    grants = (await session.execute(
+        select(DocPrincipal.principal, DocPrincipal.level).where(DocPrincipal.document_id == document_id)
+    )).all()
+    object_keys = set(await session.scalars(
+        select(DocumentVersion.object_key).where(DocumentVersion.document_id == document_id)
+    ))
+
+    # Tighten first: local read-index + derived rows go before OpenFGA. Chunks cascade to embeddings.
+    await session.execute(delete(DocPrincipal).where(DocPrincipal.document_id == document_id))
+    await session.execute(delete(Chunk).where(Chunk.document_id == document_id))
+    await session.execute(delete(DocumentVersion).where(DocumentVersion.document_id == document_id))
+    doc.status = "purged"
+    doc.current_version_id = None
+    await audit.record(session, f"user:{actor.id}", "document.purge", _document_object(document_id),
+                       {"principals": len(grants), "objects": len(object_keys)})
+    await session.commit()
+
+    deletes = [{"user": p, "relation": _relation(level), "object": _document_object(document_id)} for p, level in grants]
+    if deletes:
+        await authz.write(deletes=deletes)
+
+    for key in object_keys:
+        still_used = await session.scalar(
+            select(func.count()).select_from(DocumentVersion).where(DocumentVersion.object_key == key)
+        )
+        if not still_used:
+            await storage.delete(key)
+
+
 async def visible_chunks(session: AsyncSession, principals: Iterable[str]) -> list[tuple[str, str, int | None]]:
     """Return only chunks from active documents whose current version is visible to one principal.
 
@@ -235,14 +318,50 @@ async def share_document_api(
     from .core.config import get_settings
 
     user = await _current_user(db, sess)
-    owner_row = await db.scalar(select(DocPrincipal).where(DocPrincipal.document_id == document_id,
-                                                           DocPrincipal.principal == f"user:{user.id}",
-                                                           DocPrincipal.level == "owner"))
-    if owner_row is None:
-        raise AppError(403, "Not allowed")
+    await _require_owner(db, user, document_id)
     await share_document(db, await connect(get_settings(), db), actor=user, document_id=document_id,
                          principal=body.principal, level=body.level)
     return {"status": "ok"}
+
+
+async def _require_owner(db: AsyncSession, user: User, document_id: uuid.UUID) -> None:
+    owner_row = await db.scalar(select(DocPrincipal).where(
+        DocPrincipal.document_id == document_id, DocPrincipal.principal == f"user:{user.id}", DocPrincipal.level == "owner"))
+    if owner_row is None:
+        raise AppError(403, "Not allowed")
+
+
+@router.delete("/documents/{document_id}")
+async def delete_document_api(
+    document_id: uuid.UUID,
+    permanent: bool = False,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+    storage: LocalObjectStorage = Depends(get_storage),
+) -> dict:
+    """Trash by default; `?permanent=true` purges (FR-D9). Both require document ownership."""
+    from .authz import connect
+    from .core.config import get_settings
+
+    user = await _current_user(db, sess)
+    await _require_owner(db, user, document_id)
+    if permanent:
+        await purge_document(db, await connect(get_settings(), db), actor=user, document_id=document_id, storage=storage)
+        return {"status": "purged"}
+    await trash_document(db, actor=user, document_id=document_id)
+    return {"status": "trashed"}
+
+
+@router.post("/documents/{document_id}/restore")
+async def restore_document_api(
+    document_id: uuid.UUID,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    user = await _current_user(db, sess)
+    await _require_owner(db, user, document_id)
+    await restore_document(db, actor=user, document_id=document_id)
+    return {"status": "active"}
 
 
 @router.get("/documents/visible-chunks")

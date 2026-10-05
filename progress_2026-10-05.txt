@@ -189,6 +189,34 @@ PHASE 1 STARTED
        api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
        openfga model + deny-unshared=True).
 
+- Document lifecycle P0: trash / restore / purge with no-leak + legal hold (FR-D9, FR-D13, PRD F4):
+  - No schema change needed: `documents.status` (active/trashed/purged), `trashed_at`, `legal_hold` already
+    exist (migration 0002), and retrieval/visible_chunks already filter `status = 'active'`. So trashing a
+    document removes it from a shared user's retrieval/chat/citations immediately (well inside FR-D9's 5 min).
+  - `documents.py`: `trash_document` (status=trashed, trashed_at=now, audit), `restore_document` (409 if not
+    trashed, 410 if past the 30-day retention window, status=active, trashed_at cleared, audit), and
+    `purge_document` (FR-D13 legal_hold -> AppError 409 "Legal hold blocks purge"; otherwise tighten-first:
+    delete doc_principals + chunks (embeddings cascade via FK) + versions, set status=purged and
+    current_version_id=None, audit, commit, THEN delete OpenFGA tuples for every captured principal, THEN
+    unlink content-addressed objects only when no surviving version still references the key). Added
+    `LocalObjectStorage.delete`; extracted `_relation`/`_require_owner` helpers (share route reuses them).
+  - Minimal API path (PRD T7): `DELETE /api/v1/documents/{id}` (trash; `?permanent=true` purges),
+    `POST /api/v1/documents/{id}/restore`; both require document ownership. Operator path:
+    `e2eai-api trash-document|restore-document|purge-document <document_id> <actor_email>`.
+  - Tests first (TDD, watched RED then GREEN): `test_us_document_lifecycle.py` on the real DB + pgvector path —
+    owner trash -> Andi no longer retrieves, gets no citation, and no WhatsApp/30-percent/title/existence leak;
+    restore within retention -> Andi retrieves and is cited again; purge -> chunks/embeddings/doc_principals/
+    versions all removed, stored object unlinked, OpenFGA deletes issued for both principals (tighten-first),
+    status=purged, current_version_id cleared; legal_hold -> purge raises AppError(409) and leaves every
+    derived row + object intact. Audit counts are scoped to each test's unique document target (audit_log is
+    append-only and never reset).
+  - Verified: `cd apps/api && uv run pytest -q` -> 33 passed, 1 skipped, 1 warning.
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED
+      (compose 6 services; cli 27 passed/1 skipped; api 33 passed/1 skipped; alembic head;
+       api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
+       openfga model + deny-unshared=True).
+
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.
 - Commit + push after every milestone whose tests pass.
