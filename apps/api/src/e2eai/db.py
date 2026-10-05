@@ -157,6 +157,16 @@ class Chunk(Base):
     table_json: Mapped[dict | None] = mapped_column(JSONB)
 
 
+class ChunkEmbedding(Base):
+    """One embedding vector per chunk/model. Shares never copy embeddings per user (FR-C1)."""
+    __tablename__ = "chunk_embeddings"
+    chunk_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("chunks.id", ondelete="CASCADE"), primary_key=True)
+    embedding_model: Mapped[str] = mapped_column(String(160))
+    dims: Mapped[int] = mapped_column(Integer)
+    vector: Mapped[list[float]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class DocPrincipal(Base):
     """Read-index for permission-filtered retrieval (PRD T4). Stores the *granted principal*
     (user:/team:/division:/role:/org:), never expanded to individual users."""

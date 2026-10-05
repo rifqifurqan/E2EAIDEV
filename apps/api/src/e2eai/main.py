@@ -5,6 +5,7 @@ from sqlalchemy import text
 
 from .auth import router as auth_router
 from .documents import router as documents_router
+from .retrieval import router as retrieval_router
 from .core.errors import install
 from .db import sessions
 
@@ -14,6 +15,7 @@ def create_app() -> FastAPI:
     install(app)
     app.include_router(auth_router)
     app.include_router(documents_router)
+    app.include_router(retrieval_router)
 
     @app.get("/api/v1/health", tags=["ops"])
     async def health() -> dict[str, str]:

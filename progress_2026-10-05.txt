@@ -76,7 +76,8 @@ DONE AND VERIFIED
       litellm embedding bge-m3: 200 dim=1024 · openfga model + fail-closed: deny-unshared=True
 
 NEXT
-1. Phase 1 continues: parser/ingest job stub, embedding/index table, chat answer pipeline with citations.
+1. Phase 1 continues: replace stub parser/embedding with Docling + LiteLLM embedding calls, add vector operator
+   search/rerank, and connect the UI path.
 2. Then complete US1-US4 end-to-end through UI path and the permission-leak suite.
 
 PHASE 1 STARTED
@@ -104,6 +105,18 @@ PHASE 1 STARTED
     Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED.
     Live upload endpoint smoke on 127.0.0.1:18001: login as demo user, POST `/api/v1/documents`,
     then GET `/api/v1/documents/visible-chunks` returned the uploaded text chunk.
+
+- Backend cited-answer tracer bullet for US2/US3 (FR-R5, FR-R7, FR-C1, FR-C2):
+  - Added migration `0003_chunk_embeddings` and ORM `ChunkEmbedding`; embeddings are indexed once per
+    chunk/model and are not copied per user/share.
+  - Added `retrieval.py`: chunk indexing with an embedder interface, SQL-level principal filtering before
+    scoring, citation-bearing answer generation, and `POST /api/v1/chat/ask`.
+  - Added `test_us02_cited_answer.py`: Andi asks the WhatsApp revenue-share question and receives the
+    page-4 citation; Budi asks the same question and receives no title/content/citation leak.
+  - Verified: `cd apps/api && uv run pytest -q` -> 20 passed, 1 skipped, 1 warning.
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED.
+    Live chat endpoint smoke on 127.0.0.1:18002: Andi got answer with page 4 citation; Budi got no leak.
 
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.
