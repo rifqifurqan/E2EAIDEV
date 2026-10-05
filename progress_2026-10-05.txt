@@ -328,6 +328,43 @@ PHASE 1 STARTED
        api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
        openfga model + deny-unshared=True).
 
+- Chat conversations, message history, trace-safe feedback, stop marker (FR-C11, FR-O1, FR-O2, FR-C9, FR-C12):
+  - Added migration `0005_conversations`: conversations(user_id, title), messages(conversation_id,
+    role, content, model, tokens, latency_ms, stop_reason), message_citations(message_id, document_id,
+    version_id, chunk_id, page, section), message_feedback(message_id, rating, correction_masked,
+    trace_id). Down_revision: 0004_pgvector_embeddings. Reversible.
+  - Added ORM models: Conversation, Message, MessageCitation, MessageFeedback in db.py.
+  - New `chat.py`: service + API routes for the PRD T7 Chat group:
+    - `create_conversation`, `list_conversations` (with search), `rename_conversation`,
+      `delete_conversation`: every operation scoped to user_id, non-owner gets 404 with no existence
+      hint (FR-C12). Conversations ordered by updated_at desc.
+    - `send_message`: stores user message, calls existing `answer_question` (permission-filtered
+      retrieval, prompt-injection guardrail, no-existence-leak), stores assistant message + citations.
+    - `record_feedback` (FR-O2): thumbs up/down with optional correction. Correction text is PII-masked
+      via existing `mask_text` before persistence; audit row stores only `{rating, has_correction}` — no
+      raw PII (FR-O9).
+    - `mark_stop` (FR-C9): sets `stop_reason="user_stop"` on the assistant message without deleting it;
+      content preserved (history not broken). Audited.
+    - API endpoints: `GET /chat/conversations`, `POST /chat/conversations`, `PATCH /chat/conversations/{id}`,
+      `DELETE /chat/conversations/{id}`, `POST /chat/conversations/{id}/messages`,
+      `POST /messages/{id}/feedback`, `POST /messages/{id}/stop`.
+  - Tests first (TDD, watched RED then GREEN): `test_us_chat_conversations.py` — 6 tests:
+    (1) owner-scoped CRUD: Andi creates 2 convos, sees both, Budi sees 0, search/rename/delete scoped
+    to owner, Budi rename/delete -> 404; (2) send_message stores user+assistant messages + citation,
+    Budi sees no conversations, cannot send to Andi's conv (404), Budi's own answer has no WhatsApp/
+    30-percent leak; (3) feedback with PII correction -> correction_masked has [EMAIL]+[PHONE], audit
+    has no raw PII, only rating+has_correction; (4) thumbs up without correction stores cleanly;
+    (5) stop marker sets stop_reason, content preserved, Budi cannot stop Andi's message (404);
+    (6) Budi cannot see Andi's conversation title or restricted "Confidential Board Minutes Q3"
+    document title, Budi's answer has no leak.
+  - Verified: `cd apps/api && uv run pytest -q` -> 69 passed, 1 skipped, 1 warning.
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED
+      (compose 6 services; cli 27 passed/1 skipped; api 69 passed/1 skipped; alembic head;
+       api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
+       openfga model + deny-unshared=True).
+    Secret scan: staged diff checked against all 22 .env values >=8 chars -> no secrets.
+
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.
 - Commit + push after every milestone whose tests pass.

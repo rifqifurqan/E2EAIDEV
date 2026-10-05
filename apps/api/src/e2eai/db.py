@@ -186,6 +186,54 @@ class DocPrincipal(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class Conversation(Base):
+    """FR-C11: user-owned chat conversation. CRUD is scoped to user_id."""
+    __tablename__ = "conversations"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class Message(Base):
+    """PRD T3 messages: role (user/assistant), content, model metadata, stop_reason (FR-C9)."""
+    __tablename__ = "messages"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column(String(16))  # user / assistant
+    content: Mapped[str] = mapped_column(Text)
+    model: Mapped[str | None] = mapped_column(String(160))
+    tokens: Mapped[int | None] = mapped_column(Integer)
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    stop_reason: Mapped[str | None] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class MessageCitation(Base):
+    """PRD T3 citations: links an assistant message to the document/version/chunk it cited."""
+    __tablename__ = "message_citations"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    message_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"))
+    document_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("documents.id"))
+    version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("document_versions.id"))
+    chunk_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("chunks.id"))
+    page: Mapped[int | None] = mapped_column(Integer)
+    section: Mapped[str | None] = mapped_column(String(1000))
+
+
+class MessageFeedback(Base):
+    """FR-O2: thumbs up/down + optional PII-masked correction, attached to the trace."""
+    __tablename__ = "message_feedback"
+    __table_args__ = (CheckConstraint("rating in ('up', 'down')", name="message_feedback_rating"),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    message_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"), unique=True)
+    rating: Mapped[str] = mapped_column(String(8))
+    correction_masked: Mapped[str | None] = mapped_column(Text)
+    trace_id: Mapped[str | None] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 ROLE_NAMES = ("admin", "ai_engineer", "evaluator", "compliance", "business_user")  # FR-F3
 
 
