@@ -335,7 +335,8 @@ async def upload_document(
         storage=storage,
     )
     result = await ingest_version(db, embedder=LiteLLMEmbedder.from_settings(), version_id=doc.current_version_id, storage=storage)
-    return {"document_id": str(doc.id), "title": doc.title, "parse_status": result["status"], "chunks": result["chunks"]}
+    return {"document_id": str(doc.id), "title": doc.title, "parse_status": result["status"],
+            "scan_status": result.get("scan_status"), "chunks": result["chunks"]}
 
 
 @router.post("/documents/{document_id}/shares")

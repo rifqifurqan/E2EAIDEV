@@ -249,6 +249,42 @@ PHASE 1 STARTED
        openfga model + deny-unshared=True).
     Secret scan: staged diff checked against all 22 .env values >=8 chars -> no leaks.
 
+- Malware scan / quarantine upload guardrail (FR-D14, PRD F1.4; no-leak FR-C12):
+  - New `scan.py`: a `Scanner` protocol + `ScanResult` (verdict clean/infected/unavailable); `LocalNoopScanner`
+    (safe Lite default — no AV service in the 5 GB VM, so local uploads pass as clean); `ClamAVScanner`
+    adapter boundary speaking the clamd INSTREAM protocol over a raw asyncio socket (no new dependency);
+    a connection/protocol error returns `unavailable` (never a silent clean). `ScanPolicy` (frozen) with
+    safe defaults — scanning off, `on_unavailable=fail_closed`; `ScanPolicy.from_settings()` reads an
+    optional `malware_scan` block of e2eai.yaml and falls back to the safe defaults when absent.
+    `select_scanner(policy)` -> noop when off, ClamAV when enabled. `parse_clamd_response` is a pure helper.
+  - `ingest.py`: `ingest_version` now scans BEFORE any parse/index. Infected -> scan_status=infected,
+    parse_status=skipped, no chunks/embeddings, audit `document.scan.infected`, returns quarantined.
+    Unavailable -> safe policy: fail_closed (scan_status=unavailable, parse_status=skipped, blocked) or
+    pending (both pending, retriable), audit `document.scan.unavailable` with the decision. Clean ->
+    scan_status=clean, audit `document.scan.clean`, then the existing parse/chunk/embed flow. Scanner and
+    policy are injectable like the embedder (defaults from config). Idempotent per version_id, so a pending
+    file re-ingests cleanly when the scanner returns.
+  - `documents.py`: the `POST /api/v1/documents` route surfaces `scan_status` in its response; operator
+    path `e2eai-api ingest-version` unchanged (defaults apply). Added the documented `malware_scan` block
+    to e2eai.yaml (off / fail_closed) as the operator hook; e2eai.yaml is per-machine (gitignored).
+  - Retrieval/visible_chunks unchanged: a quarantined file produces no chunks, so it is never parsed,
+    indexed, or retrieved and leaks no title/content/citation/existence to any user (FR-C12).
+  - Tests first (TDD, watched RED then GREEN): `test_us_malware_scan.py` — policy safe defaults; scanner
+    selection; no-op clean; clamd response parsing; ClamAV unavailable on a refused port; clean upload
+    scans clean then ingests with a `document.scan.clean` audit; infected upload quarantined (0 chunks/0
+    embeddings, no `document.parse` audit, and after sharing, Andi/Budi get no citation and no WhatsApp/
+    30-percent leak, owner visible_chunks empty); unavailable fail_closed (blocked, skipped, 0 chunks,
+    audited); unavailable pending then a clean rescan ingests. Infected DB test uses benign bytes on disk
+    (real EICAR trips the host AV); EICAR stays in-memory only for the no-op/adapter unit tests.
+  - Verified: `cd apps/api && uv run pytest -q` -> 54 passed, 1 skipped, 1 warning.
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED
+      (compose 6 services; cli 27 passed/1 skipped; api 54 passed/1 skipped; alembic head;
+       api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
+       openfga model + deny-unshared=True).
+    Secret scan: staged diff checked against all 22 .env values >=8 chars -> no secrets (only the
+    loopback 127.0.0.1 bind address matched, which is not a secret).
+
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.
 - Commit + push after every milestone whose tests pass.

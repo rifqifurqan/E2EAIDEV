@@ -22,6 +22,7 @@ from .core.errors import AppError
 from .db import Chunk, Document, DocumentVersion
 from .documents import LocalObjectStorage, get_storage
 from .retrieval import Embedder, index_document_chunks
+from .scan import ScanPolicy, Scanner, select_scanner
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.*\S)\s*$")
 
@@ -114,27 +115,54 @@ async def ingest_version(
     embedder: Embedder,
     version_id: uuid.UUID,
     storage: LocalObjectStorage | None = None,
+    scanner: Scanner | None = None,
+    policy: ScanPolicy | None = None,
 ) -> dict:
-    """Parse the stored object for one version, (re)write its chunks, index embeddings, set status.
+    """Scan, then parse the stored object for one version, (re)write chunks, index embeddings, set status.
 
-    Idempotent per `version_id` (PRD F1.6): existing chunks for the version are deleted first, so a
-    retry yields the same result. On a parser error the version is marked `failed` with an audit row
-    and no chunks are written — no content reaches an unauthorised reader because none is produced."""
+    Malware scan runs before any parse/index (FR-D14, PRD F1.4): an infected file is quarantined
+    (scan_status=infected, parse_status=skipped, no chunks/embeddings), so it is never parsed, indexed,
+    or retrieved and leaks no title/content/citation/existence. If a configured scanner is unavailable,
+    the safe policy decides — fail closed (blocked, skipped) or pending (retry later). Idempotent per
+    `version_id` (PRD F1.6): existing chunks are deleted before a reparse. On a parser error the version
+    is marked `failed` with no chunks — nothing reaches an unauthorised reader because none is produced."""
     storage = storage or get_storage()
+    policy = policy or ScanPolicy.from_settings()
+    scanner = scanner or select_scanner(policy)
     version = await session.get(DocumentVersion, version_id)
     if version is None:
         raise AppError(404, "Document version not found")
     target = f"document:{version.document_id}"
 
+    data = await storage.get_bytes(version.object_key)
+    scan = await scanner.scan(data)
+    if scan.verdict == "infected":
+        version.scan_status = "infected"
+        version.parse_status = "skipped"
+        await audit.record(session, "system:scan", "document.scan.infected", target,
+                           {"version_id": str(version_id), "signature": scan.signature})
+        await session.commit()
+        return {"status": "quarantined", "scan_status": "infected", "chunks": 0, "signature": scan.signature}
+    if scan.verdict == "unavailable":
+        decision = "pending" if policy.on_unavailable == "pending" else "fail_closed"
+        version.scan_status = "pending" if decision == "pending" else "unavailable"
+        version.parse_status = "pending" if decision == "pending" else "skipped"
+        await audit.record(session, "system:scan", "document.scan.unavailable", target,
+                           {"version_id": str(version_id), "decision": decision})
+        await session.commit()
+        status = "pending" if decision == "pending" else "blocked"
+        return {"status": status, "scan_status": version.scan_status, "chunks": 0}
+    version.scan_status = "clean"
+    await audit.record(session, "system:scan", "document.scan.clean", target, {"version_id": str(version_id)})
+
     try:
-        data = await storage.get_bytes(version.object_key)
         parsed = select_parser(version.mime).parse(data, mime=version.mime)
     except AppError as exc:
         version.parse_status = "failed"
         await audit.record(session, "system:ingest", "document.parse.failed", target,
                            {"version_id": str(version_id), "reason": exc.title})
         await session.commit()
-        return {"status": "failed", "chunks": 0, "reason": exc.title}
+        return {"status": "failed", "scan_status": "clean", "chunks": 0, "reason": exc.title}
 
     await session.execute(delete(Chunk).where(Chunk.version_id == version_id))
     for ordinal, pc in enumerate(parsed):
@@ -147,4 +175,4 @@ async def ingest_version(
     await session.commit()
 
     indexed = await index_document_chunks(session, embedder=embedder, document_id=version.document_id)
-    return {"status": "ready", "chunks": len(parsed), "indexed": indexed}
+    return {"status": "ready", "scan_status": "clean", "chunks": len(parsed), "indexed": indexed}
