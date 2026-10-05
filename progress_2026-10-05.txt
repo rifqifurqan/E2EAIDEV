@@ -160,6 +160,35 @@ PHASE 1 STARTED
       LiteLLMEmbedder (`bge-m3`, dims=1024) stored in pgvector; Andi got the page-4 "30 percent" citation;
       Budi got no citations and no WhatsApp/30-percent leak.
 
+- Parser interface + ingest service for uploaded text/markdown; safe Docling boundary (FR-D1, FR-D3, FR-D4):
+  - New `ingest.py`: a `Parser` protocol + `ParsedChunk`; `TextMarkdownParser` (structure-aware: splits on
+    ATX headings, carries the heading trail as `section_path`, counts form-feed page breaks); `DoclingParser`
+    adapter that raises a clear AppError(503) when Docling is not installed (it isn't here), so rich formats
+    (PDF/DOCX/PPTX/XLSX/images) are routed but recorded as a failed parse until the worker image lands.
+    `select_parser(mime)` routes text/* to the markdown parser and everything else to Docling.
+  - `ingest_version(session, embedder, version_id, storage)`: reads the stored object by object_key, parses it,
+    (re)writes chunks idempotently per version_id (PRD F1.6), sets parse_status ready/failed with an audit row,
+    then indexes embeddings through the existing `index_document_chunks`/LiteLLMEmbedder path. On a parser error
+    it marks the version failed and writes no chunks (nothing to leak). No heavy Docker worker added (5 GB VM):
+    it runs inline and is callable as a service, the `POST /api/v1/documents` route, and the new operator
+    command `e2eai-api ingest-version <version_id>`.
+  - `documents.py`: `create_uploaded_document` now stores the object + a `pending` version only (chunking moved
+    to ingest, PRD F1.2); added `LocalObjectStorage.get_bytes`; the upload route stores then ingests and returns
+    parse_status/chunks.
+  - Retrieval unchanged and still filters doc_principals in the WHERE clause before vector scoring — no leak.
+  - Tests first (TDD, watched RED then GREEN): new `test_us_upload_ingest.py` — markdown parser splits by heading
+    into section paths; plain text -> one chunk; form-feed page counting; parser routing; Docling offline -> clear
+    AppError; upload->ingest->chunks->cited answer (Andi gets the "30 percent" revenue chunk with a "Revenue"
+    section citation using a one-hot FakeEmbedder that only ranks correctly by vector distance; Budi gets no
+    title/content/citation); unparseable binary -> parse_status failed, zero chunks/embeddings, no leak. Adjusted
+    the existing text-upload test to assert upload is store-only (pending, no chunk) then ingest produces the chunk.
+  - Verified: `cd apps/api && uv run pytest -q` -> 29 passed, 1 skipped, 1 warning.
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED
+      (compose 6 services; cli 27 passed/1 skipped; api 29 passed/1 skipped; alembic head;
+       api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
+       openfga model + deny-unshared=True).
+
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.
 - Commit + push after every milestone whose tests pass.

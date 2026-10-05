@@ -47,6 +47,9 @@ class LocalObjectStorage:
             path.write_bytes(data)
         return key, digest
 
+    async def get_bytes(self, key: str) -> bytes:
+        return (self.root / key).read_bytes()
+
 
 def get_storage() -> LocalObjectStorage:
     return LocalObjectStorage()
@@ -99,9 +102,9 @@ async def create_uploaded_document(
     mime: str,
     storage: LocalObjectStorage,
 ) -> Document:
-    """Create a P0 uploaded document. Text files become one ready chunk; richer parsing lands next."""
+    """Store the uploaded object and version metadata (PRD F1.2). Parsing/chunking is a separate
+    ingest step (`e2eai.ingest.ingest_version`), so the version is created `pending`."""
     key, digest = await storage.put_bytes(data)
-    text = data.decode("utf-8", errors="ignore") if mime.startswith("text/") else ""
     doc = Document(title=title, owner_id=owner.id, created_by=str(owner.id))
     session.add(doc)
     await session.flush()
@@ -111,15 +114,13 @@ async def create_uploaded_document(
         sha256=digest,
         mime=mime,
         size=len(data),
-        parse_status="ready" if text else "pending",
+        parse_status="pending",
         scan_status="pending",
         created_by=str(owner.id),
     )
     session.add(version)
     await session.flush()
     doc.current_version_id = version.id
-    if text:
-        session.add(Chunk(document_id=doc.id, version_id=version.id, ordinal=0, text=text, page=1, section_path="upload"))
     session.add(DocPrincipal(document_id=doc.id, principal=f"user:{owner.id}", level="owner"))
     await audit.record(session, f"user:{owner.id}", "document.upload", _document_object(doc.id), {"title": title, "mime": mime})
     await session.commit()
@@ -204,6 +205,9 @@ async def upload_document(
     db: AsyncSession = Depends(get_session),
     storage: LocalObjectStorage = Depends(get_storage),
 ) -> dict:
+    from .ingest import ingest_version
+    from .retrieval import LiteLLMEmbedder
+
     user = await _current_user(db, sess)
     data = await file.read()
     if not data:
@@ -216,7 +220,8 @@ async def upload_document(
         mime=file.content_type or "application/octet-stream",
         storage=storage,
     )
-    return {"document_id": str(doc.id), "title": doc.title}
+    result = await ingest_version(db, embedder=LiteLLMEmbedder.from_settings(), version_id=doc.current_version_id, storage=storage)
+    return {"document_id": str(doc.id), "title": doc.title, "parse_status": result["status"], "chunks": result["chunks"]}
 
 
 @router.post("/documents/{document_id}/shares")

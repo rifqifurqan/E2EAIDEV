@@ -88,3 +88,15 @@ def index_document_cmd(document_id: str) -> None:
     doc_id = uuid.UUID(document_id)
     count = _run(lambda session: index_document_chunks(session, embedder=LiteLLMEmbedder.from_settings(), document_id=doc_id))
     typer.secho(f"Indexed {count} chunk(s) for document {doc_id}", fg=typer.colors.GREEN)
+
+
+@app.command("ingest-version")
+def ingest_version_cmd(version_id: str) -> None:
+    """Parse a stored document version, chunk, and index it through LiteLLM (Phase 1 FR-D1/FR-D3)."""
+    from .ingest import ingest_version
+    from .retrieval import LiteLLMEmbedder
+
+    vid = uuid.UUID(version_id)
+    result = _run(lambda session: ingest_version(session, embedder=LiteLLMEmbedder.from_settings(), version_id=vid))
+    color = typer.colors.GREEN if result["status"] == "ready" else typer.colors.RED
+    typer.secho(f"ingest {vid}: {result}", fg=color)

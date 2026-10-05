@@ -4,9 +4,17 @@ import subprocess
 from sqlalchemy import delete, func, select
 
 from e2eai.authz import principals
-from e2eai.db import Chunk, DocPrincipal, Document, DocumentVersion, Folder, User, sessions
+from e2eai.db import Chunk, ChunkEmbedding, DocPrincipal, Document, DocumentVersion, Folder, User, sessions
 from e2eai.documents import LocalObjectStorage, create_seeded_document, create_uploaded_document, revoke_document, share_document, visible_chunks
+from e2eai.ingest import ingest_version
 from e2eai.seed import seed_demo
+
+
+class FakeEmbedder:
+    model = "fake-embedding-v1"
+
+    async def embed(self, texts):
+        return [[float(len(t)), 1.0] for t in texts]
 
 
 class RecordingAuthz:
@@ -18,7 +26,7 @@ class RecordingAuthz:
 
 
 async def _reset_documents(session):
-    for model in (DocPrincipal, Chunk, DocumentVersion, Document, Folder):
+    for model in (ChunkEmbedding, DocPrincipal, Chunk, DocumentVersion, Document, Folder):
         await session.execute(delete(model))
     await session.commit()
 
@@ -67,7 +75,7 @@ def test_us01_us03_us04_share_retrieve_and_revoke_without_existence_leak():
     asyncio.run(run())
 
 
-def test_text_upload_service_stores_object_and_indexes_owner_chunk(tmp_path):
+def test_text_upload_stores_object_then_ingest_produces_owner_chunk(tmp_path):
     async def run():
         async with sessions()() as session:
             await _reset_documents(session)
@@ -81,11 +89,16 @@ def test_text_upload_service_stores_object_and_indexes_owner_chunk(tmp_path):
                 mime="text/plain",
                 storage=storage,
             )
-            rows = await visible_chunks(session, await principals(session, owner))
-            assert rows == [("policy.txt", "Internal leave policy: 12 days.", 1)]
+            # Upload stores the object only; parsing/chunking happens in the ingest step (PRD F1).
             version = await session.get(DocumentVersion, doc.current_version_id)
+            assert version.parse_status == "pending"
             assert version.object_key.startswith("sha256/")
             assert (tmp_path / "objects" / version.object_key).exists()
+            assert await visible_chunks(session, await principals(session, owner)) == []
+
+            await ingest_version(session, embedder=FakeEmbedder(), version_id=doc.current_version_id, storage=storage)
+            rows = await visible_chunks(session, await principals(session, owner))
+            assert rows == [("policy.txt", "Internal leave policy: 12 days.", 1)]
 
     _migrate()
     asyncio.run(run())
