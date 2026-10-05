@@ -115,6 +115,31 @@ class Folder(Audited, Base):
     path: Mapped[str] = mapped_column(String(1000), default="/")
 
 
+class FolderPrincipal(Base):
+    """Read-index for inherited folder sharing (FR-S3).
+
+    Stores the granted principal, not expanded users. Retrieval/list views join this table in the SQL
+    permission predicate, so folder shares never copy embeddings or disclose folder contents to others.
+    """
+    __tablename__ = "folder_principals"
+    __table_args__ = (Index("folder_principals_by_principal", "principal", "folder_id"),)
+    folder_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("folders.id", ondelete="CASCADE"), primary_key=True)
+    principal: Mapped[str] = mapped_column(String(80), primary_key=True)
+    level: Mapped[str] = mapped_column(String(16), default="viewer")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Notification(Base):
+    """In-app notification row (FR-F11/FR-C10). Details contain safe metadata only."""
+    __tablename__ = "notifications"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(80))
+    details: Mapped[dict] = mapped_column(JSONB, default=dict)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Document(Audited, Base):
     """FR-D1. Retrieval uses only the latest version (current_version_id)."""
     __tablename__ = "documents"

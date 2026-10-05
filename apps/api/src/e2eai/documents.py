@@ -13,7 +13,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
@@ -21,7 +21,7 @@ from .auth import current_session
 from .authz import principals
 from .core.config import repo_root
 from .core.errors import AppError
-from .db import Chunk, DocPrincipal, Document, DocumentVersion, Folder, User
+from .db import Chunk, DocPrincipal, Document, DocumentVersion, Folder, FolderPrincipal, Notification, User
 from .db import get_session
 from .share_policy import SENSITIVITIES, SharePolicy, share_block_reason
 
@@ -160,8 +160,77 @@ async def share_document(
     relation = "viewer" if level == "viewer" else "editor" if level == "editor" else "owner"
     await authz.write(writes=[{"user": principal, "relation": relation, "object": _document_object(document_id)}])
     await session.merge(DocPrincipal(document_id=document_id, principal=principal, level=level))
+    await _notify_direct_user_share(session, actor=actor, principal=principal, title=doc.title, document_id=document_id)
     await audit.record(session, f"user:{actor.id}", "document.share", _document_object(document_id), {"principal": principal, "level": level})
     await session.commit()
+
+
+async def share_folder(
+    session: AsyncSession,
+    authz,
+    *,
+    actor: User,
+    folder_id: uuid.UUID,
+    principal: str,
+    level: str = "viewer",
+) -> None:
+    """Grant a folder principal (FR-S3). Loosen last: OpenFGA first, local read-index second."""
+    folder = await session.get(Folder, folder_id)
+    if folder is None:
+        raise AppError(404, "Folder not found")
+    await authz.write(writes=[{"user": principal, "relation": _relation(level), "object": f"folder:{folder_id}"}])
+    await session.merge(FolderPrincipal(folder_id=folder_id, principal=principal, level=level))
+    await _notify_direct_user_share(session, actor=actor, principal=principal, title=folder.name, folder_id=folder_id)
+    await audit.record(session, f"user:{actor.id}", "folder.share", f"folder:{folder_id}", {"principal": principal, "level": level})
+    await session.commit()
+
+
+async def revoke_folder(
+    session: AsyncSession,
+    authz,
+    *,
+    actor: User,
+    folder_id: uuid.UUID,
+    principal: str,
+    level: str = "viewer",
+) -> None:
+    """Revoke a folder principal (FR-S3). Tighten first: local row delete before OpenFGA delete."""
+    await session.execute(delete(FolderPrincipal).where(FolderPrincipal.folder_id == folder_id, FolderPrincipal.principal == principal))
+    await audit.record(session, f"user:{actor.id}", "folder.revoke", f"folder:{folder_id}", {"principal": principal})
+    await session.commit()
+    await authz.write(deletes=[{"user": principal, "relation": _relation(level), "object": f"folder:{folder_id}"}])
+
+
+async def _notify_direct_user_share(
+    session: AsyncSession,
+    *,
+    actor: User,
+    principal: str,
+    title: str,
+    document_id: uuid.UUID | None = None,
+    folder_id: uuid.UUID | None = None,
+) -> None:
+    """Create an in-app notification only for a direct user principal.
+
+    Group notifications stay represented in audit for now; the notification details intentionally carry
+    safe metadata only (title/type/id), never document contents or snippets.
+    """
+    if not principal.startswith("user:"):
+        await audit.record(session, f"user:{actor.id}", "notification.group.placeholder", principal,
+                           {"target_type": "folder" if folder_id else "document"})
+        return
+    try:
+        user_id = uuid.UUID(principal.split(":", 1)[1])
+    except ValueError:
+        return
+    if user_id == actor.id:
+        return
+    details = {"title": title, "shared_by": str(actor.id)}
+    if document_id:
+        details |= {"document_id": str(document_id), "target_type": "document"}
+    if folder_id:
+        details |= {"folder_id": str(folder_id), "target_type": "folder"}
+    session.add(Notification(user_id=user_id, kind="document.shared", details=details))
 
 
 async def revoke_document(
@@ -272,25 +341,80 @@ async def purge_document(
 
 
 async def visible_chunks(session: AsyncSession, principals: Iterable[str]) -> list[tuple[str, str, int | None]]:
-    """Return only chunks from active documents whose current version is visible to one principal.
+    """Return only chunks from active documents visible to at least one principal.
 
-    Result tuples are (document title, chunk text, page). No rows means no existence hints to the caller.
+    Direct document shares and inherited folder shares are both checked in SQL before rows are returned.
+    No rows means no existence hints to the caller.
     """
     principal_list = sorted(set(principals))
     if not principal_list:
         return []
+    allowed = _visible_document_clause(principal_list)
     rows = await session.execute(
         select(Document.title, Chunk.text, Chunk.page)
         .join(Chunk, Chunk.document_id == Document.id)
-        .join(DocPrincipal, DocPrincipal.document_id == Document.id)
         .where(
             Document.status == "active",
             Chunk.version_id == Document.current_version_id,
-            DocPrincipal.principal.in_(principal_list),
+            allowed,
         )
         .order_by(Document.title, Chunk.ordinal)
     )
     return list(rows.all())
+
+
+def _visible_document_clause(principal_list: list[str]):
+    direct = exists().where(DocPrincipal.document_id == Document.id, DocPrincipal.principal.in_(principal_list))
+    folder = exists().where(FolderPrincipal.folder_id == Document.folder_id, FolderPrincipal.principal.in_(principal_list))
+    return or_(direct, folder)
+
+
+async def list_documents_view(session: AsyncSession, *, user: User, view: str = "all") -> list[dict]:
+    """Permission-filtered document metadata views (FR-S6).
+
+    Returns only documents the user is allowed to know about. Metadata is intentionally small and contains
+    no snippets/content.
+    """
+    user_principals = await principals(session, user)
+    principal_list = sorted(user_principals)
+    if not principal_list:
+        return []
+    stmt = select(Document.id, Document.title, Document.owner_id, Document.sensitivity).where(
+        Document.status == "active", _visible_document_clause(principal_list)
+    )
+    if view == "my_documents":
+        stmt = stmt.where(Document.owner_id == user.id)
+    elif view == "shared_with_me":
+        direct_user = f"user:{user.id}"
+        user_share = or_(
+            exists().where(DocPrincipal.document_id == Document.id, DocPrincipal.principal == direct_user),
+            exists().where(FolderPrincipal.folder_id == Document.folder_id, FolderPrincipal.principal == direct_user),
+        )
+        stmt = stmt.where(Document.owner_id != user.id, user_share)
+    elif view == "my_team":
+        teams = sorted(p for p in user_principals if p.startswith("team:"))
+        if not teams:
+            return []
+        team_share = or_(
+            exists().where(DocPrincipal.document_id == Document.id, DocPrincipal.principal.in_(teams)),
+            exists().where(FolderPrincipal.folder_id == Document.folder_id, FolderPrincipal.principal.in_(teams)),
+        )
+        stmt = stmt.where(team_share)
+    elif view not in ("all", "everything"):
+        raise AppError(400, "Invalid document view")
+    stmt = stmt.order_by(Document.title)
+    return [
+        {"id": str(doc_id), "title": title, "owner_id": str(owner_id), "sensitivity": sensitivity}
+        for doc_id, title, owner_id, sensitivity in (await session.execute(stmt)).all()
+    ]
+
+
+async def list_notifications(session: AsyncSession, *, user: User, unread_only: bool = False) -> list[Notification]:
+    stmt = select(Notification).where(Notification.user_id == user.id)
+    if unread_only:
+        stmt = stmt.where(Notification.read_at.is_(None))
+    stmt = stmt.order_by(Notification.created_at.desc())
+    return list((await session.execute(stmt)).scalars().all())
 
 
 async def _current_user(db: AsyncSession, sess: dict) -> User:

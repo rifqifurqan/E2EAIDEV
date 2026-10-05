@@ -15,7 +15,7 @@ import httpx
 import yaml
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
@@ -23,7 +23,7 @@ from .auth import current_session
 from .authz import principals
 from .core.config import Settings, get_settings, repo_root
 from .core.errors import AppError
-from .db import Chunk, ChunkEmbedding, DocPrincipal, Document, User, get_session
+from .db import Chunk, ChunkEmbedding, DocPrincipal, Document, FolderPrincipal, User, get_session
 from .guardrails import PromptGuardPolicy, PromptInjectionDetector, select_prompt_detector
 
 class Embedder(Protocol):
@@ -103,28 +103,60 @@ async def retrieve_relevant_chunks(
     user_principals: Iterable[str],
     question: str,
     limit: int = 4,
+    user: User | None = None,
+    scope: str = "all",
+    document_id: uuid.UUID | None = None,
 ) -> list[dict]:
-    """Rank indexed chunks by vector distance, after SQL-level permission filtering (FR-C2).
+    """Rank indexed chunks by vector distance after SQL-level permission and scope filtering (FR-C2/FR-C3).
 
-    The doc_principals join + WHERE restrict candidates *before* the ORDER BY/LIMIT, so the vector
-    search only ever ranks chunks the caller may see. The ChunkEmbedding join is inner: un-indexed
-    chunks are not retrievable, and unshared users match no rows at all.
+    Direct document shares and inherited folder shares are part of the SQL predicate before ordering/limit.
+    Scopes only narrow this already-permission-filtered set; they never grant access.
     """
     principal_list = sorted(set(user_principals))
     if not principal_list:
         return []
     qvec = (await embedder.embed([question]))[0]
+    allowed = _visible_document_clause(principal_list)
+    filters = [
+        Document.status == "active",
+        Chunk.version_id == Document.current_version_id,
+        ChunkEmbedding.embedding_model == embedder.model,
+        allowed,
+    ]
+    if scope == "this_document":
+        if document_id is None:
+            return []
+        filters.append(Document.id == document_id)
+    elif scope == "my_documents":
+        if user is None:
+            return []
+        filters.append(Document.owner_id == user.id)
+    elif scope == "shared_with_me":
+        if user is None:
+            return []
+        direct_user = f"user:{user.id}"
+        filters.extend([
+            Document.owner_id != user.id,
+            or_(
+                exists().where(DocPrincipal.document_id == Document.id, DocPrincipal.principal == direct_user),
+                exists().where(FolderPrincipal.folder_id == Document.folder_id, FolderPrincipal.principal == direct_user),
+            ),
+        ])
+    elif scope == "my_team":
+        teams = sorted(p for p in principal_list if p.startswith("team:"))
+        if not teams:
+            return []
+        filters.append(or_(
+            exists().where(DocPrincipal.document_id == Document.id, DocPrincipal.principal.in_(teams)),
+            exists().where(FolderPrincipal.folder_id == Document.folder_id, FolderPrincipal.principal.in_(teams)),
+        ))
+    elif scope not in ("all", "everything"):
+        raise AppError(400, "Invalid chat scope")
     rows = await session.execute(
         select(Document.title, Chunk.text, Chunk.page, Chunk.section_path)
         .join(Chunk, Chunk.document_id == Document.id)
         .join(ChunkEmbedding, ChunkEmbedding.chunk_id == Chunk.id)
-        .join(DocPrincipal, DocPrincipal.document_id == Document.id)
-        .where(
-            Document.status == "active",
-            Chunk.version_id == Document.current_version_id,
-            ChunkEmbedding.embedding_model == embedder.model,
-            DocPrincipal.principal.in_(principal_list),
-        )
+        .where(*filters)
         .order_by(ChunkEmbedding.vector.cosine_distance(qvec))
         .limit(limit)
     )
@@ -132,6 +164,13 @@ async def retrieve_relevant_chunks(
         {"document": title, "text": text, "page": page, "section": section_path}
         for title, text, page, section_path in rows.all()
     ]
+
+
+def _visible_document_clause(principal_list: list[str]):
+    return or_(
+        exists().where(DocPrincipal.document_id == Document.id, DocPrincipal.principal.in_(principal_list)),
+        exists().where(FolderPrincipal.folder_id == Document.folder_id, FolderPrincipal.principal.in_(principal_list)),
+    )
 
 
 async def answer_question(
@@ -142,6 +181,8 @@ async def answer_question(
     question: str,
     prompt_detector: PromptInjectionDetector | None = None,
     prompt_policy: PromptGuardPolicy | None = None,
+    scope: str = "all",
+    document_id: uuid.UUID | None = None,
 ) -> dict:
     """Answer from permission-filtered chunks, treating retrieved context as untrusted (FR-C8).
 
@@ -152,7 +193,14 @@ async def answer_question(
     prompt_policy = prompt_policy or PromptGuardPolicy.from_settings()
     prompt_detector = prompt_detector or select_prompt_detector(prompt_policy)
     chunks = await retrieve_relevant_chunks(
-        session, embedder=embedder, user_principals=await principals(session, user), question=question, limit=4
+        session,
+        embedder=embedder,
+        user_principals=await principals(session, user),
+        question=question,
+        limit=4,
+        user=user,
+        scope=scope,
+        document_id=document_id,
     )
     safe_chunks = []
     for chunk in chunks:
@@ -190,6 +238,8 @@ async def _current_user(db: AsyncSession, sess: dict) -> User:
 
 class AskIn(BaseModel):
     question: str
+    scope: str = "all"
+    document_id: uuid.UUID | None = None
 
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
@@ -200,4 +250,11 @@ async def ask(body: AskIn, sess: dict = Depends(current_session), db: AsyncSessi
     user = await _current_user(db, sess)
     if not body.question.strip():
         raise AppError(400, "Question is required")
-    return await answer_question(db, embedder=LiteLLMEmbedder.from_settings(), user=user, question=body.question)
+    return await answer_question(
+        db,
+        embedder=LiteLLMEmbedder.from_settings(),
+        user=user,
+        question=body.question,
+        scope=body.scope,
+        document_id=body.document_id,
+    )
