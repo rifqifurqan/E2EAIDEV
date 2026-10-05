@@ -393,6 +393,28 @@ PHASE 1 STARTED
        openfga model + deny-unshared=True).
     Secret scan: staged diff checked against 14 secret-like .env values -> no secrets.
 
+- Eval Lab P0 backend slice (FR-T1, FR-T2, FR-D12, FR-T7, FR-T12):
+  - Added migration `0007_eval_lab`: versioned `eval_datasets` and normalized `eval_runs`.
+  - Added ORM models `EvalDataset` and `EvalRun`.
+  - New `eval_lab.py` service/API:
+    - deterministic synthetic Q&A/adversarial/persona generation from source chunks;
+    - versioned dataset creation;
+    - `EvalAdapter` protocol plus offline `LocalRagasAdapter` boundary for Ragas-compatible metrics;
+    - normalized run records with metrics/item results;
+    - built-in permission-leak suite that stores leak booleans/counts only, never restricted answers,
+      retrieved text, or citation titles;
+    - run-vs-run comparison with regression flagging.
+  - API endpoints: `POST /api/v1/evals/datasets` and `POST /api/v1/evals/runs`.
+  - Tests first: `test_us_eval_lab_p0.py` covers dataset versioning/synthetic generation, Ragas adapter
+    run metrics + regression comparison, and permission-leak suite no-leak storage.
+  - Verified: targeted eval suite -> 3 passed; `cd apps/api && uv run pytest -q` -> 77 passed,
+    1 skipped, 1 warning. Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED
+      (compose 6 services; cli 27 passed/1 skipped; api 77 passed/1 skipped; alembic head;
+       api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
+       openfga model + deny-unshared=True).
+    Secret scan: staged diff checked against 14 secret-like .env values -> no secrets.
+
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.
 - Commit + push after every milestone whose tests pass.

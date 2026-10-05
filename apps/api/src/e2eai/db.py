@@ -259,6 +259,31 @@ class MessageFeedback(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class EvalDataset(Base):
+    """FR-T1/FR-D12: versioned eval dataset, manual/synthetic/trace sourced."""
+    __tablename__ = "eval_datasets"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    name: Mapped[str] = mapped_column(String(200))
+    version: Mapped[int] = mapped_column(Integer)
+    source: Mapped[str] = mapped_column(String(32))
+    items: Mapped[list] = mapped_column(JSONB, default=list)
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EvalRun(Base):
+    """FR-T2/FR-T7/FR-T12: normalized eval run results for adapter comparisons."""
+    __tablename__ = "eval_runs"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    dataset_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("eval_datasets.id", ondelete="SET NULL"))
+    adapter: Mapped[str] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(32), default="completed")
+    metrics: Mapped[dict] = mapped_column(JSONB, default=dict)
+    item_results: Mapped[list] = mapped_column(JSONB, default=list)
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 ROLE_NAMES = ("admin", "ai_engineer", "evaluator", "compliance", "business_user")  # FR-F3
 
 
