@@ -157,6 +157,34 @@ def set_sensitivity_cmd(document_id: str, sensitivity: str, actor_email: str) ->
     typer.secho(f"Set {doc_id} sensitivity={sensitivity}", fg=typer.colors.GREEN)
 
 
+@app.command("deactivate-user")
+def deactivate_user_cmd(target_email: str, transfer_to_email: str, admin_email: str) -> None:
+    """Deactivate a user, revoke sessions, and transfer assets (FR-F18, US13)."""
+    from .auth import redis_client
+    from .authz import connect
+    from .core.config import get_settings
+    from .offboarding import deactivate_user
+
+    async def _do(session):
+        admin = await _actor(session, admin_email)
+        target = await _actor(session, target_email)
+        transfer_to = await _actor(session, transfer_to_email)
+        if admin is None or target is None or transfer_to is None:
+            typer.secho("One or more users not found.", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        authz = await connect(get_settings(), session)
+        return await deactivate_user(
+            session, redis_client(), authz,
+            admin=admin, target_user_id=target.id, transfer_to_id=transfer_to.id,
+        )
+
+    result = _run(_do)
+    typer.secho(f"User {target_email} deactivated.", fg=typer.colors.GREEN)
+    typer.echo(f"  Documents transferred: {result['documents_transferred']}")
+    typer.echo(f"  Folders transferred: {result['folders_transferred']}")
+    typer.echo(f"  Sessions purged: {result['sessions_purged']}")
+
+
 @app.command("ingest-version")
 def ingest_version_cmd(version_id: str) -> None:
     """Parse a stored document version, chunk, and index it through LiteLLM (Phase 1 FR-D1/FR-D3)."""

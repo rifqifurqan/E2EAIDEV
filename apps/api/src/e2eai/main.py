@@ -8,6 +8,7 @@ from .bot_release import router as bot_router
 from .chat import router as chat_router
 from .documents import router as documents_router
 from .eval_lab import router as evals_router
+from .offboarding import router as offboarding_router
 from .retrieval import router as retrieval_router
 from .core.errors import install
 from .db import sessions
@@ -22,6 +23,7 @@ def create_app() -> FastAPI:
     app.include_router(documents_router)
     app.include_router(retrieval_router)
     app.include_router(evals_router)
+    app.include_router(offboarding_router)
 
     @app.get("/api/v1/health", tags=["ops"])
     async def health() -> dict[str, str]:

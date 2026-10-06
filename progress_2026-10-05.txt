@@ -441,6 +441,43 @@ PHASE 1 STARTED
        openfga model + deny-unshared=True).
     Secret scan: staged diff checked against 14 secret-like .env values -> no secrets.
 
+- User offboarding P0 (US13, FR-F18):
+  - New `offboarding.py`: `deactivate_user` workflow:
+    1. Validate: target must be active, admin cannot deactivate self.
+    2. Set `status = 'disabled'` → `auth.authenticate` and `authz.principals` already reject disabled
+       users (empty principal set), so login, session reuse, retrieval, and chat all stop immediately.
+    3. Revoke all Valkey sessions for the user via SCAN (≤ 1 min revocation; P0 scale is tiny).
+    4. Placeholder audit rows for API key and delegated token revocation (systems not yet built;
+       revocation intent is explicit and tested).
+    5. Transfer owned documents to `transfer_to_id`: `documents.owner_id` updated, `doc_principals`
+       old owner removed + new owner merged, OpenFGA tuples deleted/written. Existing shares to
+       other users stay intact (viewer/editor doc_principals are untouched).
+    6. Transfer owned folders to `transfer_to_id`.
+    7. Chats retained (not deleted) — disabled user can no longer access them because every auth path
+       checks `status = 'active'`.
+    8. Audit `user.offboard` with safe metadata only (transfer_to, counts; no passwords/tokens/sessions).
+  - API endpoint: `POST /api/v1/users/{user_id}/deactivate` (requires admin role).
+  - CLI command: `e2eai-api deactivate-user <target_email> <transfer_to_email> <admin_email>`.
+  - Router registered in `main.py`.
+  - Tests first (TDD, watched RED then GREEN): `test_us13_offboarding.py` — 10 tests:
+    (1) deactivate sets status=disabled and purges all sessions;
+    (2) disabled user cannot authenticate and has empty principals;
+    (3) document ownership transfers, existing shares stay intact, Intern can still retrieve;
+    (4) folder ownership transfers;
+    (5) chats retained but inaccessible after deactivation;
+    (6) placeholder API key and token revocation is audited;
+    (7) offboarding audit captures action without sensitive content;
+    (8) no-existence-leak after deactivation (Andi gets nothing, Budi as new owner can retrieve);
+    (9) OpenFGA owner tuples updated for transferred documents;
+    (10) cannot deactivate self or already-disabled user.
+    Module teardown resets user status so subsequent test files are not affected.
+  - Verified: `cd apps/api && uv run pytest -q` -> 91 passed, 1 skipped, 1 warning.
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED
+      (compose 6 services; cli 27 passed/1 skipped; api 91 passed/1 skipped; alembic head;
+       api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
+       openfga model + deny-unshared=True).
+
 OWNER DECISIONS IN FORCE
 - Use Claude Code first; if it hangs/limits, Hermes/ChatGPT may continue the work directly.
 - Commit + push after every milestone whose tests pass.
