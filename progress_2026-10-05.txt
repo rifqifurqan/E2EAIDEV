@@ -488,6 +488,38 @@ OWNER DECISIONS IN FORCE
   bound to 127.0.0.1.
 - Progress files: progress_<date>.txt in the repo root. Update this file after every real milestone.
 
+- P0 MVP documentation and runbooks (FR-F22, FR-F14, FR-O13):
+  - Created scripts/validate_docs.py: automated validation that checks all required docs and
+    runbooks exist with required headings. Usable as standalone script or pytest test.
+  - Created scripts/generate_docs.py: deterministic generator for all 11 doc files.
+  - TDD approach: ran validation RED (all 11 files missing), then generated docs, then GREEN.
+  - Files created:
+    - docs/en/user-guide.md: English user guide (Getting Started, Document Upload, Sharing, Chat,
+      PII/guardrails, Bots)
+    - docs/id/panduan-pengguna.md: Indonesian user guide (Memulai, Unggah Dokumen, Berbagi, Chat,
+      PII/pagar keamanan, Bot) — real Indonesian, not machine-translated English
+    - docs/en/admin-operator-guide.md: English admin/operator guide (Installation, Configuration,
+      Backup, Monitoring, User Management, Evaluation Lab, Bot Management, Runbooks, Commands Reference)
+    - docs/id/panduan-admin-operator.md: Indonesian admin/operator guide (Instalasi, Konfigurasi,
+      Pencadangan, Pemantauan, Manajemen Pengguna, Lab Evaluasi, Manajemen Bot, Runbook, Referensi Perintah)
+    - docs/runbooks/service-down.md
+    - docs/runbooks/restore-from-backup.md
+    - docs/runbooks/model-endpoint-failing.md
+    - docs/runbooks/vector-store-degraded.md
+    - docs/runbooks/permission-sync-lag.md
+    - docs/runbooks/disk-full.md
+    - docs/runbooks/leaked-key.md
+  - All runbooks follow consistent structure: Symptoms, Diagnosis, Fix, Verification, Escalation.
+  - Docs match implementation: compose ps/up, cli pytest, api pytest, alembic upgrade,
+    verify-phase-0, auth/session, document upload/share/retrieval, PII/prompt guardrails,
+    chat history/feedback, sharing views/notifications, eval lab, bot release/scope, offboarding.
+  - No secrets or sample real tokens in any docs.
+  - Verified: python scripts/validate_docs.py -> PASS (all required docs and runbooks present
+    with required headings).
+    Regression: cd cli && uv run pytest -q -> 27 passed, 1 skipped.
+    Regression: cd apps/api && uv run pytest -q -> 91 passed, 1 skipped, 1 warning.
+    Secret scan: staged diff checked against secret-like .env values -> no secrets.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
