@@ -514,11 +514,15 @@ OWNER DECISIONS IN FORCE
     verify-phase-0, auth/session, document upload/share/retrieval, PII/prompt guardrails,
     chat history/feedback, sharing views/notifications, eval lab, bot release/scope, offboarding.
   - No secrets or sample real tokens in any docs.
-  - Verified: python scripts/validate_docs.py -> PASS (all required docs and runbooks present
+  - Verified by Hermes after Claude Code completed: python scripts/validate_docs.py -> PASS (all required docs and runbooks present
     with required headings).
     Regression: cd cli && uv run pytest -q -> 27 passed, 1 skipped.
     Regression: cd apps/api && uv run pytest -q -> 91 passed, 1 skipped, 1 warning.
-    Secret scan: staged diff checked against secret-like .env values -> no secrets.
+    Full stack verify: cd apps/api && uv run e2eai-api verify-phase-0 -> ALL PASSED
+      (compose 6 services; cli 27 passed/1 skipped; api 91 passed/1 skipped; alembic head;
+       api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
+       openfga model + deny-unshared=True).
+    Secret scan: committed HEAD files checked against 12 secret-like .env values -> no secrets.
 
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
