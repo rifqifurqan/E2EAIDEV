@@ -13,7 +13,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import delete, exists, func, or_, select
+from sqlalchemy import case, delete, exists, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
@@ -409,6 +409,103 @@ async def list_documents_view(session: AsyncSession, *, user: User, view: str = 
     ]
 
 
+async def search_documents(
+    session: AsyncSession,
+    *,
+    user: User,
+    query: str,
+    sensitivity: str | None = None,
+    status: str | None = None,
+    view: str = "all",
+) -> list[dict]:
+    """Permission-filtered document search by title and chunk content (FR-S10).
+
+    Permission is enforced in the SQL WHERE clause via `_visible_document_clause` — the same predicate
+    used by `visible_chunks` and `list_documents_view`. Unshared documents never appear, and no title,
+    snippet, or existence hint is returned to unauthorized callers (FR-C12).
+
+    Returns safe fields only: document_id, title, sensitivity, status, owner_id, match_kind.
+    """
+    query = query.strip()
+    if not query:
+        return []
+    user_principals = await principals(session, user)
+    principal_list = sorted(user_principals)
+    if not principal_list:
+        return []
+
+    like_pattern = f"%{query}%"
+
+    title_match = Document.title.ilike(like_pattern)
+    content_match = exists().where(
+        Chunk.document_id == Document.id,
+        Chunk.version_id == Document.current_version_id,
+        Chunk.text.ilike(like_pattern),
+    )
+
+    effective_status = status or "active"
+    filters = [
+        Document.status == effective_status,
+        _visible_document_clause(principal_list),
+        or_(title_match, content_match),
+    ]
+
+    if sensitivity:
+        filters.append(Document.sensitivity == sensitivity)
+
+    if view == "my_documents":
+        filters.append(Document.owner_id == user.id)
+    elif view == "shared_with_me":
+        direct_user = f"user:{user.id}"
+        user_share = or_(
+            exists().where(DocPrincipal.document_id == Document.id, DocPrincipal.principal == direct_user),
+            exists().where(FolderPrincipal.folder_id == Document.folder_id, FolderPrincipal.principal == direct_user),
+        )
+        filters.append(Document.owner_id != user.id)
+        filters.append(user_share)
+    elif view == "my_team":
+        teams = sorted(p for p in user_principals if p.startswith("team:"))
+        if not teams:
+            return []
+        team_share = or_(
+            exists().where(DocPrincipal.document_id == Document.id, DocPrincipal.principal.in_(teams)),
+            exists().where(FolderPrincipal.folder_id == Document.folder_id, FolderPrincipal.principal.in_(teams)),
+        )
+        filters.append(team_share)
+    elif view not in ("all", "everything"):
+        raise AppError(400, "Invalid document view")
+
+    match_kind_expr = case(
+        (title_match, literal("title")),
+        else_=literal("content"),
+    )
+
+    stmt = (
+        select(
+            Document.id,
+            Document.title,
+            Document.sensitivity,
+            Document.status,
+            Document.owner_id,
+            match_kind_expr.label("match_kind"),
+        )
+        .where(*filters)
+        .order_by(Document.title)
+    )
+
+    return [
+        {
+            "document_id": str(doc_id),
+            "title": title,
+            "sensitivity": sens,
+            "status": st,
+            "owner_id": str(owner_id),
+            "match_kind": mk,
+        }
+        for doc_id, title, sens, st, owner_id, mk in (await session.execute(stmt)).all()
+    ]
+
+
 async def list_notifications(session: AsyncSession, *, user: User, unread_only: bool = False) -> list[Notification]:
     stmt = select(Notification).where(Notification.user_id == user.id)
     if unread_only:
@@ -532,6 +629,20 @@ async def restore_document_api(
     await _require_owner(db, user, document_id)
     await restore_document(db, actor=user, document_id=document_id)
     return {"status": "active"}
+
+
+@router.get("/documents/search")
+async def search_documents_api(
+    q: str = "",
+    sensitivity: str | None = None,
+    view: str = "all",
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Permission-filtered document search (FR-S10). Returns safe metadata only."""
+    user = await _current_user(db, sess)
+    results = await search_documents(db, user=user, query=q, sensitivity=sensitivity, view=view)
+    return {"results": results}
 
 
 @router.get("/documents/visible-chunks")

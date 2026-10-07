@@ -575,6 +575,38 @@ OWNER DECISIONS IN FORCE
        openfga model + deny-unshared=True).
     Secret scan: committed HEAD files checked against 12 secret-like .env values -> no secrets.
 
+- Permission-filtered document search backend (FR-S10, FR-C12):
+  - TDD: wrote `test_us_document_search_p1.py` first (6 tests), observed RED (ImportError: search_documents
+    not found), then implemented and went GREEN.
+  - New `search_documents()` in `documents.py`:
+    - Accepts query string, optional sensitivity/status/view filters.
+    - Matches document title (ILIKE) and chunk text (ILIKE via EXISTS subquery).
+    - Permission filtering reuses the existing `_visible_document_clause` predicate — the same SQL WHERE
+      clause used by `visible_chunks`, `list_documents_view`, and `retrieve_relevant_chunks`. Permissions
+      are evaluated inside the SQL query before any row is returned; never post-filtered.
+    - Supports all principal types: user, team, division, role, org (direct doc shares) and folder
+      (inherited via `folder_principals`).
+    - Filters only narrow: sensitivity restricts to one label, status defaults to active, view
+      (my_documents/shared_with_me/my_team) scopes but cannot widen access.
+    - Returns safe fields only: document_id, title, sensitivity, status, owner_id, match_kind
+      (title/content). No snippets, no chunk text, no content field (FR-C12).
+  - New API route: `GET /api/v1/documents/search?q=...&sensitivity=...&view=...` on the existing
+    documents router.
+  - Tests cover:
+    (1) owner finds own doc by title and by chunk content, safe fields only;
+    (2) shared user (direct user principal) finds a shared document;
+    (3) unshared user searching exact restricted title/content gets empty result, no title/snippet leak;
+    (4) team/folder/division/role/org inherited access participates in search;
+    (5) sensitivity/status/view filters narrow but never widen — trash hides, sensitivity filters restrict,
+        my_documents scopes to owner, unshared docs stay hidden regardless of filter;
+    (6) revoke removes result immediately from the next search.
+  - Verified: targeted search suite -> 6 passed;
+    `cd apps/api && uv run pytest -q` -> 97 passed, 1 skipped, 1 warning.
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED
+      (compose 6 services; cli 27 passed/1 skipped; api 97 passed/1 skipped; alembic head;
+       api health/ready 200/200).
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
