@@ -564,12 +564,16 @@ OWNER DECISIONS IN FORCE
     citations in EN/ID, eval headings/buttons/leak summary in EN/ID, bot sections/buttons in EN/ID,
     admin offboarding/runbook links in EN/ID, API client endpoint paths match backend routes, no cloud
     SDK dependency in package.json or source files.
-  - Verified: `cd apps/web && pnpm test` -> 53 passed (9 test files).
+  - Verified by Hermes after Claude Code completed: `cd apps/web && pnpm test` -> 53 passed (9 test files).
     Typecheck: `cd apps/web && pnpm typecheck` -> clean.
     Build: `cd apps/web && pnpm build` -> 14 static pages, middleware compiled, no errors.
     Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
     Regression: `cd apps/api && uv run pytest -q` -> 91 passed, 1 skipped, 1 warning.
-    Secret scan: staged diff checked against .env secret-like values -> no secrets.
+    Full stack verify: `cd apps/api && uv run e2eai-api verify-phase-0` -> ALL PASSED
+      (compose 6 services; cli 27 passed/1 skipped; api 91 passed/1 skipped; alembic head;
+       api health/ready 200/200; litellm chat qwen3.5:4b 200; litellm embedding bge-m3 200 dim=1024;
+       openfga model + deny-unshared=True).
+    Secret scan: committed HEAD files checked against 12 secret-like .env values -> no secrets.
 
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
