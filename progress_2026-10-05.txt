@@ -524,9 +524,58 @@ OWNER DECISIONS IN FORCE
        openfga model + deny-unshared=True).
     Secret scan: committed HEAD files checked against 12 secret-like .env values -> no secrets.
 
+- Web UI shell — P0 lifecycle navigation + EN/ID + screens (FR-F14, FR-E1, FR-C14, NFR-13, NFR-14, NFR-18, NFR-20):
+  - Created apps/web as a Next.js 15.5.27 + TypeScript (strict) + Tailwind CSS 4.1.8 app, managed with
+    pnpm 10.15.0. All dependencies pinned in package.json + pnpm-lock.yaml. No cloud services, no
+    telemetry, no hardcoded secrets.
+  - Lifecycle navigation (FR-E1): Plan -> Data -> Build -> Test -> Release -> Operate -> Improve, rendered
+    as the top nav bar with links. All 7 stages present in correct order.
+  - EN/ID language switch (FR-F14, NFR-13): real English and Indonesian UI copy across all screens. Language
+    switch button in the header toggles between locales. Indonesian copy is real Indonesian, not machine
+    translated English. i18n system uses React context with getDictionary(locale), no external i18n library.
+    EN and ID dictionaries have the same key structure (verified by test).
+  - App shell: header (banner landmark) with title/subtitle and language switch, lifecycle nav bar,
+    sidebar with Documents/Chat/Admin links, main content area (main landmark). Responsive layout.
+  - Documents screen: My Documents / Shared with Me / My Team tabs, search input (searchbox role),
+    Upload / Share / Revoke buttons, empty state. Accessible heading, tab roles, i18n.
+  - Chat screen: conversation list (region landmark), new conversation button, scope picker (combobox:
+    all/my_documents/shared_with_me/my_team/this_document), message input (textbox), stop button,
+    feedback (Yes/No) buttons, citations region. Internal component boundary named for future assistant-ui
+    swap. No cloud SDK dependency.
+  - Eval Lab screen: Datasets and Runs sections with headings, New Dataset and Run Evaluation buttons,
+    Permission Leak Summary section. i18n EN/ID.
+  - Bot Release screen: Bundles / Access Grants / Knowledge Scope sections, New Bot / Release Bundle /
+    Rollback buttons. i18n EN/ID.
+  - Admin/Operate screen: User Offboarding section with Deactivate User button, Operational Runbooks
+    section with links to all 7 runbook files (service-down, restore-from-backup, model-endpoint-failing,
+    vector-store-degraded, permission-sync-lag, disk-full, leaked-key). i18n EN/ID.
+  - Typed API client (src/lib/api-client.ts): all /api/v1 backend endpoints typed — health, auth, chat
+    (conversations CRUD, messages, feedback, stop), documents (upload, share, sensitivity, trash, purge,
+    restore, visible-chunks), evals (datasets, runs), bots (create, release, rollback, grants, scope, ask),
+    admin (deactivate user). ApiError class with RFC 9457 problem details. CSRF token header support.
+    ENDPOINTS object exported for path verification in tests.
+  - CSP/security headers (NFR-18): Next.js middleware sets Content-Security-Policy (self only, no eval,
+    frame-ancestors none), X-Content-Type-Options nosniff, X-Frame-Options DENY, Referrer-Policy
+    strict-origin-when-cross-origin, Permissions-Policy (camera/mic/geo/payment disabled).
+    poweredByHeader disabled in next.config.ts.
+  - TDD approach: 53 tests across 9 test files. Tests written first (RED), then components implemented
+    (GREEN). Tests cover: lifecycle nav labels in EN and ID, language switch toggle, feature sidebar links,
+    banner/main landmarks, document tabs/buttons/search in EN/ID, chat regions/buttons/scope/input/
+    citations in EN/ID, eval headings/buttons/leak summary in EN/ID, bot sections/buttons in EN/ID,
+    admin offboarding/runbook links in EN/ID, API client endpoint paths match backend routes, no cloud
+    SDK dependency in package.json or source files.
+  - Verified: `cd apps/web && pnpm test` -> 53 passed (9 test files).
+    Typecheck: `cd apps/web && pnpm typecheck` -> clean.
+    Build: `cd apps/web && pnpm build` -> 14 static pages, middleware compiled, no errors.
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Regression: `cd apps/api && uv run pytest -q` -> 91 passed, 1 skipped, 1 warning.
+    Secret scan: staged diff checked against .env secret-like values -> no secrets.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
 - Wizard tests:  cd cli && uv run pytest -q
 - API tests:     cd apps/api && uv run pytest -q
+- Web tests:     cd apps/web && pnpm test
+- Web build:     cd apps/web && pnpm build
 - API migrate:   cd apps/api && uv run alembic upgrade head
