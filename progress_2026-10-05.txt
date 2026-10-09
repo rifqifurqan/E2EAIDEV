@@ -875,6 +875,34 @@ OWNER DECISIONS IN FORCE
       tests/test_us_retrieval_metrics_p1.py tests/test_us_judging_modes_p1.py` -> 28 passed.
     App wiring smoke: `cd apps/api && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> app ok.
 
+[FR-T13] Document-understanding test set: table QA, chart QA, figure/diagram QA, OCR CER,
+  safety-warning-included (2026-10-10)
+  - New `doc_understanding.py` module (eval_lab.py was already large; separate module consistent
+    with benchmark.py pattern). No schema change: reuses existing `eval_runs` and `eval_datasets`.
+  - Pure deterministic/offline metrics:
+    - `character_error_rate`: Levenshtein-based CER, capped at 1.0, handles empty strings.
+    - `score_items`: per-kind scoring for table_qa/chart_qa/figure_qa (exact match accuracy),
+      ocr (mean CER), and safety_warning (all-warnings-included rate).
+    - `_safe_item_result`: stores only index, kind, correct/cer/warnings_expected/all_included —
+      never raw table text, chart values, OCR text, warning text, document snippets, or answers.
+  - `evaluate_doc_understanding`: creates a safe dataset (kind labels only, no raw content),
+    stores an EvalRun with adapter="doc-understanding.local", safe metrics and item_results.
+  - API route `POST /api/v1/evals/doc-understanding`, protected by `evals` scope and FR-F13
+    request-quota; router registered in main.py.
+  - Tests first (TDD, watched RED `ModuleNotFoundError: e2eai.doc_understanding` then GREEN):
+    `tests/test_us_doc_understanding_p1.py` — 13 tests: CER exact/wrong/partial/empty,
+    per-kind scoring (table_qa/chart_qa/figure_qa/ocr/safety_warning/mixed), DB-backed
+    safe eval run storage with leakage guard (forbidden raw content strings absent from
+    serialized metrics+item_results), and empty-items run.
+  - Verified:
+    `cd apps/api && uv run pytest -q tests/test_us_doc_understanding_p1.py` -> 13 passed.
+    Adjacent eval suite: `cd apps/api && uv run pytest -q tests/test_us_doc_understanding_p1.py
+      tests/test_us_eval_lab_p0.py tests/test_us_benchmark_runner_p1.py
+      tests/test_us_lab_cost_estimate_p1.py tests/test_us_lab_compare_reports_p1.py
+      tests/test_us_evaluator_transparency_p1.py tests/test_us_retrieval_metrics_p1.py
+      tests/test_us_judging_modes_p1.py` -> 41 passed.
+    App wiring smoke: `cd apps/api && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> app ok.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
