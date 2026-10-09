@@ -1,7 +1,8 @@
-"""Versioned bot bundles and bot-scoped permission-aware answering (FR-RL1, FR-RL5, FR-RL7)."""
+"""Versioned bot bundles, release gates, and bot-scoped permission-aware answering (FR-RL1, FR-RL2, FR-RL5, FR-RL7)."""
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -12,8 +13,100 @@ from . import audit
 from .auth import current_session, require_scope
 from .authz import principals
 from .core.errors import AppError
-from .db import Bot, BotBundle, BotGrant, BotScope, User, get_session
+from .db import Bot, BotBundle, BotGrant, BotScope, EvalRun, User, get_session
 from .retrieval import Embedder, LiteLLMEmbedder, answer_question
+
+
+# ---------------------------------------------------------------------------
+# FR-RL2  Release gate policy and checker
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ReleaseGatePolicy:
+    """Configurable release gates per bot (FR-RL2).
+
+    Each field is optional; gates that are not configured are skipped.
+    """
+
+    # Eval threshold gate: require a metric on a specific adapter >= threshold
+    eval_threshold: float | None = None
+    eval_adapter: str = "ragas.local"
+    eval_metric: str = "answer_correctness"
+
+    # Permission leak gate: require zero leaks
+    require_zero_leaks: bool = False
+
+    # Red-team gate: require pass_rate >= threshold
+    redteam_pass_rate: float | None = None
+
+    # Human sign-off gate
+    require_human_signoff: bool = False
+
+
+def _find_run(eval_runs: Sequence[dict], adapter: str) -> dict | None:
+    """Find the latest (last) eval run dict matching the adapter name."""
+    matched = None
+    for run in eval_runs:
+        if run.get("adapter") == adapter:
+            matched = run
+    return matched
+
+
+def check_release_gates(
+    *,
+    eval_runs: Sequence[dict],
+    policy: ReleaseGatePolicy,
+    human_signoff: bool = False,
+) -> dict:
+    """Evaluate all configured release gates and return a verdict (FR-RL2).
+
+    Returns a dict with ``passed`` (bool) and ``gates`` (per-gate detail).
+    Stored metadata is safe: only gate names, thresholds, pass/fail booleans,
+    and numeric values — never raw eval content, prompts, or responses.
+    """
+    gates: dict[str, dict] = {}
+
+    # --- eval threshold ---
+    if policy.eval_threshold is not None:
+        run = _find_run(eval_runs, policy.eval_adapter)
+        actual = (run.get("metrics") or {}).get(policy.eval_metric) if run else None
+        passed = actual is not None and float(actual) >= policy.eval_threshold
+        gates["eval_threshold"] = {
+            "passed": passed,
+            "actual": actual,
+            "required": policy.eval_threshold,
+            "adapter": policy.eval_adapter,
+            "metric": policy.eval_metric,
+        }
+
+    # --- zero permission leaks ---
+    if policy.require_zero_leaks:
+        run = _find_run(eval_runs, "permission-leak.local")
+        leaks = (run.get("metrics") or {}).get("leaks") if run else None
+        passed = leaks is not None and int(leaks) == 0
+        gates["zero_permission_leaks"] = {
+            "passed": passed,
+            "leaks": int(leaks) if leaks is not None else None,
+        }
+
+    # --- red-team pass rate ---
+    if policy.redteam_pass_rate is not None:
+        run = _find_run(eval_runs, "security-red-team.local")
+        actual = (run.get("metrics") or {}).get("pass_rate") if run else None
+        passed = actual is not None and float(actual) >= policy.redteam_pass_rate
+        gates["redteam_pass"] = {
+            "passed": passed,
+            "actual": float(actual) if actual is not None else None,
+            "required": policy.redteam_pass_rate,
+        }
+
+    # --- human sign-off ---
+    if policy.require_human_signoff:
+        gates["human_signoff"] = {"passed": bool(human_signoff)}
+
+    overall = all(g["passed"] for g in gates.values()) if gates else True
+    return {"passed": overall, "gates": gates}
 
 
 async def create_bot(session: AsyncSession, *, owner: User, name: str) -> Bot:
@@ -27,8 +120,65 @@ async def create_bot(session: AsyncSession, *, owner: User, name: str) -> Bot:
     return bot
 
 
-async def release_bundle(session: AsyncSession, *, actor: User, bot_id: uuid.UUID, bundle: dict) -> BotBundle:
+async def _load_release_gate_eval_runs(session: AsyncSession) -> list[dict]:
+    """Load completed EvalRun summaries for release gates.
+
+    The API/service path should evaluate gates from server-side EvalRun rows, not
+    from client-supplied raw eval payloads. Only safe summary fields are returned.
+    """
+    runs = (await session.execute(
+        select(EvalRun)
+        .where(EvalRun.status == "completed")
+        .order_by(EvalRun.created_at.asc(), EvalRun.id.asc())
+    )).scalars().all()
+    return [
+        {
+            "id": str(run.id),
+            "adapter": run.adapter,
+            "metrics": dict(run.metrics or {}),
+            "status": run.status,
+        }
+        for run in runs
+    ]
+
+
+async def release_bundle(
+    session: AsyncSession,
+    *,
+    actor: User,
+    bot_id: uuid.UUID,
+    bundle: dict,
+    gate_policy: ReleaseGatePolicy | None = None,
+    gate_eval_runs: Sequence[dict] | None = None,
+    gate_human_signoff: bool = False,
+) -> BotBundle:
     bot = await _load_bot(session, bot_id)
+
+    # FR-RL2: check release gates before mutating any state
+    gate_result: dict | None = None
+    if gate_policy is not None:
+        eval_runs = list(gate_eval_runs) if gate_eval_runs is not None else await _load_release_gate_eval_runs(session)
+        gate_result = check_release_gates(
+            eval_runs=eval_runs,
+            policy=gate_policy,
+            human_signoff=gate_human_signoff,
+        )
+        if not gate_result["passed"]:
+            failed_names = [name for name, g in gate_result["gates"].items() if not g["passed"]]
+            await audit.record(
+                session,
+                f"user:{actor.id}",
+                "bot.bundle.release.blocked",
+                f"bot:{bot_id}",
+                {"gates_passed": False, "failed_gates": failed_names},
+            )
+            await session.commit()
+            raise AppError(
+                422,
+                "Release blocked by failed gates",
+                f"Failed gates: {', '.join(failed_names)}",
+            )
+
     current = await session.get(BotBundle, bot.production_bundle_id) if bot.production_bundle_id else None
     if current:
         current.status = "superseded"
@@ -43,7 +193,12 @@ async def release_bundle(session: AsyncSession, *, actor: User, bot_id: uuid.UUI
     session.add(released)
     await session.flush()
     bot.production_bundle_id = released.id
-    await audit.record(session, f"user:{actor.id}", "bot.bundle.release", f"bot:{bot_id}", {"version": released.version})
+
+    audit_details: dict = {"version": released.version}
+    if gate_result is not None:
+        audit_details["gates_passed"] = True
+        audit_details["gate_count"] = len(gate_result["gates"])
+    await audit.record(session, f"user:{actor.id}", "bot.bundle.release", f"bot:{bot_id}", audit_details)
     await session.commit()
     return released
 
@@ -156,8 +311,29 @@ class BotIn(BaseModel):
     name: str
 
 
+class ReleaseGatePolicyIn(BaseModel):
+    eval_threshold: float | None = None
+    eval_adapter: str = "ragas.local"
+    eval_metric: str = "answer_correctness"
+    require_zero_leaks: bool = False
+    redteam_pass_rate: float | None = None
+    require_human_signoff: bool = False
+
+    def to_policy(self) -> ReleaseGatePolicy:
+        return ReleaseGatePolicy(
+            eval_threshold=self.eval_threshold,
+            eval_adapter=self.eval_adapter,
+            eval_metric=self.eval_metric,
+            require_zero_leaks=self.require_zero_leaks,
+            redteam_pass_rate=self.redteam_pass_rate,
+            require_human_signoff=self.require_human_signoff,
+        )
+
+
 class BundleIn(BaseModel):
     bundle: dict
+    release_gates: ReleaseGatePolicyIn | None = None
+    human_signoff: bool = False
 
 
 class GrantIn(BaseModel):
@@ -190,7 +366,14 @@ async def create_bot_api(body: BotIn, sess: dict = Depends(current_session), db:
 async def release_bundle_api(bot_id: uuid.UUID, body: BundleIn, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
     require_scope(sess, "bots")
     user = await _current_user(db, sess)
-    bundle = await release_bundle(db, actor=user, bot_id=bot_id, bundle=body.bundle)
+    bundle = await release_bundle(
+        db,
+        actor=user,
+        bot_id=bot_id,
+        bundle=body.bundle,
+        gate_policy=body.release_gates.to_policy() if body.release_gates else None,
+        gate_human_signoff=body.human_signoff,
+    )
     return {"id": str(bundle.id), "version": bundle.version, "status": bundle.status}
 
 

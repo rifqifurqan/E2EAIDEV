@@ -931,6 +931,33 @@ OWNER DECISIONS IN FORCE
   - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-T8 +
     adjacent eval/security gates passed.
 
+[FR-RL2] Release gates: eval thresholds, zero permission leaks, red-team pass, human sign-off (2026-10-10)
+  - Claude Code was used first and implemented the initial release-gate slice with TDD; Hermes then added
+    RED/GREEN regressions so the release API/service path reads completed server-side EvalRun rows instead
+    of trusting client-supplied eval summaries, and so the API request body carries only gate policy fields
+    plus human sign-off.
+  - `bot_release.py` now has `ReleaseGatePolicy`, `check_release_gates`, server-side EvalRun summary loading,
+    and gated `release_bundle` behavior. Configured gates cover:
+      eval metric threshold, zero permission leaks via `permission-leak.local`, red-team pass rate via
+      `security-red-team.local`, and required human sign-off.
+  - A failed gate raises 422 before mutating production state: the existing `production_bundle_id` remains,
+    the current production bundle is not superseded, and no new bundle is created. The blocked release is
+    audited with safe metadata (`failed_gates` names only). Successful gated releases audit only version,
+    gate pass flag, and gate count.
+  - `POST /api/v1/bots/{bot_id}/bundles` remains backward compatible for ungated releases and now optionally
+    accepts `release_gates` plus `human_signoff`; gate checks use completed EvalRun rows in the database.
+  - Tests first / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_us_release_gates_p1.py::test_release_bundle_with_gate_policy_uses_completed_db_eval_runs_by_default tests/test_us_release_gates_p1.py::test_bundle_request_body_parses_release_gates_without_raw_eval_payloads` -> failed first with DB runs not loaded and `BundleIn` missing `release_gates`/`human_signoff`, then GREEN.
+  - Verified:
+    `cd apps/api && uv run pytest -q tests/test_us_release_gates_p1.py` -> 12 passed.
+    Adjacent release/eval/security suite: `cd apps/api && uv run pytest -q tests/test_us_release_gates_p1.py
+      tests/test_us_release_bundle_p0.py tests/test_us_eval_lab_p0.py tests/test_us_security_red_team_p1.py
+      tests/test_us_judging_modes_p1.py tests/test_us_lab_cost_estimate_p1.py tests/test_us_lab_compare_reports_p1.py
+      tests/test_us_evaluator_transparency_p1.py` -> 50 passed.
+    App wiring smoke: `cd apps/api && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> app ok.
+  - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-RL2 +
+    adjacent release/eval/security gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
