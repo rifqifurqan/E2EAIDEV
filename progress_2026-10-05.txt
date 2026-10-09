@@ -844,6 +844,37 @@ OWNER DECISIONS IN FORCE
     Full heavy verification intentionally deferred while developing PRD backlog quickly; focused
     FR-T11 + adjacent eval gates passed.
 
+[FR-T5] Judging modes: LLM-only multi-judge majority vote, human-only, hybrid routing (2026-10-10)
+  - Claude Code was used first and implemented the slice with TDD; Hermes then added one additional
+    RED/GREEN low-confidence regression for unanimous near-threshold judge scores and verified the focused gates.
+  - Pure service helpers in `apps/api/src/e2eai/eval_lab.py` (no route wiring this slice; pure tests
+    cover it per task guidance, consistent with FR-T6/FR-T11 pure helpers):
+      `majority_vote(judge_scores, threshold=0.5)` -> verdict/score/confidence/disagreement over
+        deterministic per-item judge scores (>=threshold is a pass vote; confidence combines vote
+        agreement with normalized threshold margin; disagreement = non-unanimous).
+      `judge_items(items, mode=..., vote_threshold, confidence_threshold, audit_sample_rate,
+        audit_seed)` with modes:
+        - "llm": accept every item by majority vote, empty human_queue.
+        - "human": route all items to human review, no LLM scores stored.
+        - "hybrid": accept majority result unless disagreement > low confidence > deterministic
+          random audit, which route to the human queue (priority in that order).
+      `_audit_selected` uses sha256(seed:item_id) for reproducible audit sampling (no RNG state).
+  - Safe storage: human_queue entries carry only item_id, routing reason, and whitelisted metadata
+    (persona/kind/metric/dataset + confidence/judges); raw answers/questions/snippets are dropped so
+    the review queue can't become a leakage channel.
+  - Tests first (TDD, watched RED `ImportError: cannot import name 'judge_items'` then GREEN):
+    `tests/test_us_judging_modes_p1.py` -- 7 tests: unanimous vs split majority vote, llm-only accepts
+    all, human-only routes all with a no-sensitive-text leakage guard ("30 percent"/"revenue share"
+    absent), hybrid disagreement routing, hybrid low-confidence routing for near-threshold unanimous
+    judges, and deterministic audit sampling (same seed -> same subset).
+  - Verified:
+    `cd apps/api && uv run pytest -q tests/test_us_judging_modes_p1.py` -> 7 passed.
+    Adjacent eval suite: `cd apps/api && uv run pytest -q tests/test_us_eval_lab_p0.py
+      tests/test_us_evaluator_transparency_p1.py tests/test_us_benchmark_runner_p1.py
+      tests/test_us_lab_compare_reports_p1.py tests/test_us_lab_cost_estimate_p1.py
+      tests/test_us_retrieval_metrics_p1.py tests/test_us_judging_modes_p1.py` -> 28 passed.
+    App wiring smoke: `cd apps/api && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> app ok.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps

@@ -5,6 +5,7 @@ implement the same `EvalAdapter` protocol later; the database schema and normali
 """
 
 import csv
+import hashlib
 import io
 import math
 import uuid
@@ -155,6 +156,125 @@ def estimate_eval_run_cost(
             if requires_confirmation
             else None
         ),
+    }
+
+
+# Metadata keys safe to echo into the human review queue; everything else (answers, questions,
+# snippets, retrieved text) is dropped so the queue itself cannot become a leakage channel (FR-T5).
+_HUMAN_QUEUE_METADATA_KEYS = ("persona", "kind", "metric", "dataset")
+
+
+def majority_vote(judge_scores: Sequence[float], *, threshold: float = 0.5) -> dict:
+    """LLM-only multi-judge majority vote over deterministic judge scores (FR-T5).
+
+    Each judge score >= threshold is a pass vote. Returns the majority verdict, mean score,
+    confidence, and whether judges split. Confidence combines vote agreement with normalized
+    distance from the threshold, so unanimous near-threshold scores can still route to humans.
+    """
+    scores = [float(s) for s in judge_scores]
+    if not scores:
+        return {"verdict": 0, "score": 0.0, "confidence": 0.0, "disagreement": False, "judges": 0}
+    votes = [1 if s >= threshold else 0 for s in scores]
+    passes = sum(votes)
+    verdict = 1 if passes * 2 >= len(votes) else 0
+    backing = passes if verdict == 1 else len(votes) - passes
+    backing_fraction = backing / len(votes)
+
+    margins = []
+    for score, vote in zip(scores, votes, strict=False):
+        denominator = (1.0 - threshold) if vote == 1 else threshold
+        if denominator <= 0:
+            margins.append(1.0 if score == threshold else 0.0)
+        else:
+            margins.append(max(0.0, min(1.0, abs(score - threshold) / denominator)))
+    margin_confidence = sum(margins) / len(margins)
+    confidence = min(backing_fraction, margin_confidence)
+
+    return {
+        "verdict": verdict,
+        "score": round(sum(scores) / len(scores), 4),
+        "confidence": round(confidence, 4),
+        "disagreement": 0 < passes < len(votes),
+        "judges": len(votes),
+    }
+
+
+def _audit_selected(item_id: str, *, rate: float, seed: int) -> bool:
+    """Deterministic audit sampling: reproducible per item_id+seed, no RNG state (FR-T5)."""
+    if rate <= 0:
+        return False
+    if rate >= 1:
+        return True
+    digest = hashlib.sha256(f"{seed}:{item_id}".encode()).hexdigest()
+    return (int(digest[:8], 16) / 0xFFFFFFFF) < rate
+
+
+def _queue_entry(item: dict, reason: str, vote: dict | None) -> dict:
+    metadata = {k: item[k] for k in _HUMAN_QUEUE_METADATA_KEYS if k in item}
+    if vote is not None:
+        metadata["confidence"] = vote["confidence"]
+        metadata["judges"] = vote["judges"]
+    return {"item_id": item.get("item_id"), "reason": reason, "metadata": metadata}
+
+
+def judge_items(
+    items: Sequence[dict],
+    *,
+    mode: str = "llm",
+    vote_threshold: float = 0.5,
+    confidence_threshold: float = 0.75,
+    audit_sample_rate: float = 0.0,
+    audit_seed: int = 0,
+) -> dict:
+    """Apply a judging mode to items carrying per-item `judge_scores` (FR-T5).
+
+    - ``llm``: accept every item by multi-judge majority vote; no human queue.
+    - ``human``: route every item to human review with no LLM scores stored.
+    - ``hybrid``: accept the majority result unless confidence is low, judges disagree, or the
+      item is picked by deterministic audit sampling — those route to human review.
+
+    The human queue stores only item_id, routing reason, and whitelisted metadata.
+    """
+    if mode not in ("llm", "human", "hybrid"):
+        raise AppError(400, f"Unknown judging mode: {mode}")
+
+    accepted: list[dict] = []
+    human_queue: list[dict] = []
+
+    for item in items:
+        if mode == "human":
+            human_queue.append(_queue_entry(item, "human_only", None))
+            continue
+
+        vote = majority_vote(item.get("judge_scores") or [], threshold=vote_threshold)
+        accepted_row = {
+            "item_id": item.get("item_id"),
+            "verdict": vote["verdict"],
+            "score": vote["score"],
+            "confidence": vote["confidence"],
+            "disagreement": vote["disagreement"],
+            "judges": vote["judges"],
+        }
+
+        if mode == "llm":
+            accepted.append(accepted_row)
+            continue
+
+        # hybrid routing: disagreement > low confidence > random audit
+        if vote["disagreement"]:
+            human_queue.append(_queue_entry(item, "judge_disagreement", vote))
+        elif vote["confidence"] < confidence_threshold:
+            human_queue.append(_queue_entry(item, "low_confidence", vote))
+        elif _audit_selected(str(item.get("item_id")), rate=audit_sample_rate, seed=audit_seed):
+            human_queue.append(_queue_entry(item, "random_audit", vote))
+        else:
+            accepted.append(accepted_row)
+
+    return {
+        "mode": mode,
+        "accepted": accepted,
+        "human_queue": human_queue,
+        "counts": {"accepted": len(accepted), "human": len(human_queue), "items": len(items)},
     }
 
 
