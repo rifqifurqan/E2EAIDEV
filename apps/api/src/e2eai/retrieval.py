@@ -19,7 +19,7 @@ import httpx
 import yaml
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import exists, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
@@ -250,10 +250,23 @@ async def retrieve_relevant_chunks(
     ]
 
 
+def _non_expired(expires_at_col):
+    """Filter: expires_at is NULL (permanent) or in the future (FR-S4)."""
+    return or_(expires_at_col.is_(None), expires_at_col > func.now())
+
+
 def _visible_document_clause(principal_list: list[str]):
     return or_(
-        exists().where(DocPrincipal.document_id == Document.id, DocPrincipal.principal.in_(principal_list)),
-        exists().where(FolderPrincipal.folder_id == Document.folder_id, FolderPrincipal.principal.in_(principal_list)),
+        exists().where(
+            DocPrincipal.document_id == Document.id,
+            DocPrincipal.principal.in_(principal_list),
+            _non_expired(DocPrincipal.expires_at),
+        ),
+        exists().where(
+            FolderPrincipal.folder_id == Document.folder_id,
+            FolderPrincipal.principal.in_(principal_list),
+            _non_expired(FolderPrincipal.expires_at),
+        ),
     )
 
 

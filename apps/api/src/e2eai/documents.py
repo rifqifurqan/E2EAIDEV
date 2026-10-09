@@ -13,7 +13,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import case, delete, exists, func, literal, or_, select
+from sqlalchemy import and_, case, delete, exists, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
@@ -21,7 +21,7 @@ from .auth import current_session
 from .authz import principals
 from .core.config import repo_root
 from .core.errors import AppError
-from .db import Chunk, DocPrincipal, Document, DocumentVersion, Folder, FolderPrincipal, Notification, User
+from .db import AccessRequest, Chunk, DocPrincipal, Document, DocumentVersion, Folder, FolderPrincipal, Notification, User
 from .db import get_session
 from .share_policy import SENSITIVITIES, SharePolicy, share_block_reason
 
@@ -145,10 +145,14 @@ async def share_document(
     principal: str,
     level: str = "viewer",
     policy: SharePolicy | None = None,
+    expires_at: datetime | None = None,
 ) -> None:
     """Grant access. Enforce sensitivity/admin guardrails *before* any write (FR-D5, FR-S7): a blocked
     share audits and raises without creating an OpenFGA tuple or a doc_principal. Otherwise loosen last:
-    OpenFGA tuple first, local read-index row second (PRD T4)."""
+    OpenFGA tuple first, local read-index row second (PRD T4).
+
+    Optional ``expires_at`` (FR-S4) sets a time after which the share no longer grants visibility.
+    """
     policy = policy or SharePolicy()
     doc = await _load_document(session, document_id)
     reason = share_block_reason(doc.sensitivity, principal, policy)
@@ -159,9 +163,12 @@ async def share_document(
         raise AppError(403, "Share not allowed", reason)
     relation = "viewer" if level == "viewer" else "editor" if level == "editor" else "owner"
     await authz.write(writes=[{"user": principal, "relation": relation, "object": _document_object(document_id)}])
-    await session.merge(DocPrincipal(document_id=document_id, principal=principal, level=level))
+    await session.merge(DocPrincipal(document_id=document_id, principal=principal, level=level, expires_at=expires_at))
     await _notify_direct_user_share(session, actor=actor, principal=principal, title=doc.title, document_id=document_id)
-    await audit.record(session, f"user:{actor.id}", "document.share", _document_object(document_id), {"principal": principal, "level": level})
+    details: dict = {"principal": principal, "level": level}
+    if expires_at:
+        details["expires_at"] = expires_at.isoformat()
+    await audit.record(session, f"user:{actor.id}", "document.share", _document_object(document_id), details)
     await session.commit()
 
 
@@ -173,15 +180,22 @@ async def share_folder(
     folder_id: uuid.UUID,
     principal: str,
     level: str = "viewer",
+    expires_at: datetime | None = None,
 ) -> None:
-    """Grant a folder principal (FR-S3). Loosen last: OpenFGA first, local read-index second."""
+    """Grant a folder principal (FR-S3). Loosen last: OpenFGA first, local read-index second.
+
+    Optional ``expires_at`` (FR-S4) sets a time after which the folder share no longer grants visibility.
+    """
     folder = await session.get(Folder, folder_id)
     if folder is None:
         raise AppError(404, "Folder not found")
     await authz.write(writes=[{"user": principal, "relation": _relation(level), "object": f"folder:{folder_id}"}])
-    await session.merge(FolderPrincipal(folder_id=folder_id, principal=principal, level=level))
+    await session.merge(FolderPrincipal(folder_id=folder_id, principal=principal, level=level, expires_at=expires_at))
     await _notify_direct_user_share(session, actor=actor, principal=principal, title=folder.name, folder_id=folder_id)
-    await audit.record(session, f"user:{actor.id}", "folder.share", f"folder:{folder_id}", {"principal": principal, "level": level})
+    details: dict = {"principal": principal, "level": level}
+    if expires_at:
+        details["expires_at"] = expires_at.isoformat()
+    await audit.record(session, f"user:{actor.id}", "folder.share", f"folder:{folder_id}", details)
     await session.commit()
 
 
@@ -363,9 +377,22 @@ async def visible_chunks(session: AsyncSession, principals: Iterable[str]) -> li
     return list(rows.all())
 
 
+def _non_expired(expires_at_col):
+    """Filter: expires_at is NULL (permanent) or in the future (FR-S4)."""
+    return or_(expires_at_col.is_(None), expires_at_col > func.now())
+
+
 def _visible_document_clause(principal_list: list[str]):
-    direct = exists().where(DocPrincipal.document_id == Document.id, DocPrincipal.principal.in_(principal_list))
-    folder = exists().where(FolderPrincipal.folder_id == Document.folder_id, FolderPrincipal.principal.in_(principal_list))
+    direct = exists().where(
+        DocPrincipal.document_id == Document.id,
+        DocPrincipal.principal.in_(principal_list),
+        _non_expired(DocPrincipal.expires_at),
+    )
+    folder = exists().where(
+        FolderPrincipal.folder_id == Document.folder_id,
+        FolderPrincipal.principal.in_(principal_list),
+        _non_expired(FolderPrincipal.expires_at),
+    )
     return or_(direct, folder)
 
 
@@ -514,6 +541,128 @@ async def list_notifications(session: AsyncSession, *, user: User, unread_only: 
     return list((await session.execute(stmt)).scalars().all())
 
 
+# ---------------------------------------------------------------------------
+# FR-S5: Access requests
+# ---------------------------------------------------------------------------
+
+
+async def request_access(
+    session: AsyncSession,
+    *,
+    requester: User,
+    document_id: uuid.UUID,
+) -> AccessRequest:
+    """Create a pending access request. Idempotent: returns the existing pending request if one exists."""
+    existing = await session.scalar(
+        select(AccessRequest).where(
+            AccessRequest.document_id == document_id,
+            AccessRequest.requester_id == requester.id,
+            AccessRequest.status == "pending",
+        )
+    )
+    if existing:
+        return existing
+    req = AccessRequest(document_id=document_id, requester_id=requester.id)
+    session.add(req)
+    await audit.record(
+        session, f"user:{requester.id}", "access_request.create",
+        _document_object(document_id), {"requester_id": str(requester.id)},
+    )
+    await session.commit()
+    return req
+
+
+async def approve_access_request(
+    session: AsyncSession,
+    authz,
+    *,
+    owner: User,
+    request_id: uuid.UUID,
+) -> AccessRequest:
+    """Owner approves an access request: grants viewer access and creates a notification (FR-S5).
+
+    Ordering: loosen last — OpenFGA tuple first, then local read-index row (PRD T4).
+    """
+    req = await session.get(AccessRequest, request_id)
+    if req is None:
+        raise AppError(404, "Access request not found")
+    doc = await _load_document(session, req.document_id)
+    # Only the document owner can approve
+    owner_row = await session.scalar(select(DocPrincipal).where(
+        DocPrincipal.document_id == req.document_id,
+        DocPrincipal.principal == f"user:{owner.id}",
+        DocPrincipal.level == "owner",
+    ))
+    if owner_row is None:
+        raise AppError(403, "Not allowed")
+    # Grant viewer access (loosen last: OpenFGA first, local row second)
+    principal = f"user:{req.requester_id}"
+    await authz.write(writes=[{"user": principal, "relation": "viewer", "object": _document_object(req.document_id)}])
+    await session.merge(DocPrincipal(document_id=req.document_id, principal=principal, level="viewer"))
+    req.status = "approved"
+    req.resolved_at = datetime.now(UTC)
+    req.resolved_by = owner.id
+    # Notify requester with safe metadata only (no content)
+    session.add(Notification(
+        user_id=req.requester_id, kind="access_request.approved",
+        details={"title": doc.title, "document_id": str(req.document_id), "approved_by": str(owner.id)},
+    ))
+    await audit.record(
+        session, f"user:{owner.id}", "access_request.approve",
+        _document_object(req.document_id), {"requester_id": str(req.requester_id)},
+    )
+    await session.commit()
+    return req
+
+
+async def deny_access_request(
+    session: AsyncSession,
+    *,
+    owner: User,
+    request_id: uuid.UUID,
+) -> AccessRequest:
+    """Owner denies an access request. No grant, no content leak (FR-S5, FR-C12)."""
+    req = await session.get(AccessRequest, request_id)
+    if req is None:
+        raise AppError(404, "Access request not found")
+    # Only the document owner can deny
+    owner_row = await session.scalar(select(DocPrincipal).where(
+        DocPrincipal.document_id == req.document_id,
+        DocPrincipal.principal == f"user:{owner.id}",
+        DocPrincipal.level == "owner",
+    ))
+    if owner_row is None:
+        raise AppError(403, "Not allowed")
+    req.status = "denied"
+    req.resolved_at = datetime.now(UTC)
+    req.resolved_by = owner.id
+    await audit.record(
+        session, f"user:{owner.id}", "access_request.deny",
+        _document_object(req.document_id), {"requester_id": str(req.requester_id)},
+    )
+    await session.commit()
+    return req
+
+
+async def list_access_requests(
+    session: AsyncSession,
+    *,
+    owner: User,
+    status_filter: str = "pending",
+) -> list[AccessRequest]:
+    """List access requests for documents owned by the given user."""
+    owned_doc_ids = select(DocPrincipal.document_id).where(
+        DocPrincipal.principal == f"user:{owner.id}",
+        DocPrincipal.level == "owner",
+    ).scalar_subquery()
+    stmt = (
+        select(AccessRequest)
+        .where(AccessRequest.document_id.in_(owned_doc_ids), AccessRequest.status == status_filter)
+        .order_by(AccessRequest.created_at.desc())
+    )
+    return list((await session.execute(stmt)).scalars().all())
+
+
 async def _current_user(db: AsyncSession, sess: dict) -> User:
     user = await db.get(User, uuid.UUID(sess["user_id"]))
     if user is None or user.status != "active":
@@ -524,10 +673,15 @@ async def _current_user(db: AsyncSession, sess: dict) -> User:
 class ShareIn(BaseModel):
     principal: str
     level: str = "viewer"
+    expires_at: datetime | None = None
 
 
 class SensitivityIn(BaseModel):
     sensitivity: str
+
+
+class AccessRequestIn(BaseModel):
+    document_id: uuid.UUID
 
 
 router = APIRouter(prefix="/api/v1", tags=["documents"])
@@ -573,7 +727,8 @@ async def share_document_api(
     user = await _current_user(db, sess)
     await _require_owner(db, user, document_id)
     await share_document(db, await connect(get_settings(), db), actor=user, document_id=document_id,
-                         principal=body.principal, level=body.level, policy=SharePolicy.from_settings())
+                         principal=body.principal, level=body.level, policy=SharePolicy.from_settings(),
+                         expires_at=body.expires_at)
     return {"status": "ok"}
 
 
@@ -650,3 +805,58 @@ async def visible_chunks_api(sess: dict = Depends(current_session), db: AsyncSes
     user = await _current_user(db, sess)
     rows = await visible_chunks(db, await principals(db, user))
     return {"chunks": [{"title": title, "text": text, "page": page} for title, text, page in rows]}
+
+
+@router.post("/documents/access-requests")
+async def request_access_api(
+    body: AccessRequestIn,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Request access to a document (FR-S5). Idempotent."""
+    user = await _current_user(db, sess)
+    req = await request_access(db, requester=user, document_id=body.document_id)
+    return {"id": str(req.id), "status": req.status, "document_id": str(req.document_id)}
+
+
+@router.get("/documents/access-requests")
+async def list_access_requests_api(
+    status: str = "pending",
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """List access requests for documents owned by the caller (FR-S5)."""
+    user = await _current_user(db, sess)
+    reqs = await list_access_requests(db, owner=user, status_filter=status)
+    return {"requests": [
+        {"id": str(r.id), "document_id": str(r.document_id), "requester_id": str(r.requester_id),
+         "status": r.status, "created_at": r.created_at.isoformat()}
+        for r in reqs
+    ]}
+
+
+@router.post("/documents/access-requests/{request_id}/approve")
+async def approve_access_request_api(
+    request_id: uuid.UUID,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Owner approves an access request (FR-S5)."""
+    from .authz import connect
+    from .core.config import get_settings
+
+    user = await _current_user(db, sess)
+    req = await approve_access_request(db, await connect(get_settings(), db), owner=user, request_id=request_id)
+    return {"status": req.status}
+
+
+@router.post("/documents/access-requests/{request_id}/deny")
+async def deny_access_request_api(
+    request_id: uuid.UUID,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Owner denies an access request (FR-S5). No content leak."""
+    user = await _current_user(db, sess)
+    req = await deny_access_request(db, owner=user, request_id=request_id)
+    return {"status": req.status}

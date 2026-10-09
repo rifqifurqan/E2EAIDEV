@@ -642,6 +642,44 @@ OWNER DECISIONS IN FORCE
        openfga model + deny-unshared=True).
     Secret scan: committed HEAD files checked against 12 secret-like .env values -> no secrets.
 
+- Expiring shares and access requests P1 (FR-S4, FR-S5, FR-C12):
+  - Share expiry (FR-S4):
+    - `share_document` and `share_folder` now accept optional `expires_at` (datetime). The expiry
+      timestamp is stored in `doc_principals.expires_at` / `folder_principals.expires_at` (columns
+      already existed from migration 0006).
+    - `_visible_document_clause` in both `documents.py` and `retrieval.py` now filters:
+      `expires_at IS NULL OR expires_at > now()`. This excludes expired shares from `visible_chunks`,
+      `list_documents_view`, `search_documents`, and `retrieve_relevant_chunks` (chat/answer).
+    - A share with no expiry (None) works as before — backward compatible.
+    - Expired shares do not leak title, content, citation, or existence.
+    - Share API route (`POST /api/v1/documents/{id}/shares`) accepts optional `expires_at` in body.
+  - Access requests (FR-S5):
+    - New `AccessRequest` model in db.py and migration `0009_access_requests`.
+    - `request_access(session, requester, document_id)`: creates a pending access request.
+      Idempotent — returns the existing pending request if one exists.
+    - `approve_access_request(session, authz, owner, request_id)`: owner approves, grants viewer
+      access (loosen last: OpenFGA first, doc_principals second), creates a notification with safe
+      metadata only (title, document_id, approved_by — no content).
+    - `deny_access_request(session, owner, request_id)`: owner denies. No grant, no content leak
+      (FR-C12). Only the document owner can approve or deny (403 for non-owners).
+    - `list_access_requests(session, owner)`: lists pending requests for documents owned by the caller.
+    - API routes: `POST /api/v1/documents/access-requests` (request), `GET` (list),
+      `POST .../access-requests/{id}/approve`, `POST .../access-requests/{id}/deny`.
+  - Tests first (TDD, watched RED then GREEN): `test_us_share_expiry_access_requests_p1.py` — 8 tests:
+    (1) expired share removes visibility from retrieval/search/list/chat and leaks nothing,
+        non-expired share works;
+    (2) no-expiry share works as before (backward compatible);
+    (3) expired folder share removes inherited visibility;
+    (4) user requests access, owner approves, user gets visibility + notification with safe metadata;
+    (5) owner denies request, no grant, no content leak;
+    (6) duplicate request is idempotent (returns same pending request);
+    (7) owner can list pending requests, non-owner sees nothing;
+    (8) non-owner cannot approve or deny (403).
+  - Verified: targeted sharing/expiry suite -> 8 passed;
+    `cd apps/api && uv run pytest -q` -> 112 passed, 1 skipped, 1 warning.
+    Regression: related sharing/retrieval tests (5 files) -> 22 passed.
+    Full heavy verification intentionally skipped per owner request ("baru develop ga usah banyak testing").
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
