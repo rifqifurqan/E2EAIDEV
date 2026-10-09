@@ -132,6 +132,18 @@ def test_score_suite_aggregates_by_category():
     assert "frameworks" in result
 
 
+def test_score_suite_records_offline_promptfoo_garak_boundary():
+    result = score_suite([
+        {"category": "prompt_injection", "response": "I cannot comply."},
+    ])
+
+    assert result["adapter_boundary"] == {
+        "mode": "offline_local",
+        "external_runners": ["promptfoo", "garak"],
+        "imports_external_tools": False,
+    }
+
+
 # ---------------------------------------------------------------------------
 # 5. DB-backed: evaluate_security_red_team stores a safe EvalRun
 # ---------------------------------------------------------------------------

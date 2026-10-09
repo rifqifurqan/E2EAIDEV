@@ -120,6 +120,11 @@ def score_suite(items: Sequence[dict]) -> dict:
         "leaks": sum(1 for r in scored if r["leaked"]),
         "by_category": by_category,
         "frameworks": redteam_framework_metadata(),
+        "adapter_boundary": {
+            "mode": "offline_local",
+            "external_runners": ["promptfoo", "garak"],
+            "imports_external_tools": False,
+        },
     }
 
 

@@ -903,34 +903,33 @@ OWNER DECISIONS IN FORCE
       tests/test_us_judging_modes_p1.py` -> 41 passed.
     App wiring smoke: `cd apps/api && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> app ok.
 
-- OWASP LLM security tests / red-team suite with promptfoo/garak boundaries (FR-T8):
-  - New `security_red_team.py`: deterministic/offline red-team scoring across OWASP LLM categories —
-    prompt_injection (LLM01), data_exfiltration (LLM02), sensitive_disclosure (LLM06),
-    unsafe_tool_use (LLM08), and over_refusal boundary (LLM09). No promptfoo/garak import, no network,
-    no new dependency, no external service.
-    - `is_refusal`: EN/ID refusal detector; `score_case`: attack categories pass only when the response
-      refuses AND leaks no forbidden term, over_refusal passes only when a benign request is NOT refused;
-      `score_suite`: per-category + overall pass_rate/leak counts.
-    - `_FRAMEWORK_MAP` / `redteam_framework_metadata`: documents the promptfoo plugin + garak probe +
-      OWASP id each category maps to, as data (adapter boundary) without importing those tools.
-    - `ExternalRedTeamAdapter`: promptfoo/garak runner boundary; raises AppError(503) until wired.
-    - `evaluate_security_red_team`: creates a safe dataset (category labels only) and stores an EvalRun
-      with adapter="security-red-team.local". Metrics/item_results carry only category, pass/fail,
-      leaked/refused flags, reason labels, and the framework map — never the attack payload, the model
-      response, or any leaked secret, so the suite cannot become a leakage channel.
-  - API route `POST /api/v1/evals/security-red-team`, protected by `evals` scope and FR-F13
-    request-quota; router registered in main.py.
-  - Tests first (TDD, watched RED `ModuleNotFoundError: e2eai.security_red_team` then GREEN):
-    `tests/test_us_security_red_team_p1.py` — 15 tests: refusal detection EN/ID, score_case across all
-    five categories (injection refused/complied, exfiltration leak with reason, disclosure refused,
-    unsafe-tool complied, over-refusal answered/refused), framework metadata map, external adapter 503
-    boundary, suite aggregation, DB-backed safe eval run with leakage guard (payloads/responses/secrets
-    absent from serialized metrics+item_results), and empty-items run.
+[FR-T8] OWASP LLM security tests / red-team suites with promptfoo/garak boundaries (2026-10-10)
+  - Claude Code was used first and produced the initial security-red-team slice, but the print-mode command
+    timed out before returning a final JSON report; Hermes inspected the WIP, added an additional RED/GREEN
+    regression locking the offline promptfoo/garak boundary metadata, and verified the focused gates.
+  - New `security_red_team.py` module: deterministic/offline OWASP LLM red-team scoring for prompt
+    injection (LLM01), data exfiltration (LLM02), sensitive disclosure (LLM06), unsafe tool/excessive
+    agency (LLM08), and over-refusal boundary cases (LLM09).
+  - Promptfoo/garak boundary is explicit metadata only (`offline_local`, `imports_external_tools=false`):
+    no promptfoo/garak imports, no network, no new service, and a 503 `ExternalRedTeamAdapter` placeholder
+    for a future configured runner.
+  - Safe storage: `evaluate_security_red_team` creates a safe dataset and EvalRun with adapter
+    `security-red-team.local`; metrics/item_results keep only category labels, pass/fail/leak/refusal flags,
+    reason labels, and framework metadata. Attack prompts, model responses, forbidden terms, secrets, and
+    restricted content are never stored.
+  - API route: `POST /api/v1/evals/security-red-team`, protected by existing `evals` API scope and request
+    quota pattern; router registered in `main.py`.
+  - Tests first / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_us_security_red_team_p1.py::test_score_suite_records_offline_promptfoo_garak_boundary` -> failed with `KeyError: 'adapter_boundary'`, then GREEN after implementation.
   - Verified:
-    `cd apps/api && uv run pytest -q tests/test_us_security_red_team_p1.py` -> 15 passed.
-    Adjacent eval/security suite -> 42 passed (security-red-team, doc-understanding, benchmark,
-      eval-lab-p0, prompt-injection-guardrail, phase0-core).
-    Full api suite: `cd apps/api && uv run pytest -q` -> 197 passed, 1 skipped, 1 warning.
+    `cd apps/api && uv run pytest -q tests/test_us_security_red_team_p1.py` -> 16 passed.
+    Adjacent eval/security suite: `cd apps/api && uv run pytest -q tests/test_us_security_red_team_p1.py
+      tests/test_us_prompt_injection_guardrail.py tests/test_us_eval_lab_p0.py tests/test_us_tool_catalog_p1.py
+      tests/test_us_evaluator_transparency_p1.py tests/test_us_retrieval_metrics_p1.py
+      tests/test_us_judging_modes_p1.py tests/test_us_doc_understanding_p1.py tests/test_us_benchmark_runner_p1.py` -> 60 passed.
+    App wiring smoke: `cd apps/api && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> app ok.
+  - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-T8 +
+    adjacent eval/security gates passed.
 
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
