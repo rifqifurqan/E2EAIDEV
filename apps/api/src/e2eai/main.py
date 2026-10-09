@@ -25,6 +25,9 @@ def create_app() -> FastAPI:
     app.include_router(evals_router)
     app.include_router(offboarding_router)
 
+    from .api_keys import make_router as api_keys_router
+    app.include_router(api_keys_router())
+
     @app.get("/api/v1/health", tags=["ops"])
     async def health() -> dict[str, str]:
         return {"status": "ok"}

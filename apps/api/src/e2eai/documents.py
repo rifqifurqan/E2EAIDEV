@@ -17,7 +17,7 @@ from sqlalchemy import and_, case, delete, exists, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
-from .auth import current_session
+from .auth import current_session, require_scope
 from .authz import principals
 from .core.config import repo_root
 from .core.errors import AppError
@@ -697,6 +697,7 @@ async def upload_document(
     from .ingest import ingest_version
     from .retrieval import LiteLLMEmbedder
 
+    require_scope(sess, "documents")
     user = await _current_user(db, sess)
     data = await file.read()
     if not data:
@@ -724,6 +725,7 @@ async def share_document_api(
     from .authz import connect
     from .core.config import get_settings
 
+    require_scope(sess, "sharing")
     user = await _current_user(db, sess)
     await _require_owner(db, user, document_id)
     await share_document(db, await connect(get_settings(), db), actor=user, document_id=document_id,
@@ -740,6 +742,7 @@ async def set_sensitivity_api(
     db: AsyncSession = Depends(get_session),
 ) -> dict:
     """Set a document's sensitivity label (FR-D5). Requires document ownership."""
+    require_scope(sess, "documents")
     user = await _current_user(db, sess)
     await _require_owner(db, user, document_id)
     doc = await update_sensitivity(db, actor=user, document_id=document_id, sensitivity=body.sensitivity)
@@ -765,6 +768,7 @@ async def delete_document_api(
     from .authz import connect
     from .core.config import get_settings
 
+    require_scope(sess, "documents")
     user = await _current_user(db, sess)
     await _require_owner(db, user, document_id)
     if permanent:
@@ -780,6 +784,7 @@ async def restore_document_api(
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
 ) -> dict:
+    require_scope(sess, "documents")
     user = await _current_user(db, sess)
     await _require_owner(db, user, document_id)
     await restore_document(db, actor=user, document_id=document_id)
@@ -795,6 +800,7 @@ async def search_documents_api(
     db: AsyncSession = Depends(get_session),
 ) -> dict:
     """Permission-filtered document search (FR-S10). Returns safe metadata only."""
+    require_scope(sess, "documents")
     user = await _current_user(db, sess)
     results = await search_documents(db, user=user, query=q, sensitivity=sensitivity, view=view)
     return {"results": results}
@@ -802,6 +808,7 @@ async def search_documents_api(
 
 @router.get("/documents/visible-chunks")
 async def visible_chunks_api(sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
+    require_scope(sess, "documents")
     user = await _current_user(db, sess)
     rows = await visible_chunks(db, await principals(db, user))
     return {"chunks": [{"title": title, "text": text, "page": page} for title, text, page in rows]}
@@ -814,6 +821,7 @@ async def request_access_api(
     db: AsyncSession = Depends(get_session),
 ) -> dict:
     """Request access to a document (FR-S5). Idempotent."""
+    require_scope(sess, "sharing")
     user = await _current_user(db, sess)
     req = await request_access(db, requester=user, document_id=body.document_id)
     return {"id": str(req.id), "status": req.status, "document_id": str(req.document_id)}
@@ -826,6 +834,7 @@ async def list_access_requests_api(
     db: AsyncSession = Depends(get_session),
 ) -> dict:
     """List access requests for documents owned by the caller (FR-S5)."""
+    require_scope(sess, "sharing")
     user = await _current_user(db, sess)
     reqs = await list_access_requests(db, owner=user, status_filter=status)
     return {"requests": [
@@ -845,6 +854,7 @@ async def approve_access_request_api(
     from .authz import connect
     from .core.config import get_settings
 
+    require_scope(sess, "sharing")
     user = await _current_user(db, sess)
     req = await approve_access_request(db, await connect(get_settings(), db), owner=user, request_id=request_id)
     return {"status": req.status}
@@ -857,6 +867,7 @@ async def deny_access_request_api(
     db: AsyncSession = Depends(get_session),
 ) -> dict:
     """Owner denies an access request (FR-S5). No content leak."""
+    require_scope(sess, "sharing")
     user = await _current_user(db, sess)
     req = await deny_access_request(db, owner=user, request_id=request_id)
     return {"status": req.status}

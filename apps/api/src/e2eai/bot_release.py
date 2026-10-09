@@ -9,7 +9,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
-from .auth import current_session
+from .auth import current_session, require_scope
 from .authz import principals
 from .core.errors import AppError
 from .db import Bot, BotBundle, BotGrant, BotScope, User, get_session
@@ -177,6 +177,7 @@ router = APIRouter(prefix="/api/v1/bots", tags=["bots"])
 
 @router.post("")
 async def create_bot_api(body: BotIn, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
+    require_scope(sess, "bots")
     user = await _current_user(db, sess)
     bot = await create_bot(db, owner=user, name=body.name)
     return {"id": str(bot.id), "name": bot.name}
@@ -184,6 +185,7 @@ async def create_bot_api(body: BotIn, sess: dict = Depends(current_session), db:
 
 @router.post("/{bot_id}/bundles")
 async def release_bundle_api(bot_id: uuid.UUID, body: BundleIn, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
+    require_scope(sess, "bots")
     user = await _current_user(db, sess)
     bundle = await release_bundle(db, actor=user, bot_id=bot_id, bundle=body.bundle)
     return {"id": str(bundle.id), "version": bundle.version, "status": bundle.status}
@@ -191,6 +193,7 @@ async def release_bundle_api(bot_id: uuid.UUID, body: BundleIn, sess: dict = Dep
 
 @router.post("/{bot_id}/bundles/{bundle_id}/rollback")
 async def rollback_bundle_api(bot_id: uuid.UUID, bundle_id: uuid.UUID, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
+    require_scope(sess, "bots")
     user = await _current_user(db, sess)
     bundle = await rollback_bundle(db, actor=user, bot_id=bot_id, target_bundle_id=bundle_id)
     return {"id": str(bundle.id), "version": bundle.version, "status": bundle.status}
@@ -198,6 +201,7 @@ async def rollback_bundle_api(bot_id: uuid.UUID, bundle_id: uuid.UUID, sess: dic
 
 @router.post("/{bot_id}/grants")
 async def grant_bot_api(bot_id: uuid.UUID, body: GrantIn, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
+    require_scope(sess, "bots")
     user = await _current_user(db, sess)
     grant = await grant_bot_access(db, actor=user, bot_id=bot_id, principal=body.principal, level=body.level)
     return {"principal": grant.principal, "level": grant.level}
@@ -205,6 +209,7 @@ async def grant_bot_api(bot_id: uuid.UUID, body: GrantIn, sess: dict = Depends(c
 
 @router.put("/{bot_id}/scope")
 async def set_bot_scope_api(bot_id: uuid.UUID, body: ScopeIn, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
+    require_scope(sess, "bots")
     user = await _current_user(db, sess)
     await set_bot_scope(db, actor=user, bot_id=bot_id, document_ids=body.document_ids, folder_ids=body.folder_ids)
     return {"status": "ok", "documents": len(body.document_ids), "folders": len(body.folder_ids)}
@@ -212,6 +217,7 @@ async def set_bot_scope_api(bot_id: uuid.UUID, body: ScopeIn, sess: dict = Depen
 
 @router.post("/{bot_id}/ask")
 async def ask_bot_api(bot_id: uuid.UUID, body: BotAskIn, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
+    require_scope(sess, "bots")
     user = await _current_user(db, sess)
     if not body.question.strip():
         raise AppError(400, "Question is required")

@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
-from .auth import current_session
+from .auth import current_session, require_scope
 from .core.errors import AppError
 from .db import Conversation, Message, MessageCitation, MessageFeedback, User, get_session
 from .pii import mask_text
@@ -218,6 +218,7 @@ async def list_conversations_api(
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
 ) -> dict:
+    require_scope(sess, "chat")
     user = await _current_user(db, sess)
     convos = await list_conversations(db, user=user, search=search)
     return {"conversations": [
@@ -232,6 +233,7 @@ async def create_conversation_api(
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
 ) -> dict:
+    require_scope(sess, "chat")
     user = await _current_user(db, sess)
     conv = await create_conversation(db, user=user, title=body.title)
     return {"id": str(conv.id), "title": conv.title}
@@ -244,6 +246,7 @@ async def rename_conversation_api(
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
 ) -> dict:
+    require_scope(sess, "chat")
     user = await _current_user(db, sess)
     conv = await rename_conversation(db, user=user, conversation_id=conversation_id, new_title=body.title)
     return {"id": str(conv.id), "title": conv.title}
@@ -255,6 +258,7 @@ async def delete_conversation_api(
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
 ) -> dict:
+    require_scope(sess, "chat")
     user = await _current_user(db, sess)
     await delete_conversation(db, user=user, conversation_id=conversation_id)
     return {"status": "deleted"}
@@ -269,6 +273,7 @@ async def send_message_api(
 ) -> dict:
     from .retrieval import LiteLLMEmbedder
 
+    require_scope(sess, "chat")
     user = await _current_user(db, sess)
     if not body.question.strip():
         raise AppError(400, "Question is required")
@@ -286,6 +291,7 @@ async def feedback_api(
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
 ) -> dict:
+    require_scope(sess, "chat")
     user = await _current_user(db, sess)
     fb = await record_feedback(db, user=user, message_id=message_id,
                                rating=body.rating, correction=body.correction)
@@ -298,6 +304,7 @@ async def stop_api(
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
 ) -> dict:
+    require_scope(sess, "chat")
     user = await _current_user(db, sess)
     msg = await mark_stop(db, user=user, message_id=message_id)
     return {"status": "stopped", "stop_reason": msg.stop_reason}

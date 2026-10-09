@@ -1,0 +1,12 @@
+{
+  "name": "@e2eai/sdk",
+  "version": "0.1.0",
+  "description": "E2EAIDEV TypeScript SDK — typed client for the public REST API (FR-F12)",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "node --test tests/test_sdk_client.mjs",
+    "build": "echo 'no build step for now'"
+  },
+  "license": "UNLICENSED"
+}

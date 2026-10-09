@@ -1,0 +1,25 @@
+[project]
+name = "e2eai-sdk"
+version = "0.1.0"
+description = "E2EAIDEV Python SDK — typed client for the public REST API (FR-F12)"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/e2eai_sdk"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=0.25.0",
+]

@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .auth import current_session
+from .auth import current_session, require_scope
 from .core.errors import AppError
 from .db import EvalDataset, EvalRun, User, get_session
 from .retrieval import Embedder, LiteLLMEmbedder, answer_question
@@ -217,6 +217,7 @@ router = APIRouter(prefix="/api/v1/evals", tags=["evals"])
 
 @router.post("/datasets")
 async def create_dataset_api(body: DatasetIn, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
+    require_scope(sess, "evals")
     user = await _current_user(db, sess)
     ds = await create_dataset(db, name=body.name, items=body.items, source=body.source, created_by=f"user:{user.id}")
     return {"id": str(ds.id), "name": ds.name, "version": ds.version, "items": len(ds.items)}
@@ -224,6 +225,7 @@ async def create_dataset_api(body: DatasetIn, sess: dict = Depends(current_sessi
 
 @router.post("/runs")
 async def run_eval_api(body: RunIn, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
+    require_scope(sess, "evals")
     user = await _current_user(db, sess)
     if body.adapter != "ragas.local":
         raise AppError(400, "Unsupported eval adapter", "Only ragas.local is wired in P0.")

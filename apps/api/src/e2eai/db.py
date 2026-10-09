@@ -340,6 +340,22 @@ class BotScope(Base):
     target_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
 
 
+class ApiKey(Base):
+    """FR-F12: scoped API keys for public REST clients. Raw key is never stored — only sha256 hash.
+    Prefix (first 12 chars) is stored for display/identification purposes."""
+    __tablename__ = "api_keys"
+    __table_args__ = (Index("api_keys_key_hash", "key_hash", unique=True),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(200))
+    key_hash: Mapped[str] = mapped_column(String(64))  # sha256 hex
+    prefix: Mapped[str] = mapped_column(String(16))  # first 12 chars for display
+    scopes: Mapped[list] = mapped_column(JSONB, default=list)  # ["chat", "documents", ...]
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 ROLE_NAMES = ("admin", "ai_engineer", "evaluator", "compliance", "business_user")  # FR-F3
 
 

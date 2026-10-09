@@ -108,11 +108,42 @@ def require_csrf(request: Request, sess: dict) -> None:
 
 
 async def current_session(request: Request) -> dict:
+    """Authenticate via session cookie OR Bearer API key (FR-F12, PRD T7).
+
+    Returns a dict with at least ``user_id``. API-key auth adds ``auth_type: "api_key"``
+    and ``scopes: [...]``; cookie auth adds ``auth_type: "session"`` and ``csrf``.
+    """
+    # Try Bearer token first (API clients, FR-F12)
+    from .api_keys import authenticate_api_key, extract_bearer_token
+    from .db import get_session as _get_session
+
+    auth_header = request.headers.get("authorization")
+    token = extract_bearer_token(auth_header)
+    if token:
+        async for db in _get_session():
+            result = await authenticate_api_key(db, token)
+            if result is None:
+                raise AppError(401, "Invalid API key")
+            user, key = result
+            return {"user_id": str(user.id), "auth_type": "api_key", "scopes": list(key.scopes)}
+
+    # Fall back to session cookie
     sid = request.cookies.get(COOKIE)
     data = await _sessions().get(sid) if sid else None
     if not data:
         raise AppError(401, "Not authenticated")
-    return {"sid": sid, **data}
+    return {"sid": sid, "auth_type": "session", **data}
+
+
+def require_scope(sess: dict, scope: str) -> None:
+    """Enforce that an API-key-authenticated session has the required scope (FR-F12).
+
+    Session-based auth (web UI) has full access — scope restrictions only apply to API keys.
+    """
+    if sess.get("auth_type") == "api_key":
+        from .api_keys import has_scope
+        if not has_scope(sess.get("scopes", []), scope):
+            raise AppError(403, "Insufficient scope", f"This API key does not have the '{scope}' scope.")
 
 
 class LoginIn(BaseModel):

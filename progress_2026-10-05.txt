@@ -684,6 +684,17 @@ OWNER DECISIONS IN FORCE
     Remote sync: origin/main == a71eb6d23cd6b64a0e2b5d87e59c0e2069f92303.
     Secret scan: committed HEAD files checked against 12 secret-like .env values -> no secrets.
 
+- Public REST API + SDK vertical slice (FR-F12):
+  - Claude Code started the milestone but hit subscription limit (`You've hit your limit · resets 6:40pm Asia/Jakarta`) before finishing. Hermes continued manually; no Codex used.
+  - Added `api_keys` table/model/migration `0010_api_keys`: raw API keys are never stored, only SHA-256 hashes plus display prefix, scopes, expiry, revoke timestamp.
+  - Added `api_keys.py`: key creation/list/revoke, bearer-token extraction, hash verification, usability checks, scoped auth helpers, and `/api/v1/api-keys` management routes.
+  - `current_session` now accepts `Authorization: Bearer <key>` and returns API-key scope context; `require_scope` blocks API keys missing required scope while preserving full web-session access.
+  - Scoped public API coverage was wired through chat, documents/search/share/access-requests, evals, and bots using scopes: `chat`, `documents`, `sharing`, `evals`, `bots`.
+  - Added lightweight Python SDK under `packages/sdk-python` and TypeScript/JS SDK under `packages/sdk-ts`; both cover chat, document list/search/share/access requests, evals, and bots with Bearer auth.
+  - Verified focused gates: `cd apps/api && uv run pytest -q tests/test_auth.py tests/test_api_keys.py` -> 14 passed; `cd packages/sdk-python && uv run pytest -q` -> 16 passed; `cd packages/sdk-ts && npm test` -> 15 passed.
+  - Migration gate: `cd apps/api && uv run alembic upgrade head` -> upgraded `0009_access_requests -> 0010_api_keys` successfully.
+  - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-F12 gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
