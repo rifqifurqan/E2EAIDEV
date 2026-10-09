@@ -112,6 +112,50 @@ class LocalRagasAdapter:
         }, results
 
 
+def _estimate_tokens(text: str) -> int:
+    # Deterministic offline estimate: roughly one token per four chars, with a word-count floor.
+    # This avoids provider calls while still surfacing cost before a run starts (FR-L4).
+    stripped = text.strip()
+    if not stripped:
+        return 0
+    return max(1, max(math.ceil(len(stripped) / 4), len(stripped.split())))
+
+
+def estimate_eval_run_cost(
+    items: Sequence[dict],
+    *,
+    judge_price_per_1k_tokens_usd: float,
+    gpu_price_per_minute_usd: float,
+    expected_gpu_minutes: float,
+    budget_threshold_usd: float | None = None,
+    metric: str = "answer_correctness",
+) -> dict:
+    """Estimate judge-token and GPU runtime cost before an evaluation run starts (FR-L4)."""
+    judge_tokens = sum(_estimate_tokens(build_judge_prompt(item, metric)) for item in items)
+    judge_cost = round((judge_tokens / 1000.0) * float(judge_price_per_1k_tokens_usd), 4)
+    gpu_minutes = round(float(expected_gpu_minutes), 4)
+    gpu_cost = round(gpu_minutes * float(gpu_price_per_minute_usd), 4)
+    total_cost = round(judge_cost + gpu_cost, 4)
+    threshold = float(budget_threshold_usd) if budget_threshold_usd is not None else None
+    requires_confirmation = threshold is not None and total_cost > threshold
+    return {
+        "items": len(items),
+        "metric": metric,
+        "judge_tokens": judge_tokens,
+        "judge_cost_usd": judge_cost,
+        "gpu_minutes": gpu_minutes,
+        "gpu_cost_usd": gpu_cost,
+        "total_cost_usd": total_cost,
+        "budget_threshold_usd": budget_threshold_usd,
+        "requires_confirmation": requires_confirmation,
+        "confirmation_reason": (
+            f"Estimated cost ${total_cost:.4f} exceeds budget threshold ${threshold:.4f}."
+            if requires_confirmation
+            else None
+        ),
+    }
+
+
 def generate_synthetic_qa(source_chunks: Sequence[dict], *, personas: Sequence[str], adversarial: bool = True) -> list[dict]:
     """Generate deterministic Q&A and adversarial probes from source chunks (FR-D12).
 
@@ -354,6 +398,15 @@ class RunIn(BaseModel):
     adapter: str = "ragas.local"
 
 
+class CostEstimateIn(BaseModel):
+    dataset_id: uuid.UUID | None = None
+    items: list[dict] | None = None
+    judge_price_per_1k_tokens_usd: float = 0.0
+    gpu_price_per_minute_usd: float = 0.0
+    expected_gpu_minutes: float = 0.0
+    budget_threshold_usd: float | None = None
+
+
 class RetrievalMetricsIn(BaseModel):
     dataset_id: uuid.UUID
 
@@ -377,6 +430,31 @@ async def create_dataset_api(body: DatasetIn, sess: dict = Depends(current_sessi
     user = await _current_user(db, sess)
     ds = await create_dataset(db, name=body.name, items=body.items, source=body.source, created_by=f"user:{user.id}")
     return {"id": str(ds.id), "name": ds.name, "version": ds.version, "items": len(ds.items)}
+
+
+@router.post("/cost-estimate")
+async def cost_estimate_api(
+    body: CostEstimateIn,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """FR-L4: estimate judge-token and GPU cost before starting an eval run."""
+    require_scope(sess, "evals")
+    items = body.items
+    if body.dataset_id is not None:
+        ds = await db.get(EvalDataset, body.dataset_id)
+        if ds is None:
+            raise AppError(404, "Dataset not found")
+        items = ds.items
+    if not items:
+        raise AppError(400, "Either dataset_id or items is required")
+    return estimate_eval_run_cost(
+        items,
+        judge_price_per_1k_tokens_usd=body.judge_price_per_1k_tokens_usd,
+        gpu_price_per_minute_usd=body.gpu_price_per_minute_usd,
+        expected_gpu_minutes=body.expected_gpu_minutes,
+        budget_threshold_usd=body.budget_threshold_usd,
+    )
 
 
 @router.post("/runs")

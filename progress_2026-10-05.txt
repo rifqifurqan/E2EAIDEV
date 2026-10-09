@@ -779,6 +779,14 @@ OWNER DECISIONS IN FORCE
   - Verified focused gates: `cd apps/api && uv run pytest -q tests/test_us_tool_catalog_p1.py` -> 3 passed; adjacent eval/evaluator tests -> 9 passed.
   - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-L3 gates passed.
 
+- Lab cost/time estimate P1 (FR-L4):
+  - Claude Code was still rate-limited, so Hermes implemented manually; no Codex used.
+  - Added `estimate_eval_run_cost`: deterministic pre-run estimate for judge prompt tokens, judge cost, GPU minutes, GPU cost, total cost, budget threshold, and `requires_confirmation` flag.
+  - Added `POST /api/v1/evals/cost-estimate`, protected by `evals` scope, accepting either inline eval items or a dataset id before starting a run.
+  - Tests first: `test_us_lab_cost_estimate_p1.py` initially failed with missing import, then passed after implementation.
+  - Verified focused gates: `cd apps/api && uv run pytest -q tests/test_us_lab_cost_estimate_p1.py` -> 2 passed; adjacent eval/tool-catalog/evaluator tests -> 11 passed.
+  - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-L4 gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
