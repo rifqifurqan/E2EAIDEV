@@ -675,10 +675,14 @@ OWNER DECISIONS IN FORCE
     (6) duplicate request is idempotent (returns same pending request);
     (7) owner can list pending requests, non-owner sees nothing;
     (8) non-owner cannot approve or deny (403).
-  - Verified: targeted sharing/expiry suite -> 8 passed;
+  - Verified by Claude Code: targeted sharing/expiry suite -> 8 passed;
     `cd apps/api && uv run pytest -q` -> 112 passed, 1 skipped, 1 warning.
     Regression: related sharing/retrieval tests (5 files) -> 22 passed.
     Full heavy verification intentionally skipped per owner request ("baru develop ga usah banyak testing").
+  - Verified by Hermes after Claude Code completed (focused only):
+    `cd apps/api && uv run pytest -q tests/test_us_share_expiry_access_requests_p1.py tests/test_us_sharing_views_notifications.py tests/test_us_document_search_p1.py` -> 19 passed.
+    Remote sync: origin/main == a71eb6d23cd6b64a0e2b5d87e59c0e2069f92303.
+    Secret scan: committed HEAD files checked against 12 secret-like .env values -> no secrets.
 
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
