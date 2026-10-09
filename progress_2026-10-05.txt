@@ -814,6 +814,36 @@ OWNER DECISIONS IN FORCE
     `cd apps/api && uv run pytest -q tests/test_us_prompt_registry_p0.py tests/test_us_release_bundle_p0.py && uv run alembic upgrade head && python ../../scripts/validate_docs.py` -> 9 passed; Alembic head already current; docs validation PASS.
   - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-B1 + adjacent bot release gate passed.
 
+- Benchmark runner P1 slice (FR-T11):
+  - New `benchmark.py` service/API (eval_lab.py was already ~667 lines, so a separate module). No schema
+    change: benchmark runs reuse the existing `eval_runs` table.
+  - Deterministic/offline: per-combination measurement samples (quality, latency_ms, ttft_ms,
+    output_tokens, cost_usd) are injected by the caller; the module aggregates them. A live runner that
+    executes model x prompt x dataset through the chat path can populate `samples` and reuse the same
+    aggregation (ponytail note in the module header).
+  - `summarize_combination`: per model x prompt x dataset row with quality (mean), p50/p95 latency,
+    p50/p95 TTFT (linear-interpolation percentiles), tokens/s (mean output_tokens / latency-seconds), and
+    summed cost. Only measurement numbers + combination labels are kept — never raw answers/snippets.
+  - `build_benchmark_leaderboard`: ranks best quality first, ties broken by lower p50 latency then cost.
+  - `run_benchmark`: stores an `EvalRun` with `adapter="benchmark.local"`, `item_results` = the safe
+    leaderboard, and `metrics` = name, combinations, sorted models/prompts/datasets, best combo, total cost.
+  - API route `POST /api/v1/evals/benchmark`, protected by the existing `evals` scope and the FR-F13
+    request-quota pattern (`endpoint="evals.benchmark"`); router registered in `main.py`.
+  - Tests first (TDD, watched RED `ModuleNotFoundError: e2eai.benchmark` then GREEN):
+    `test_us_benchmark_runner_p1.py` -- 3 tests: per-combination aggregation (exact quality/p50/p95/TTFT/
+    tokens-per-s/cost values), leaderboard sorting by quality then latency, and DB-backed run_benchmark
+    storing a benchmark.local EvalRun whose serialized metrics+item_results contain no raw answer text
+    (the "30 percent" / "answer" leakage guard asserts safe storage).
+  - Verified:
+    `cd apps/api && uv run pytest -q tests/test_us_benchmark_runner_p1.py` -> 3 passed.
+    Adjacent eval suite: `cd apps/api && uv run pytest -q tests/test_us_benchmark_runner_p1.py
+      tests/test_us_eval_lab_p0.py tests/test_us_lab_cost_estimate_p1.py
+      tests/test_us_lab_compare_reports_p1.py tests/test_us_evaluator_transparency_p1.py
+      tests/test_us_retrieval_metrics_p1.py` -> 21 passed.
+    App wiring smoke: `uv run python -c "from e2eai.main import create_app; create_app()"` -> app ok.
+    Full heavy verification intentionally deferred while developing PRD backlog quickly; focused
+    FR-T11 + adjacent eval gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
