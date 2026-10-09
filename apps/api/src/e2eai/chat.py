@@ -18,7 +18,7 @@ from .auth import current_session
 from .core.errors import AppError
 from .db import Conversation, Message, MessageCitation, MessageFeedback, User, get_session
 from .pii import mask_text
-from .retrieval import Embedder, answer_question
+from .retrieval import AnswerGenerator, Embedder, answer_question
 
 
 # ---------------------------------------------------------------------------
@@ -73,12 +73,13 @@ async def send_message(
     conversation_id: uuid.UUID,
     question: str,
     embedder: Embedder,
+    answer_generator: AnswerGenerator | None = None,
     scope: str = "all",
     document_id: uuid.UUID | None = None,
 ) -> dict:
     """Add a user message, generate a permission-filtered answer, store the assistant message
     with citations, and return the answer dict. The existing `answer_question` does the retrieval,
-    guardrail filtering, and audit (FR-C8, FR-C12)."""
+    guardrail filtering, language detection (FR-C13), and audit (FR-C8, FR-C12)."""
     conv = await _own_conversation(session, user, conversation_id)
 
     # Store user message
@@ -87,7 +88,8 @@ async def send_message(
     await session.flush()
 
     # Generate answer through existing permission-filtered path
-    result = await answer_question(session, embedder=embedder, user=user, question=question, scope=scope, document_id=document_id)
+    result = await answer_question(session, embedder=embedder, user=user, question=question,
+                                   answer_generator=answer_generator, scope=scope, document_id=document_id)
 
     # Store assistant message
     asst_msg = Message(conversation_id=conv.id, role="assistant", content=result["answer"])

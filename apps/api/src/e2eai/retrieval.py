@@ -1,9 +1,13 @@
-"""Permission-filtered retrieval and cited-answer tracer bullet for Phase 1.
+"""Permission-filtered retrieval and cited-answer generation for Phase 1.
 
 Retrieval is pgvector-backed: the question is embedded through the same embedder as the chunks, and
 candidates are ranked by cosine distance (`<=>`) in SQL. The P0 invariant holds inside that one query:
 doc_principals is filtered in the WHERE clause *before* the ORDER BY/LIMIT, never as a post-top-k pass,
 so unshared users get no document names, snippets, or citations.
+
+Answer language (FR-C13): the AI answers in the language of the question. Language detection is
+deterministic and runs on the question only — retrieved context cannot override it. Citations and
+quotes stay in the original source language.
 """
 
 import uuid
@@ -25,6 +29,7 @@ from .core.config import Settings, get_settings, repo_root
 from .core.errors import AppError
 from .db import Chunk, ChunkEmbedding, DocPrincipal, Document, FolderPrincipal, User, get_session
 from .guardrails import PromptGuardPolicy, PromptInjectionDetector, select_prompt_detector
+from .language import detect_language
 
 class Embedder(Protocol):
     @property
@@ -67,6 +72,72 @@ class LiteLLMEmbedder:
         if len(vectors) != len(texts) or any(not vector for vector in vectors):
             raise AppError(502, "Embedding gateway returned an invalid response")
         return vectors
+
+
+class AnswerGenerator(Protocol):
+    async def generate(self, question: str, chunks: list[dict], answer_language: str) -> str: ...
+
+
+def build_answer_system_prompt(chunks: list[dict], answer_language: str) -> str:
+    """Build the system prompt for LLM answer generation with an explicit language instruction (FR-C13).
+
+    The language instruction is derived from the question only (not from source content), so an injected
+    "answer in X" instruction in retrieved context cannot override it.
+    """
+    language_name = "Indonesian" if answer_language == "id" else "English"
+    context_lines = []
+    for c in chunks:
+        context_lines.append(
+            f"[Source: {c['document']}, page {c['page']}, section: {c['section']}]\n{c['text']}"
+        )
+    context_block = "\n\n".join(context_lines)
+    return (
+        f"You are a helpful assistant. Answer questions using ONLY the provided sources.\n\n"
+        f"IMPORTANT: You MUST answer in {language_name}.\n"
+        f"When quoting or citing source text, keep quotes in their original language — "
+        f"do not translate document titles, section names, or direct quotes from source material.\n\n"
+        f"Sources:\n{context_block}"
+    )
+
+
+@dataclass(frozen=True)
+class LiteLLMAnswerGenerator:
+    """OpenAI-compatible LiteLLM chat client for answer generation with language control (FR-C13)."""
+
+    base_url: str
+    api_key: str
+    model: str
+    timeout: float = 120.0
+    client_factory: Callable[..., Any] = httpx.AsyncClient
+
+    @classmethod
+    def from_settings(cls, settings: Settings | None = None) -> "LiteLLMAnswerGenerator":
+        settings = settings or get_settings()
+        cfg = yaml.safe_load((repo_root() / "e2eai.yaml").read_text(encoding="utf-8"))
+        models = cfg.get("models", {}).get("chat") or []
+        if not models:
+            raise AppError(503, "No chat model configured")
+        return cls(base_url=settings.litellm_url, api_key=settings.litellm_key, model=models[0])
+
+    async def generate(self, question: str, chunks: list[dict], answer_language: str) -> str:
+        system_prompt = build_answer_system_prompt(chunks, answer_language)
+        async with self.client_factory(base_url=self.base_url, timeout=self.timeout) as client:
+            response = await client.post(
+                "/v1/chat/completions",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json={
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": question},
+                    ],
+                },
+            )
+        response.raise_for_status()
+        choices = response.json().get("choices") or []
+        if not choices:
+            raise AppError(502, "Chat gateway returned no choices")
+        return choices[0].get("message", {}).get("content", "")
 
 
 async def index_document_chunks(session: AsyncSession, *, embedder: Embedder, document_id: uuid.UUID) -> int:
@@ -194,6 +265,7 @@ async def answer_question(
     question: str,
     prompt_detector: PromptInjectionDetector | None = None,
     prompt_policy: PromptGuardPolicy | None = None,
+    answer_generator: AnswerGenerator | None = None,
     scope: str = "all",
     document_id: uuid.UUID | None = None,
     scoped_document_ids: Sequence[uuid.UUID] | None = None,
@@ -201,9 +273,11 @@ async def answer_question(
 ) -> dict:
     """Answer from permission-filtered chunks, treating retrieved context as untrusted (FR-C8).
 
-    Suspicious retrieved chunks are audited and excluded before answer assembly. The audit stores only
-    reason labels/counts, never the blocked text/title, and the user receives no citation/text if every
-    candidate is blocked.
+    Answer language (FR-C13): the language is detected from the question only (never from retrieved
+    context, so injected "answer in X" instructions in source text have no effect). When an
+    answer_generator is provided, the answer is generated in the detected language; otherwise the
+    top chunk text is returned directly (tracer-bullet fallback). Citations always stay in the
+    original source language.
     """
     prompt_policy = prompt_policy or PromptGuardPolicy.from_settings()
     prompt_detector = prompt_detector or select_prompt_detector(prompt_policy)
@@ -233,15 +307,26 @@ async def answer_question(
                 )
                 continue
         safe_chunks.append(chunk)
+    answer_lang = detect_language(question)
     if not safe_chunks:
+        no_context_msg = (
+            "Saya tidak menemukan dokumen yang relevan untuk pertanyaan tersebut."
+            if answer_lang == "id"
+            else "I don't have access to relevant documents for that question."
+        )
         await audit.record(session, f"user:{user.id}", "chat.answer.no_context", "retrieval:visible_chunks", {})
         await session.commit()
-        return {"answer": "I don't have access to relevant documents for that question.", "citations": []}
+        return {"answer": no_context_msg, "answer_language": answer_lang, "citations": []}
+    if answer_generator is not None:
+        answer_text = await answer_generator.generate(question, safe_chunks, answer_lang)
+    else:
+        answer_text = safe_chunks[0]["text"]
     top = safe_chunks[0]
     await audit.record(session, f"user:{user.id}", "chat.answer", "retrieval:visible_chunks", {"citations": 1})
     await session.commit()
     return {
-        "answer": top["text"],
+        "answer": answer_text,
+        "answer_language": answer_lang,
         "citations": [{"document": top["document"], "page": top["page"], "section": top["section"]}],
     }
 

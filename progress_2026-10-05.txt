@@ -607,6 +607,36 @@ OWNER DECISIONS IN FORCE
       (compose 6 services; cli 27 passed/1 skipped; api 97 passed/1 skipped; alembic head;
        api health/ready 200/200).
 
+- Answer language behavior (FR-C13, FR-C12):
+  - TDD: wrote `test_us_answer_language_p0.py` first (7 tests), observed RED (ModuleNotFoundError:
+    e2eai.language), then implemented and went GREEN.
+  - New `language.py`: deterministic offline ID/EN language detection via token-frequency heuristic
+    (common Indonesian function words). If >= 25% of tokens are Indonesian, classify as "id";
+    otherwise "en". No external paid services.
+  - New `AnswerGenerator` protocol in `retrieval.py` alongside the existing `Embedder` protocol:
+    injectable answer generation with `generate(question, chunks, answer_language)`. Default behavior
+    (when no generator injected): unchanged raw-chunk-text fallback (backward compat with all
+    existing tests). When a generator is provided: language-aware answer generation.
+  - New `build_answer_system_prompt(chunks, answer_language)`: constructs the LLM system prompt with
+    an explicit language instruction derived from the question only (not from retrieved context), plus
+    source context. The instruction says "You MUST answer in {language}" and "keep quotes in their
+    original language."
+  - New `LiteLLMAnswerGenerator`: OpenAI-compatible chat client for real LLM answer generation through
+    the LiteLLM gateway, reading the chat model from `e2eai.yaml`.
+  - Modified `answer_question`: detects question language, generates a language-appropriate no-context
+    message (EN/ID), uses the generator when provided, includes `answer_language` in the response dict.
+    Citations always stay in the original source language.
+  - Modified `chat.py`: `send_message` forwards the optional `answer_generator` to `answer_question`.
+  - FR-C12 held: unshared user (Budi) gets no leak regardless of question language (tested in both
+    ID and EN). No-existence-leak behavior unchanged.
+  - FR-C8 held: prompt-injection guardrails unchanged; language override injections in source text
+    cannot change the detected answer language because `detect_language` runs on the question only.
+  - Tests cover: language detection (ID/EN), system prompt construction, ID question + EN source,
+    EN question + ID source, citation preservation, no-leak in both languages, injection resistance.
+  - Verified: targeted answer-language suite -> 7 passed;
+    `cd apps/api && uv run pytest -q` -> 104 passed, 1 skipped, 1 warning.
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
