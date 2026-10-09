@@ -105,6 +105,7 @@ async def answer_bot_question(
     user: User,
     bot_id: uuid.UUID,
     question: str,
+    include_explainability: bool = False,
 ) -> dict:
     bot = await session.get(Bot, bot_id)
     if bot is None or bot.production_bundle_id is None:
@@ -125,6 +126,7 @@ async def answer_bot_question(
         question=question,
         scoped_document_ids=scoped_document_ids,
         scoped_folder_ids=scoped_folder_ids,
+        include_explainability=include_explainability,
     )
 
 
@@ -170,6 +172,7 @@ class ScopeIn(BaseModel):
 
 class BotAskIn(BaseModel):
     question: str
+    include_explainability: bool = False
 
 
 router = APIRouter(prefix="/api/v1/bots", tags=["bots"])
@@ -231,7 +234,7 @@ async def ask_bot_api(bot_id: uuid.UUID, body: BotAskIn, sess: dict = Depends(cu
     await enforce_request_quota(redis, user_id=sess["user_id"], endpoint="bot_ask", policy=policy)
     await enforce_token_quota(redis, user_id=sess["user_id"], estimated_tokens=estimate_tokens(body.question), policy=policy)
 
-    result = await answer_bot_question(db, embedder=LiteLLMEmbedder.from_settings(), user=user, bot_id=bot_id, question=body.question)
+    result = await answer_bot_question(db, embedder=LiteLLMEmbedder.from_settings(), user=user, bot_id=bot_id, question=body.question, include_explainability=body.include_explainability)
 
     # Record token usage (best-effort)
     answer_tokens = estimate_tokens(result.get("answer", ""))

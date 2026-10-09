@@ -76,6 +76,7 @@ async def send_message(
     answer_generator: AnswerGenerator | None = None,
     scope: str = "all",
     document_id: uuid.UUID | None = None,
+    include_explainability: bool = False,
 ) -> dict:
     """Add a user message, generate a permission-filtered answer, store the assistant message
     with citations, and return the answer dict. The existing `answer_question` does the retrieval,
@@ -89,7 +90,8 @@ async def send_message(
 
     # Generate answer through existing permission-filtered path
     result = await answer_question(session, embedder=embedder, user=user, question=question,
-                                   answer_generator=answer_generator, scope=scope, document_id=document_id)
+                                   answer_generator=answer_generator, scope=scope, document_id=document_id,
+                                   include_explainability=include_explainability)
 
     # Store assistant message
     asst_msg = Message(conversation_id=conv.id, role="assistant", content=result["answer"])
@@ -202,6 +204,7 @@ class MessageIn(BaseModel):
     question: str
     scope: str = "all"
     document_id: uuid.UUID | None = None
+    include_explainability: bool = False
 
 
 class FeedbackIn(BaseModel):
@@ -290,6 +293,7 @@ async def send_message_api(
         db, user=user, conversation_id=conversation_id,
         question=body.question, embedder=LiteLLMEmbedder.from_settings(),
         scope=body.scope, document_id=body.document_id,
+        include_explainability=body.include_explainability,
     )
 
     # Record token usage (best-effort)

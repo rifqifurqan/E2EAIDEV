@@ -236,17 +236,25 @@ async def retrieve_relevant_chunks(
         if folder_ids:
             scope_filters.append(Document.folder_id.in_(folder_ids))
         filters.append(or_(*scope_filters))
+    distance_col = ChunkEmbedding.vector.cosine_distance(qvec).label("distance")
     rows = await session.execute(
-        select(Document.title, Chunk.text, Chunk.page, Chunk.section_path)
+        select(Document.id, Document.title, Chunk.text, Chunk.page, Chunk.section_path, distance_col)
         .join(Chunk, Chunk.document_id == Document.id)
         .join(ChunkEmbedding, ChunkEmbedding.chunk_id == Chunk.id)
         .where(*filters)
-        .order_by(ChunkEmbedding.vector.cosine_distance(qvec))
+        .order_by(distance_col)
         .limit(limit)
     )
     return [
-        {"document": title, "text": text, "page": page, "section": section_path}
-        for title, text, page, section_path in rows.all()
+        {
+            "document_id": str(doc_id),
+            "document": title,
+            "text": text,
+            "page": page,
+            "section": section_path,
+            "score": round(1.0 - float(distance), 4),
+        }
+        for doc_id, title, text, page, section_path, distance in rows.all()
     ]
 
 
@@ -283,6 +291,7 @@ async def answer_question(
     document_id: uuid.UUID | None = None,
     scoped_document_ids: Sequence[uuid.UUID] | None = None,
     scoped_folder_ids: Sequence[uuid.UUID] | None = None,
+    include_explainability: bool = False,
 ) -> dict:
     """Answer from permission-filtered chunks, treating retrieved context as untrusted (FR-C8).
 
@@ -291,6 +300,10 @@ async def answer_question(
     answer_generator is provided, the answer is generated in the detected language; otherwise the
     top chunk text is returned directly (tracer-bullet fallback). Citations always stay in the
     original source language.
+
+    FR-O11: when *include_explainability* is True, the result includes a ``explainability`` dict
+    with retrieved passages, documents considered, tool/model calls, and guardrail decisions.
+    Only permission-filtered content appears; no restricted documents leak into metadata.
     """
     prompt_policy = prompt_policy or PromptGuardPolicy.from_settings()
     prompt_detector = prompt_detector or select_prompt_detector(prompt_policy)
@@ -306,41 +319,112 @@ async def answer_question(
         scoped_document_ids=scoped_document_ids,
         scoped_folder_ids=scoped_folder_ids,
     )
-    safe_chunks = []
+    safe_chunks: list[dict] = []
+    blocked_count = 0
+    blocked_reasons: set[str] = set()
+    prompt_guard_active = prompt_policy.enabled and prompt_policy.block_suspicious_context
     for chunk in chunks:
-        if prompt_policy.enabled and prompt_policy.block_suspicious_context:
-            result = prompt_detector.detect(chunk["text"])
-            if result.blocked:
+        if prompt_guard_active:
+            detection = prompt_detector.detect(chunk["text"])
+            if detection.blocked:
+                blocked_count += 1
+                blocked_reasons.update(detection.reasons)
                 await audit.record(
                     session,
                     f"user:{user.id}",
                     "retrieval.context.blocked",
                     "retrieval:visible_chunks",
-                    {"reasons": list(result.reasons), "reason_count": len(result.reasons)},
+                    {"reasons": list(detection.reasons), "reason_count": len(detection.reasons)},
                 )
                 continue
         safe_chunks.append(chunk)
     answer_lang = detect_language(question)
     if not safe_chunks:
-        no_context_msg = (
+        answer_text = (
             "Saya tidak menemukan dokumen yang relevan untuk pertanyaan tersebut."
             if answer_lang == "id"
             else "I don't have access to relevant documents for that question."
         )
         await audit.record(session, f"user:{user.id}", "chat.answer.no_context", "retrieval:visible_chunks", {})
-        await session.commit()
-        return {"answer": no_context_msg, "answer_language": answer_lang, "citations": []}
-    if answer_generator is not None:
-        answer_text = await answer_generator.generate(question, safe_chunks, answer_lang)
+        citations: list[dict] = []
     else:
-        answer_text = safe_chunks[0]["text"]
-    top = safe_chunks[0]
-    await audit.record(session, f"user:{user.id}", "chat.answer", "retrieval:visible_chunks", {"citations": 1})
-    await session.commit()
-    return {
+        if answer_generator is not None:
+            answer_text = await answer_generator.generate(question, safe_chunks, answer_lang)
+        else:
+            answer_text = safe_chunks[0]["text"]
+        top = safe_chunks[0]
+        await audit.record(session, f"user:{user.id}", "chat.answer", "retrieval:visible_chunks", {"citations": 1})
+        citations = [{"document": top["document"], "page": top["page"], "section": top["section"]}]
+    result: dict[str, Any] = {
         "answer": answer_text,
         "answer_language": answer_lang,
-        "citations": [{"document": top["document"], "page": top["page"], "section": top["section"]}],
+        "citations": citations,
+    }
+    if include_explainability:
+        result["explainability"] = _build_explainability(
+            chunks=chunks,
+            safe_chunks=safe_chunks,
+            embedder_model=embedder.model,
+            has_answer_generator=answer_generator is not None,
+            prompt_guard_active=prompt_guard_active,
+            blocked_count=blocked_count,
+            blocked_reasons=blocked_reasons,
+        )
+    await session.commit()
+    return result
+
+
+def _build_explainability(
+    *,
+    chunks: list[dict],
+    safe_chunks: list[dict],
+    embedder_model: str,
+    has_answer_generator: bool,
+    prompt_guard_active: bool,
+    blocked_count: int,
+    blocked_reasons: set[str],
+) -> dict:
+    """Build FR-O11 'Why this answer?' metadata from permission-filtered results.
+
+    Only chunks that passed SQL-level permission filtering appear in *chunks*;
+    only those that also passed guardrail checks appear in *safe_chunks*.
+    No restricted documents leak into this metadata.
+    """
+    docs_seen: dict[str, str] = {}
+    for c in chunks:
+        did = c.get("document_id")
+        if did and did not in docs_seen:
+            docs_seen[did] = c["document"]
+    return {
+        "retrieved_passages": [
+            {
+                "document_id": c.get("document_id"),
+                "document_title": c["document"],
+                "page": c["page"],
+                "section": c["section"],
+                "snippet": c["text"][:200],
+                "score": c.get("score"),
+            }
+            for c in safe_chunks
+        ],
+        "documents_considered": {
+            "count": len(docs_seen),
+            "documents": [
+                {"document_id": did, "title": title}
+                for did, title in docs_seen.items()
+            ],
+        },
+        "tool_calls": {
+            "embedder": embedder_model,
+            "vector_search": True,
+            "reranker": None,
+            "answer_generator": has_answer_generator,
+        },
+        "guardrail_status": {
+            "prompt_guard_enabled": prompt_guard_active,
+            "chunks_blocked": blocked_count,
+            "block_reasons": sorted(blocked_reasons),
+        },
     }
 
 
@@ -355,6 +439,7 @@ class AskIn(BaseModel):
     question: str
     scope: str = "all"
     document_id: uuid.UUID | None = None
+    include_explainability: bool = False
 
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
@@ -382,6 +467,7 @@ async def ask(body: AskIn, sess: dict = Depends(current_session), db: AsyncSessi
         question=body.question,
         scope=body.scope,
         document_id=body.document_id,
+        include_explainability=body.include_explainability,
     )
 
     # Record token usage (best-effort)
