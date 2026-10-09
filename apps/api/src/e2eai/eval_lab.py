@@ -4,9 +4,12 @@ This module keeps adapter boundaries deterministic/offline for the MVP. Real Rag
 implement the same `EvalAdapter` protocol later; the database schema and normalized run shape stay stable.
 """
 
+import math
 import uuid
+from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
+from statistics import variance
 from typing import Protocol
 
 from fastapi import APIRouter, Depends
@@ -26,6 +29,44 @@ class EvalAdapter(Protocol):
     async def evaluate(self, items: Sequence[dict]) -> tuple[dict, list[dict]]: ...
 
 
+METRIC_DEFINITIONS = {
+    "answer_correctness": (
+        "Scores whether the candidate answer semantically matches the expected answer. "
+        "1.0 means correct, 0.0 means incorrect; deterministic local adapters may emit intermediate values."
+    )
+}
+
+
+def build_judge_prompt(item: dict, metric: str = "answer_correctness") -> str:
+    """Return the exact prompt sent to the judge for metric transparency (FR-T4)."""
+    return (
+        f"Metric: {metric}\n"
+        f"Definition: {METRIC_DEFINITIONS[metric]}\n"
+        f"Question: {item.get('question', '')}\n"
+        f"Expected answer: {item.get('expected_answer') or item.get('answer') or ''}\n"
+        f"Candidate answer: {item.get('answer', '')}\n"
+        "Return only a numeric score from 0.0 to 1.0."
+    )
+
+
+def build_fair_judge_payloads(
+    items: Sequence[dict],
+    *,
+    frameworks: Sequence[str],
+    judge_model: str,
+    metric: str = "answer_correctness",
+) -> dict[str, dict]:
+    """Build identical judge inputs for each framework (FR-T3) with temperature 0."""
+    messages = [
+        {"role": "system", "content": "You are a fair evaluation judge. Use the metric definition exactly."},
+        {"role": "user", "content": "\n\n---\n\n".join(build_judge_prompt(item, metric) for item in items)},
+    ]
+    return {
+        framework: {"model": judge_model, "temperature": 0, "metric": metric, "messages": messages}
+        for framework in frameworks
+    }
+
+
 @dataclass(frozen=True)
 class LocalRagasAdapter:
     """Deterministic Ragas-compatible boundary used until the Ragas worker is wired.
@@ -35,12 +76,15 @@ class LocalRagasAdapter:
     """
 
     score_override: float | None = None
+    judge_model: str = "local-deterministic-judge"
+    judge_temperature: int = 0
     name: str = "ragas.local"
 
     async def evaluate(self, items: Sequence[dict]) -> tuple[dict, list[dict]]:
         results = []
         scores = []
         for index, item in enumerate(items):
+            judge_prompt = build_judge_prompt(item)
             if self.score_override is None:
                 expected = str(item.get("expected_answer") or item.get("answer") or "").lower()
                 answer = str(item.get("answer") or "").lower()
@@ -48,9 +92,24 @@ class LocalRagasAdapter:
             else:
                 score = float(self.score_override)
             scores.append(score)
-            results.append({"index": index, "score": score, "kind": item.get("kind", "qa")})
+            results.append({
+                "index": index,
+                "score": score,
+                "kind": item.get("kind", "qa"),
+                "metric": "answer_correctness",
+                "metric_definition": METRIC_DEFINITIONS["answer_correctness"],
+                "judge_model": self.judge_model,
+                "judge_temperature": self.judge_temperature,
+                "judge_prompt": judge_prompt,
+            })
         metric = round(sum(scores) / len(scores), 4) if scores else 0.0
-        return {"answer_correctness": metric, "items": len(items)}, results
+        return {
+            "answer_correctness": metric,
+            "items": len(items),
+            "judge_model": self.judge_model,
+            "judge_temperature": self.judge_temperature,
+            "metric_definitions": METRIC_DEFINITIONS,
+        }, results
 
 
 def generate_synthetic_qa(source_chunks: Sequence[dict], *, personas: Sequence[str], adversarial: bool = True) -> list[dict]:
@@ -192,6 +251,89 @@ def compare_runs(baseline: EvalRun, candidate: EvalRun, *, threshold: float = 0.
             if change < -abs(threshold):
                 regression = True
     return {"baseline_run_id": str(baseline.id), "candidate_run_id": str(candidate.id), "delta": delta, "regression": regression}
+
+
+def _pearson(xs: Sequence[float], ys: Sequence[float]) -> float:
+    if len(xs) < 2 or len(xs) != len(ys):
+        return 0.0
+    mean_x = sum(xs) / len(xs)
+    mean_y = sum(ys) / len(ys)
+    numerator = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys, strict=True))
+    denom_x = math.sqrt(sum((x - mean_x) ** 2 for x in xs))
+    denom_y = math.sqrt(sum((y - mean_y) ** 2 for y in ys))
+    if not denom_x or not denom_y:
+        return 0.0
+    return round(numerator / (denom_x * denom_y), 4)
+
+
+def _cohens_kappa(predictions: Sequence[int], labels: Sequence[int]) -> float:
+    if not predictions or len(predictions) != len(labels):
+        return 0.0
+    n = len(predictions)
+    observed = sum(1 for p, y in zip(predictions, labels, strict=True) if p == y) / n
+    p_yes_pred = sum(predictions) / n
+    p_yes_label = sum(labels) / n
+    p_no_pred = 1 - p_yes_pred
+    p_no_label = 1 - p_yes_label
+    expected = p_yes_pred * p_yes_label + p_no_pred * p_no_label
+    if expected == 1:
+        return 1.0 if observed == 1 else 0.0
+    return round((observed - expected) / (1 - expected), 4)
+
+
+def evaluate_evaluators(runs: Sequence[object], *, human_labels: dict[str, int]) -> list[dict]:
+    """Rank evaluator frameworks by agreement with human labels, cost, latency, and variance (FR-T6)."""
+    grouped: dict[str, list[object]] = defaultdict(list)
+    for run in runs:
+        grouped[str(getattr(run, "adapter"))].append(run)
+
+    ranking = []
+    for adapter, adapter_runs in grouped.items():
+        scores: list[float] = []
+        labels: list[int] = []
+        predictions: list[int] = []
+        total_items = 0
+        total_cost = 0.0
+        latencies: list[float] = []
+        run_scores: list[float] = []
+        for run in adapter_runs:
+            metrics = getattr(run, "metrics", {}) or {}
+            item_results = getattr(run, "item_results", []) or []
+            total_items += len(item_results)
+            total_cost += float(metrics.get("judge_cost_usd") or metrics.get("cost_usd") or 0.0)
+            if metrics.get("latency_ms") is not None:
+                latencies.append(float(metrics["latency_ms"]))
+            if metrics.get("answer_correctness") is not None:
+                run_scores.append(float(metrics["answer_correctness"]))
+            for item in item_results:
+                key = str(item.get("index"))
+                if key not in human_labels:
+                    continue
+                score = float(item.get("score", 0.0))
+                label = int(human_labels[key])
+                scores.append(score)
+                labels.append(label)
+                predictions.append(1 if score >= 0.5 else 0)
+        ranking.append({
+            "adapter": adapter,
+            "runs": len(adapter_runs),
+            "items": total_items,
+            "correlation": _pearson(scores, [float(label) for label in labels]),
+            "cohens_kappa": _cohens_kappa(predictions, labels),
+            "cost_per_100_items_usd": round((total_cost / total_items) * 100, 4) if total_items else 0.0,
+            "latency_ms": round(sum(latencies) / len(latencies), 4) if latencies else 0.0,
+            "variance_across_runs": round(variance(run_scores), 4) if len(run_scores) > 1 else 0.0,
+        })
+    return sorted(
+        ranking,
+        key=lambda row: (
+            -row["correlation"],
+            -row["cohens_kappa"],
+            row["cost_per_100_items_usd"],
+            row["latency_ms"],
+            row["adapter"],
+        ),
+    )
 
 
 async def _current_user(db: AsyncSession, sess: dict) -> User:

@@ -761,6 +761,15 @@ OWNER DECISIONS IN FORCE
   - Verified focused gates: `cd apps/api && uv run pytest -q tests/test_us_retrieval_metrics_p1.py` -> 7 passed; adjacent eval/retrieval/search/answer/explainability tests -> 28 passed.
   - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-R8 gates passed.
 
+- Evaluator transparency and evaluator ranking P1 (FR-T3, FR-T4, FR-T6):
+  - Claude Code was still rate-limited, so Hermes implemented manually; no Codex used.
+  - Added fair judging helpers: `build_fair_judge_payloads` uses one judge model, temperature 0, and identical judge inputs for every framework.
+  - Added metric transparency for `LocalRagasAdapter`: item results now include metric name, metric definition, judge model, judge temperature, and the exact judge prompt sent. Existing answer_correctness metrics remain backward compatible.
+  - Added `evaluate_evaluators`: ranks adapters by correlation with human labels, Cohen's kappa, cost per 100 items, average latency, and variance across repeated runs.
+  - Tests first: `test_us_evaluator_transparency_p1.py` initially failed on missing imports, then passed after implementation.
+  - Verified focused gates: `cd apps/api && uv run pytest -q tests/test_us_evaluator_transparency_p1.py` -> 3 passed; adjacent eval/retrieval-metrics tests -> 13 passed.
+  - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-T3/T4/T6 gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
