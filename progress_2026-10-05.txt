@@ -770,6 +770,15 @@ OWNER DECISIONS IN FORCE
   - Verified focused gates: `cd apps/api && uv run pytest -q tests/test_us_evaluator_transparency_p1.py` -> 3 passed; adjacent eval/retrieval-metrics tests -> 13 passed.
   - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-T3/T4/T6 gates passed.
 
+- Lab tool catalog P1 (FR-L3):
+  - Claude Code was still rate-limited, so Hermes implemented manually; no Codex used.
+  - Added `tool_catalog.py`: deterministic Lab tool catalog with tool id/name/category/license/maturity/resource need/description, installed-vs-available status, and summary counts.
+  - License warnings flag AGPL, ELv2/Elastic License, and non-commercial/CC-BY-NC tools; warnings tell operators to run AGPL tools as separate services or review restricted licenses before production.
+  - Added `GET /api/v1/evals/tool-catalog`, protected by `evals` API scope. P1 installed detection marks wired local adapters (`ragas`, `promptfoo`) as installed.
+  - Tests first: `test_us_tool_catalog_p1.py` initially failed with missing module, then passed after implementation.
+  - Verified focused gates: `cd apps/api && uv run pytest -q tests/test_us_tool_catalog_p1.py` -> 3 passed; adjacent eval/evaluator tests -> 9 passed.
+  - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-L3 gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps

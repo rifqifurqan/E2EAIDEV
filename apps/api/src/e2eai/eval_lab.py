@@ -361,6 +361,16 @@ class RetrievalMetricsIn(BaseModel):
 router = APIRouter(prefix="/api/v1/evals", tags=["evals"])
 
 
+@router.get("/tool-catalog")
+async def tool_catalog_api(sess: dict = Depends(current_session)) -> dict:
+    """FR-L3: catalog Lab tools with maturity, resource needs, install status, and license warnings."""
+    from .tool_catalog import tool_catalog
+
+    require_scope(sess, "evals")
+    # P1 local install detection is conservative; adapters currently wired in-process are marked installed.
+    return tool_catalog(installed={"ragas", "promptfoo"})
+
+
 @router.post("/datasets")
 async def create_dataset_api(body: DatasetIn, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
     require_scope(sess, "evals")
