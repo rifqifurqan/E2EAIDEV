@@ -212,6 +212,10 @@ class RunIn(BaseModel):
     adapter: str = "ragas.local"
 
 
+class RetrievalMetricsIn(BaseModel):
+    dataset_id: uuid.UUID
+
+
 router = APIRouter(prefix="/api/v1/evals", tags=["evals"])
 
 
@@ -239,3 +243,30 @@ async def run_eval_api(body: RunIn, sess: dict = Depends(current_session), db: A
         raise AppError(400, "Unsupported eval adapter", "Only ragas.local is wired in P0.")
     run = await run_evaluation(db, dataset_id=body.dataset_id, adapter=LocalRagasAdapter(), created_by=f"user:{user.id}")
     return {"id": str(run.id), "adapter": run.adapter, "metrics": run.metrics}
+
+
+@router.post("/retrieval-metrics")
+async def run_retrieval_metrics_api(
+    body: RetrievalMetricsIn,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Run FR-R8 retrieval metrics over a dataset using permission-filtered retrieval."""
+    from .auth import redis_client
+    from .quotas import enforce_request_quota, get_effective_policy
+    from .retrieval_metrics import run_retrieval_metrics
+
+    require_scope(sess, "evals")
+    user = await _current_user(db, sess)
+    policy = await get_effective_policy(db, user=user)
+    await enforce_request_quota(redis_client(), user_id=sess["user_id"], endpoint="evals.retrieval_metrics", policy=policy)
+
+    run = await run_retrieval_metrics(
+        db,
+        dataset_id=body.dataset_id,
+        embedder=LiteLLMEmbedder.from_settings(),
+        user=user,
+        created_by=f"user:{user.id}",
+    )
+    return {"id": str(run.id), "adapter": run.adapter, "metrics": run.metrics, "item_results": run.item_results}
+

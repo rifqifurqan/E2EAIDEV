@@ -751,6 +751,16 @@ OWNER DECISIONS IN FORCE
   - Verified by Hermes after Claude Code completed: `cd apps/api && uv run pytest -q tests/test_us_explainability_p1.py tests/test_us02_cited_answer.py tests/test_us_prompt_injection_guardrail.py tests/test_us_chat_conversations.py tests/test_us_release_bundle_p0.py tests/test_us_document_search_p1.py tests/test_us_answer_language_p0.py tests/test_us_quotas_rate_limits.py` -> 44 passed.
   - Remote sync: origin/main == 1e809a61b1cc6324b9fd004f110c259e23b97b6e. Secret scan: committed HEAD files checked against 12 secret-like .env values -> no secrets.
 
+- Retrieval metrics Lab P1 (FR-R8, FR-C12):
+  - Claude Code hit subscription limit (`You've hit your limit · resets 12:30am Asia/Jakarta`) after writing the failing tests. Hermes completed the implementation manually; no Codex used.
+  - Added `retrieval_metrics.py`: pure metric math for recall@k, MRR, binary nDCG@k; per-slice aggregation for `id`, `en`, `id_question_en_source`, `en_question_id_source`; `RetrievalMetricsAdapter`; and `run_retrieval_metrics` that stores an `EvalRun`.
+  - Retrieval metrics run through existing permission-filtered retrieval, so inaccessible documents are not retrieved, counted as visible, or stored in item results.
+  - Eval Lab route added: `POST /api/v1/evals/retrieval-metrics`, protected by `evals` API scope and FR-F13 request quota.
+  - Stored item results contain safe IDs and metric numbers only; no restricted snippets or titles.
+  - Tests first: `test_us_retrieval_metrics_p1.py` was created by Claude before limit and initially failed with `ModuleNotFoundError: e2eai.retrieval_metrics`; Hermes implemented to GREEN.
+  - Verified focused gates: `cd apps/api && uv run pytest -q tests/test_us_retrieval_metrics_p1.py` -> 7 passed; adjacent eval/retrieval/search/answer/explainability tests -> 28 passed.
+  - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-R8 gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
