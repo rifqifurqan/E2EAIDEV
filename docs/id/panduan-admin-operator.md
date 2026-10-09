@@ -294,6 +294,14 @@ hasil retrieval yang tidak sah. Kegagalan kebocoran memblokir rilis.
 Bot adalah kontainer untuk konfigurasi AI berversi. Setiap rilis membuat bundle yang tidak
 dapat diubah. Rollback mengalihkan pointer produksi ke bundle sebelumnya.
 
+### Registri Prompt
+
+Prompt dikelola sebagai versi yang tidak dapat diubah sebelum dipakai oleh bundle bot. Gunakan API
+registri prompt untuk membuat prompt, menambah versi baru, memindahkan label `staging` atau
+`production` ke suatu versi, membandingkan dua versi dengan unified diff, dan merender preview
+playground lokal memakai placeholder `{{ variable }}`. Preview playground berjalan offline dan tidak
+memanggil LLM; placeholder yang hilang atau tidak aman akan ditolak.
+
 ### Akses dan Cakupan Bot
 
 - Berikan akses ke pengguna, tim, peran, atau divisi.

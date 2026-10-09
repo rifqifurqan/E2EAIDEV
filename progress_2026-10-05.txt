@@ -796,6 +796,24 @@ OWNER DECISIONS IN FORCE
   - Verified focused gates: `cd apps/api && uv run pytest -q tests/test_us_lab_compare_reports_p1.py` -> 3 passed; adjacent eval/cost/tool/evaluator tests -> 14 passed.
   - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-L1/FR-L2 gates passed.
 
+- Prompt registry P0 slice (FR-B1):
+  - Claude Code was attempted first but hit subscription limit (`You've hit your limit · resets 12:30am Asia/Jakarta`), so Hermes continued manually; no Codex used.
+  - Added migration `0012_prompt_registry`: `prompts`, immutable `prompt_versions`, and named `prompt_labels` pointers (`production`, `staging`, etc.). Reversible downgrade drops labels -> versions -> prompts.
+  - Added ORM models `Prompt`, `PromptVersion`, `PromptLabel`.
+  - New `prompt_registry.py` service/API:
+    - create prompt registry entries;
+    - add immutable prompt versions;
+    - list versions;
+    - set/move labels without mutating version text;
+    - unified diff between two versions;
+    - offline playground preview that interpolates simple `{{ variable }}` placeholders without calling an LLM and rejects missing/unsafe placeholders.
+  - API routes registered under `/api/v1/prompts`; API-key access uses existing `bots` scope while web-session access remains unrestricted by API scopes.
+  - Updated EN/ID admin-operator docs with the prompt registry workflow.
+  - Tests first (TDD, watched RED then GREEN): `test_us_prompt_registry_p0.py` initially failed with `ImportError: cannot import name 'Prompt' from 'e2eai.db'`, then passed after implementation.
+  - Verified focused gates:
+    `cd apps/api && uv run pytest -q tests/test_us_prompt_registry_p0.py tests/test_us_release_bundle_p0.py && uv run alembic upgrade head && python ../../scripts/validate_docs.py` -> 9 passed; Alembic head already current; docs validation PASS.
+  - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-B1 + adjacent bot release gate passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps

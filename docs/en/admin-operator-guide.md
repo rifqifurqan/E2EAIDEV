@@ -295,6 +295,14 @@ unauthorized retrieval results. A leak failure blocks the release.
 Bots are containers for versioned AI configurations. Each release creates an immutable bundle.
 Rollback switches the production pointer to a previous bundle.
 
+### Prompt Registry
+
+Prompts are managed as immutable versions before they are referenced from bot bundles. Use the
+prompt registry API to create a prompt, add a new version, move the `staging` or `production`
+label to a version, compare two versions with a unified diff, and render a local playground
+preview with `{{ variable }}` placeholders. The playground preview is offline and does not call
+an LLM; it rejects missing or unsafe placeholders.
+
 ### Bot Access and Scope
 
 - Grant access to users, teams, roles, or divisions.
