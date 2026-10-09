@@ -694,7 +694,9 @@ async def upload_document(
     db: AsyncSession = Depends(get_session),
     storage: LocalObjectStorage = Depends(get_storage),
 ) -> dict:
+    from .auth import redis_client
     from .ingest import ingest_version
+    from .quotas import enforce_request_quota, enforce_storage_quota, get_effective_policy
     from .retrieval import LiteLLMEmbedder
 
     require_scope(sess, "documents")
@@ -702,6 +704,12 @@ async def upload_document(
     data = await file.read()
     if not data:
         raise AppError(400, "Empty upload")
+
+    # FR-F13: enforce quotas before accepting the upload
+    policy = await get_effective_policy(db, user=user)
+    await enforce_request_quota(redis_client(), user_id=sess["user_id"], endpoint="documents", policy=policy)
+    await enforce_storage_quota(db, user_id=user.id, upload_bytes=len(data), policy=policy)
+
     doc = await create_uploaded_document(
         db,
         owner=user,
@@ -800,8 +808,13 @@ async def search_documents_api(
     db: AsyncSession = Depends(get_session),
 ) -> dict:
     """Permission-filtered document search (FR-S10). Returns safe metadata only."""
+    from .auth import redis_client
+    from .quotas import enforce_request_quota, get_effective_policy
+
     require_scope(sess, "documents")
     user = await _current_user(db, sess)
+    policy = await get_effective_policy(db, user=user)
+    await enforce_request_quota(redis_client(), user_id=sess["user_id"], endpoint="search", policy=policy)
     results = await search_documents(db, user=user, query=q, sensitivity=sensitivity, view=view)
     return {"results": results}
 

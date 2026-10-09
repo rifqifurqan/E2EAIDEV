@@ -695,6 +695,52 @@ OWNER DECISIONS IN FORCE
   - Migration gate: `cd apps/api && uv run alembic upgrade head` -> upgraded `0009_access_requests -> 0010_api_keys` successfully.
   - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-F12 gates passed.
 
+- Rate limits and quotas P1 (FR-F13, FR-F15, NFR-19):
+  - New `quotas.py` module:
+    - `QuotaPolicy` frozen dataclass with scope/scope_id/requests_per_minute/tokens_per_day/storage_bytes.
+    - `resolve_policy(policies)`: user > team > division > org > built-in default (FR-F15: 60 req/min,
+      500K tokens/day, 20 GB storage).
+    - `QuotaPolicyRow` ORM model for admin-configurable `quota_policies` table.
+    - `upsert_quota_policy` / `get_effective_policy`: CRUD and effective policy resolution by looking up
+      user -> team -> division -> org policies in priority order.
+    - `estimate_tokens(text)`: rough 1-token-per-4-chars heuristic for P1 token accounting.
+    - Valkey-backed enforcement:
+      - `check_request_rate` / `enforce_request_quota`: fixed-window per-minute counters in Valkey; 429.
+      - `check_token_budget` / `enforce_token_quota`: daily token budget in Valkey; 429.
+      - `record_token_usage`: best-effort token usage recording with 24h TTL.
+      - `check_storage_quota` / `enforce_storage_quota`: sum of document_versions.size per owner; 413.
+    - All checks fail-closed (NFR-19): if Valkey is unreachable, request is denied, never allowed.
+  - Migration `0011_quotas`: `quota_policies` table with unique index on `(scope, scope_id)`.
+    Down_revision: `0010_api_keys`. Reversible.
+  - Route enforcement wired into:
+    - `POST /api/v1/documents` (upload): request rate + storage quota before accepting bytes.
+    - `GET /api/v1/documents/search`: request rate.
+    - `POST /chat/conversations/{id}/messages` (send_message): request rate + token budget + usage recording.
+    - `POST /chat/ask`: request rate + token budget + usage recording.
+    - `POST /evals/runs`: request rate.
+    - `POST /bots/{id}/ask`: request rate + token budget + usage recording.
+  - Existing login rate limiter in auth.py kept intact (separate mechanism).
+  - Permission/no-leak semantics untouched: quota enforcement runs before data access; no new data
+    is disclosed in quota error responses.
+  - Tests first (TDD, watched RED then GREEN): `test_us_quotas_rate_limits.py` — 9 tests:
+    (1) policy resolution: user overrides team, team overrides division, division overrides org,
+        empty list returns built-in default;
+    (2) request rate limit: allows N requests then denies the (N+1)th with retry_after;
+    (3) token budget: allows when under budget, denies when exceeded;
+    (4) token estimation: rough heuristic produces sensible values;
+    (5) storage quota: allows when under quota, denies when upload would exceed;
+    (6) fail-closed: BrokenRedis -> denied (never silently allowed);
+    (7) DB-backed policy CRUD: upsert + get_effective_policy with user overriding division;
+    (8) enforce_request_quota raises AppError(429) with rate/limit in title;
+    (9) enforce_storage_quota raises AppError(413) with storage/quota in title.
+  - Verified: targeted quota suite -> 9 passed;
+    `cd apps/api && uv run pytest -q` -> 131 passed, 1 skipped, 1 warning.
+    Regression: `cd cli && uv run pytest -q` -> 27 passed, 1 skipped.
+    Migration gate: `cd apps/api && uv run alembic upgrade head` -> upgraded
+    `0010_api_keys -> 0011_quotas` successfully.
+    Focused verification: auth, api_keys, documents, cited_answer, chat, quotas tests
+    all passed (33 passed in 18s).
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps

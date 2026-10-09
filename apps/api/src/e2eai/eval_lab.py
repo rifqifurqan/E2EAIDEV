@@ -225,8 +225,16 @@ async def create_dataset_api(body: DatasetIn, sess: dict = Depends(current_sessi
 
 @router.post("/runs")
 async def run_eval_api(body: RunIn, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
+    from .auth import redis_client
+    from .quotas import enforce_request_quota, get_effective_policy
+
     require_scope(sess, "evals")
     user = await _current_user(db, sess)
+
+    # FR-F13: enforce request quota on eval runs
+    policy = await get_effective_policy(db, user=user)
+    await enforce_request_quota(redis_client(), user_id=sess["user_id"], endpoint="evals", policy=policy)
+
     if body.adapter != "ragas.local":
         raise AppError(400, "Unsupported eval adapter", "Only ragas.local is wired in P0.")
     run = await run_evaluation(db, dataset_id=body.dataset_id, adapter=LocalRagasAdapter(), created_by=f"user:{user.id}")

@@ -217,8 +217,24 @@ async def set_bot_scope_api(bot_id: uuid.UUID, body: ScopeIn, sess: dict = Depen
 
 @router.post("/{bot_id}/ask")
 async def ask_bot_api(bot_id: uuid.UUID, body: BotAskIn, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
+    from .auth import redis_client
+    from .quotas import enforce_request_quota, enforce_token_quota, estimate_tokens, get_effective_policy, record_token_usage
+
     require_scope(sess, "bots")
     user = await _current_user(db, sess)
     if not body.question.strip():
         raise AppError(400, "Question is required")
-    return await answer_bot_question(db, embedder=LiteLLMEmbedder.from_settings(), user=user, bot_id=bot_id, question=body.question)
+
+    # FR-F13: enforce request + token quotas
+    redis = redis_client()
+    policy = await get_effective_policy(db, user=user)
+    await enforce_request_quota(redis, user_id=sess["user_id"], endpoint="bot_ask", policy=policy)
+    await enforce_token_quota(redis, user_id=sess["user_id"], estimated_tokens=estimate_tokens(body.question), policy=policy)
+
+    result = await answer_bot_question(db, embedder=LiteLLMEmbedder.from_settings(), user=user, bot_id=bot_id, question=body.question)
+
+    # Record token usage (best-effort)
+    answer_tokens = estimate_tokens(result.get("answer", ""))
+    await record_token_usage(redis, user_id=sess["user_id"], tokens=estimate_tokens(body.question) + answer_tokens)
+
+    return result

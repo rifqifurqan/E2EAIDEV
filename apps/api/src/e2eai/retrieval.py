@@ -362,10 +362,20 @@ router = APIRouter(prefix="/api/v1", tags=["chat"])
 
 @router.post("/chat/ask")
 async def ask(body: AskIn, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
+    from .auth import redis_client
+    from .quotas import enforce_request_quota, enforce_token_quota, estimate_tokens, get_effective_policy, record_token_usage
+
     user = await _current_user(db, sess)
     if not body.question.strip():
         raise AppError(400, "Question is required")
-    return await answer_question(
+
+    # FR-F13: enforce request + token quotas
+    redis = redis_client()
+    policy = await get_effective_policy(db, user=user)
+    await enforce_request_quota(redis, user_id=sess["user_id"], endpoint="chat_ask", policy=policy)
+    await enforce_token_quota(redis, user_id=sess["user_id"], estimated_tokens=estimate_tokens(body.question), policy=policy)
+
+    result = await answer_question(
         db,
         embedder=LiteLLMEmbedder.from_settings(),
         user=user,
@@ -373,3 +383,9 @@ async def ask(body: AskIn, sess: dict = Depends(current_session), db: AsyncSessi
         scope=body.scope,
         document_id=body.document_id,
     )
+
+    # Record token usage (best-effort)
+    answer_tokens = estimate_tokens(result.get("answer", ""))
+    await record_token_usage(redis, user_id=sess["user_id"], tokens=estimate_tokens(body.question) + answer_tokens)
+
+    return result
