@@ -787,6 +787,15 @@ OWNER DECISIONS IN FORCE
   - Verified focused gates: `cd apps/api && uv run pytest -q tests/test_us_lab_cost_estimate_p1.py` -> 2 passed; adjacent eval/tool-catalog/evaluator tests -> 11 passed.
   - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-L4 gates passed.
 
+- Lab compare mode and saved/exportable reports P1 (FR-L1, FR-L2):
+  - Claude Code was still rate-limited, so Hermes implemented manually; no Codex used.
+  - Added reusable compare report helpers: `build_comparison_report`, CSV export, minimal PDF-byte export, and `save_comparison_report`.
+  - Comparison reports are saved/versioned in the existing `eval_runs` table as `comparison.local`, shareable, and include baseline/candidate summaries, metric deltas, regression flag, export formats, config, tool versions, model versions, and random seed for reproducibility.
+  - Added `POST /api/v1/evals/compare`, protected by `evals` scope, to save a versioned report for two eval runs.
+  - Tests first: `test_us_lab_compare_reports_p1.py` initially failed with missing imports, then passed after implementation.
+  - Verified focused gates: `cd apps/api && uv run pytest -q tests/test_us_lab_compare_reports_p1.py` -> 3 passed; adjacent eval/cost/tool/evaluator tests -> 14 passed.
+  - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-L1/FR-L2 gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps

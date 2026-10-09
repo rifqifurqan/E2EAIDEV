@@ -4,6 +4,8 @@ This module keeps adapter boundaries deterministic/offline for the MVP. Real Rag
 implement the same `EvalAdapter` protocol later; the database schema and normalized run shape stay stable.
 """
 
+import csv
+import io
 import math
 import uuid
 from collections import defaultdict
@@ -297,6 +299,126 @@ def compare_runs(baseline: EvalRun, candidate: EvalRun, *, threshold: float = 0.
     return {"baseline_run_id": str(baseline.id), "candidate_run_id": str(candidate.id), "delta": delta, "regression": regression}
 
 
+def _run_summary(run: EvalRun) -> dict:
+    return {
+        "id": str(run.id),
+        "dataset_id": str(run.dataset_id) if run.dataset_id else None,
+        "adapter": run.adapter,
+        "status": run.status,
+        "metrics": run.metrics or {},
+    }
+
+
+def build_comparison_report(
+    baseline: EvalRun,
+    candidate: EvalRun,
+    *,
+    threshold: float = 0.0,
+    config: dict | None = None,
+    tool_versions: dict | None = None,
+    model_versions: dict | None = None,
+    random_seed: int | None = None,
+) -> dict:
+    """Build a reusable, reproducible Lab compare-mode report (FR-L1/FR-L2)."""
+    comparison = compare_runs(baseline, candidate, threshold=threshold)
+    rows = []
+    metric_keys = sorted(set((baseline.metrics or {}).keys()) | set((candidate.metrics or {}).keys()))
+    for key in metric_keys:
+        if key == "items":
+            continue
+        base = (baseline.metrics or {}).get(key)
+        cand = (candidate.metrics or {}).get(key)
+        if isinstance(base, (int, float)) and isinstance(cand, (int, float)):
+            rows.append({"metric": key, "baseline": base, "candidate": cand, "delta": round(float(cand) - float(base), 4)})
+    return {
+        "kind": "eval_comparison_report",
+        "baseline": _run_summary(baseline),
+        "candidate": _run_summary(candidate),
+        "threshold": threshold,
+        "delta": comparison["delta"],
+        "regression": comparison["regression"],
+        "metrics": rows,
+        "reproducibility": {
+            "dataset_version": None,
+            "tool_versions": tool_versions or {},
+            "model_versions": model_versions or {},
+            "config": config or {},
+            "random_seed": random_seed,
+        },
+        "export_formats": ["csv", "pdf"],
+        "shareable": True,
+    }
+
+
+def export_comparison_report_csv(report: dict) -> str:
+    """Export a comparison report as CSV without leaking item-level answers."""
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\n")
+    writer.writerow(["metric", "baseline", "candidate", "delta"])
+    for row in report.get("metrics", []):
+        writer.writerow([row["metric"], row["baseline"], row["candidate"], row["delta"]])
+    return buf.getvalue()
+
+
+def export_comparison_report_pdf_bytes(report: dict) -> bytes:
+    """Return a minimal PDF-like binary export suitable for download tests and offline installs."""
+    lines = [
+        "%PDF-1.4",
+        "E2EAIDEV Comparison Report",
+        f"Baseline: {report.get('baseline', {}).get('adapter')}",
+        f"Candidate: {report.get('candidate', {}).get('adapter')}",
+        f"Regression: {report.get('regression')}",
+    ]
+    for row in report.get("metrics", []):
+        lines.append(f"{row['metric']}: {row['baseline']} -> {row['candidate']} ({row['delta']})")
+    lines.append("%%EOF")
+    return "\n".join(lines).encode("utf-8")
+
+
+async def save_comparison_report(
+    session: AsyncSession,
+    *,
+    baseline: EvalRun,
+    candidate: EvalRun,
+    created_by: str,
+    threshold: float = 0.0,
+    config: dict | None = None,
+    tool_versions: dict | None = None,
+    model_versions: dict | None = None,
+    random_seed: int | None = None,
+) -> EvalRun:
+    report = build_comparison_report(
+        baseline,
+        candidate,
+        threshold=threshold,
+        config=config,
+        tool_versions=tool_versions,
+        model_versions=model_versions,
+        random_seed=random_seed,
+    )
+    dataset_id = candidate.dataset_id or baseline.dataset_id
+    existing = await session.scalar(select(func.count()).select_from(EvalRun).where(EvalRun.adapter == "comparison.local", EvalRun.dataset_id == dataset_id))
+    version = int(existing or 0) + 1
+    run = EvalRun(
+        dataset_id=dataset_id,
+        adapter="comparison.local",
+        status="completed",
+        metrics={
+            "report_version": version,
+            "baseline_run_id": report["baseline"]["id"],
+            "candidate_run_id": report["candidate"]["id"],
+            "regression": report["regression"],
+            "shareable": True,
+            "export_formats": ["csv", "pdf"],
+        },
+        item_results=[report],
+        created_by=created_by,
+    )
+    session.add(run)
+    await session.commit()
+    return run
+
+
 def _pearson(xs: Sequence[float], ys: Sequence[float]) -> float:
     if len(xs) < 2 or len(xs) != len(ys):
         return 0.0
@@ -407,6 +529,16 @@ class CostEstimateIn(BaseModel):
     budget_threshold_usd: float | None = None
 
 
+class CompareIn(BaseModel):
+    baseline_run_id: uuid.UUID
+    candidate_run_id: uuid.UUID
+    threshold: float = 0.0
+    config: dict = {}
+    tool_versions: dict = {}
+    model_versions: dict = {}
+    random_seed: int | None = None
+
+
 class RetrievalMetricsIn(BaseModel):
     dataset_id: uuid.UUID
 
@@ -455,6 +587,38 @@ async def cost_estimate_api(
         expected_gpu_minutes=body.expected_gpu_minutes,
         budget_threshold_usd=body.budget_threshold_usd,
     )
+
+
+@router.post("/compare")
+async def compare_runs_api(
+    body: CompareIn,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """FR-L1/FR-L2: save a versioned, shareable comparison report for two eval runs."""
+    require_scope(sess, "evals")
+    user = await _current_user(db, sess)
+    baseline = await db.get(EvalRun, body.baseline_run_id)
+    candidate = await db.get(EvalRun, body.candidate_run_id)
+    if baseline is None or candidate is None:
+        raise AppError(404, "Eval run not found")
+    report_run = await save_comparison_report(
+        db,
+        baseline=baseline,
+        candidate=candidate,
+        created_by=f"user:{user.id}",
+        threshold=body.threshold,
+        config=body.config,
+        tool_versions=body.tool_versions,
+        model_versions=body.model_versions,
+        random_seed=body.random_seed,
+    )
+    return {
+        "id": str(report_run.id),
+        "adapter": report_run.adapter,
+        "metrics": report_run.metrics,
+        "report": report_run.item_results[0],
+    }
 
 
 @router.post("/runs")
