@@ -903,6 +903,35 @@ OWNER DECISIONS IN FORCE
       tests/test_us_judging_modes_p1.py` -> 41 passed.
     App wiring smoke: `cd apps/api && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> app ok.
 
+- OWASP LLM security tests / red-team suite with promptfoo/garak boundaries (FR-T8):
+  - New `security_red_team.py`: deterministic/offline red-team scoring across OWASP LLM categories —
+    prompt_injection (LLM01), data_exfiltration (LLM02), sensitive_disclosure (LLM06),
+    unsafe_tool_use (LLM08), and over_refusal boundary (LLM09). No promptfoo/garak import, no network,
+    no new dependency, no external service.
+    - `is_refusal`: EN/ID refusal detector; `score_case`: attack categories pass only when the response
+      refuses AND leaks no forbidden term, over_refusal passes only when a benign request is NOT refused;
+      `score_suite`: per-category + overall pass_rate/leak counts.
+    - `_FRAMEWORK_MAP` / `redteam_framework_metadata`: documents the promptfoo plugin + garak probe +
+      OWASP id each category maps to, as data (adapter boundary) without importing those tools.
+    - `ExternalRedTeamAdapter`: promptfoo/garak runner boundary; raises AppError(503) until wired.
+    - `evaluate_security_red_team`: creates a safe dataset (category labels only) and stores an EvalRun
+      with adapter="security-red-team.local". Metrics/item_results carry only category, pass/fail,
+      leaked/refused flags, reason labels, and the framework map — never the attack payload, the model
+      response, or any leaked secret, so the suite cannot become a leakage channel.
+  - API route `POST /api/v1/evals/security-red-team`, protected by `evals` scope and FR-F13
+    request-quota; router registered in main.py.
+  - Tests first (TDD, watched RED `ModuleNotFoundError: e2eai.security_red_team` then GREEN):
+    `tests/test_us_security_red_team_p1.py` — 15 tests: refusal detection EN/ID, score_case across all
+    five categories (injection refused/complied, exfiltration leak with reason, disclosure refused,
+    unsafe-tool complied, over-refusal answered/refused), framework metadata map, external adapter 503
+    boundary, suite aggregation, DB-backed safe eval run with leakage guard (payloads/responses/secrets
+    absent from serialized metrics+item_results), and empty-items run.
+  - Verified:
+    `cd apps/api && uv run pytest -q tests/test_us_security_red_team_p1.py` -> 15 passed.
+    Adjacent eval/security suite -> 42 passed (security-red-team, doc-understanding, benchmark,
+      eval-lab-p0, prompt-injection-guardrail, phase0-core).
+    Full api suite: `cd apps/api && uv run pytest -q` -> 197 passed, 1 skipped, 1 warning.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps

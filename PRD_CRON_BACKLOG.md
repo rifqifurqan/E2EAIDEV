@@ -16,7 +16,7 @@ Rules for every cron tick:
 1. [x] [FR-T11] Benchmark runner: model x prompt x dataset leaderboard with quality, p50/p95 latency, TTFT, tokens/s, and cost. Completed as deterministic/offline benchmark.local slice; see progress_2026-10-05.txt.
 2. [x] [FR-T5] Judging modes: LLM-only multi-judge majority vote, human-only, and hybrid routing for low confidence/disagreement/audit. Pure service helpers `majority_vote`/`judge_items` in eval_lab.py with safe human-queue storage; see progress_2026-10-05.txt.
 3. [x] [FR-T13] Document-understanding test set: table QA, chart QA, figure/diagram QA, OCR character-error-rate, and safety-warning-included checks. Completed as deterministic/offline doc-understanding.local slice; see progress_2026-10-05.txt.
-4. [FR-T8] OWASP LLM security tests / red-team suites with promptfoo/garak boundaries.
+4. [x] [FR-T8] OWASP LLM security tests / red-team suites with promptfoo/garak boundaries. Completed as deterministic/offline `security-red-team.local` slice (prompt injection, data exfiltration, sensitive disclosure, unsafe tool use, over-refusal) with a promptfoo/garak adapter boundary metadata map and leak-safe EvalRun storage; see progress_2026-10-05.txt.
 5. [FR-RL2] Release gates: eval thresholds, zero permission leaks, red-team pass, human sign-off.
 6. [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI.
 7. [FR-RL6] Environments: dev -> staging -> prod promotion model, with Lite-tier simplified mode.

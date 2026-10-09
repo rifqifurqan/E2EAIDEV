@@ -13,6 +13,7 @@ from .eval_lab import router as evals_router
 from .offboarding import router as offboarding_router
 from .prompt_registry import router as prompt_router
 from .retrieval import router as retrieval_router
+from .security_red_team import router as security_red_team_router
 from .core.errors import install
 from .db import sessions
 
@@ -28,6 +29,7 @@ def create_app() -> FastAPI:
     app.include_router(evals_router)
     app.include_router(benchmark_router)
     app.include_router(doc_understanding_router)
+    app.include_router(security_red_team_router)
     app.include_router(offboarding_router)
     app.include_router(prompt_router)
 
