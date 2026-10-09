@@ -741,6 +741,16 @@ OWNER DECISIONS IN FORCE
     Focused verification: auth, api_keys, documents, cited_answer, chat, quotas tests
     all passed (33 passed in 18s).
 
+- Explainability / why-this-answer P1 (FR-O11, FR-C12):
+  - Added optional `include_explainability` on chat/ask and bot ask flows; default remains backward compatible.
+  - `answer_question` now can return `explainability` with permission-filtered retrieved passages, score, document title/id/page/section/snippet, documents considered, tool/model call summary, and safe guardrail status.
+  - Retrieval now includes chunk document_id and cosine similarity score for explainability; snippets and counts are built only from allowed/visible documents.
+  - Bot explainability respects effective retrieval = bot scope intersect user permissions.
+  - No-leak invariant held: unshared/restricted content is absent from explainability titles/snippets/counts/citations; prompt-injection guardrail reports safe reason labels, not unsafe raw text.
+  - Claude Code commit: `1e809a6 feat(retrieval): add why-this-answer explainability [FR-O11]`, pushed to origin/main.
+  - Verified by Hermes after Claude Code completed: `cd apps/api && uv run pytest -q tests/test_us_explainability_p1.py tests/test_us02_cited_answer.py tests/test_us_prompt_injection_guardrail.py tests/test_us_chat_conversations.py tests/test_us_release_bundle_p0.py tests/test_us_document_search_p1.py tests/test_us_answer_language_p0.py tests/test_us_quotas_rate_limits.py` -> 44 passed.
+  - Remote sync: origin/main == 1e809a61b1cc6324b9fd004f110c259e23b97b6e. Secret scan: committed HEAD files checked against 12 secret-like .env values -> no secrets.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
