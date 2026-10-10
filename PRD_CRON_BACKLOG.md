@@ -22,14 +22,14 @@ Rules for every cron tick:
 
 ### B. Operate / analytics / feedback loop P1
 7. [x] [FR-O5] SLOs and alerting: latency, error rate, cost per conversation, guardrail trigger rate. Completed as deterministic metrics, DB-backed window aggregation/persistence, guardrail audit aggregation, admin/evaluator notification delivery, and safe dashboard/report API; see progress_2026-10-05.txt.
-8. [FR-O6] FinOps: spend per user/team/division/bot, budgets, alerts, chargeback reports.
+8. [x] [FR-O6] FinOps: spend per user/team/division/bot, budgets, alerts, chargeback reports.
    - [x] Deterministic/offline service + API slice: aggregate spend by user/team/division/bot from safe metadata events, evaluate budget alerts, and build safe chargeback reports. See progress_2026-10-05.txt.
    - [x] DB-backed spend aggregation from persisted message/token metadata, with conversation bot grouping and a safe rolling-window API. See progress_2026-10-05.txt.
    - [x] Persist/deliver FinOps budget alerts and expose dashboard/report integration. `FinopsBudgetAlert` model + migration 0016, persist/notify/dashboard helpers, POST /finops-window + GET /finops-dashboard. See progress_2026-10-05.txt.
 9. [x] [FR-O7] Usage and ROI analytics: active users, questions per division, answer rate, deflection, unanswered topics, estimated time saved.
    - [x] Deterministic/offline service + API slice: aggregate active users, questions per division, answer rate, deflection, top unanswered topics, and estimated time saved from safe usage events. See progress_2026-10-05.txt.
    - [x] DB-backed usage/ROI aggregation from persisted chat/feedback/trace metadata, with safe rolling-window dashboard/report integration. See progress_2026-10-05.txt.
-10. [FR-I2] Top unanswered questions report for knowledge owners.
+10. [x] [FR-I2] Top unanswered questions report for knowledge owners. Completed as deterministic/offline safe knowledge-gap report + API route (`POST /api/v1/improve/top-unanswered`) with topic/count/division breadth ranking; see progress_2026-10-05.txt.
 11. [FR-B3] Structured-output tests: JSON/schema validity rate per model.
 
 ### C. Live tools / MCP / systems integration P1

@@ -1169,6 +1169,19 @@ OWNER DECISIONS IN FORCE
     `cd apps/api && uv run pytest -q tests/test_usage_roi_p1.py tests/test_finops_p1.py tests/test_us_slo_metrics_p1.py` -> 84 passed.
   - `PRD_CRON_BACKLOG.md` item 9 marked fully done. Full heavy verification intentionally deferred; focused FR-O7 + adjacent operate gates passed.
 
+- Top unanswered questions report for knowledge owners (FR-I2) (2026-10-11):
+  - Claude Code was used first; it hit the current usage limit (`resets 8:50am Asia/Jakarta`) after leaving WIP files. The known broken SessionEnd hook noise was non-blocking. Hermes inspected and completed the slice manually.
+  - Added `top_unanswered.py`: deterministic/offline helper `compute_top_unanswered_report()` that builds a safe knowledge-gap report from usage events: total unanswered count, unique topic buckets, and ranked `top_unanswered_gaps` with topic/count/division_ids/division_count.
+  - Ranking now prioritizes frequency, then breadth across affected divisions, then topic for deterministic output so knowledge owners see broad missing-document gaps first.
+  - Added `POST /api/v1/improve/top-unanswered`, protected with the existing `evals` API scope until a dedicated improve/operate scope exists, and wired it into the FastAPI app.
+  - Output intentionally contains only aggregate counts, safe topic labels, and division IDs. It does not return raw prompts, question text, answers, document text, titles, snippets, secrets, bearer tokens, API keys, credentials, or raw tokens; unsafe topic labels are redacted through the existing FR-O7 redaction guard.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_top_unanswered_p1.py::test_tied_counts_rank_more_affected_divisions_first` -> failed as expected because tied topics were ranked by insertion order, not affected-division breadth.
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_top_unanswered_p1.py::test_tied_counts_rank_more_affected_divisions_first` -> 1 passed.
+    `cd apps/api && uv run pytest -q tests/test_top_unanswered_p1.py tests/test_usage_roi_p1.py tests/test_finops_p1.py tests/test_us_slo_metrics_p1.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 99 passed; app ok.
+  - `PRD_CRON_BACKLOG.md` item 10 marked done. Also marked item 8 top-level done because all FR-O6 sub-slices were already completed and verified. Full heavy verification intentionally deferred; focused FR-I2 + adjacent operate analytics gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
