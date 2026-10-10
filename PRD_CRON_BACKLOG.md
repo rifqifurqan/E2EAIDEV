@@ -21,7 +21,7 @@ Rules for every cron tick:
 6. [x] [FR-RL6] Environments: dev -> staging -> prod promotion model, with Lite-tier simplified mode. Completed as a focused bot-environment promotion slice; see progress_2026-10-05.txt.
 
 ### B. Operate / analytics / feedback loop P1
-7. [FR-O5] SLOs and alerting: latency, error rate, cost per conversation, guardrail trigger rate. In progress: deterministic service/API and DB-backed SLO window + safe alert persistence are done; remaining: real guardrail/audit aggregation, notification delivery, dashboard/reporting.
+7. [FR-O5] SLOs and alerting: latency, error rate, cost per conversation, guardrail trigger rate. In progress: deterministic service/API, DB-backed SLO window + safe alert persistence, and guardrail audit aggregation are done; remaining: notification delivery and dashboard/reporting.
 8. [FR-O6] FinOps: spend per user/team/division/bot, budgets, alerts, chargeback reports.
 9. [FR-O7] Usage and ROI analytics: active users, questions per division, answer rate, deflection, unanswered topics, estimated time saved.
 10. [FR-I2] Top unanswered questions report for knowledge owners.

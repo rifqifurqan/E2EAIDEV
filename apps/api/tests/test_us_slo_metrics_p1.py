@@ -640,3 +640,122 @@ def test_slo_window_api_route_is_wired():
 
     openapi = app.openapi()
     assert "/api/v1/operate/slo-window" in openapi["paths"]
+
+
+# ---------- 22. DB window aggregation includes guardrail audit entries (FR-O5) ----------
+
+def test_aggregate_slo_events_includes_guardrail_audit_entries():
+    """aggregate_slo_events_from_db reads retrieval.context.blocked AuditEntry rows inside
+    the time window and returns events with guardrail_triggered=True, making
+    guardrail_trigger_rate > 0. AuditEntry details must NOT appear in event dicts."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete
+
+    from e2eai.audit import record as audit_record
+    from e2eai.db import AuditEntry, sessions
+    from e2eai.slo_metrics import aggregate_slo_events_from_db, compute_slo_metrics
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True)
+
+    async def run():
+        async with sessions()() as session:
+            # Isolate: clear audit_log so no prior entries interfere
+            await session.execute(delete(AuditEntry))
+            await session.commit()
+
+            # Record a guardrail-block audit entry (at = now, inside the upcoming window)
+            now = datetime.now(timezone.utc)
+            await audit_record(
+                session,
+                actor="user:andi",
+                action="retrieval.context.blocked",
+                target="doc:abc",
+                details={"reason": "no_permission", "raw_content": "Confidential Budget Q4"},
+            )
+            await session.commit()
+
+            events = await aggregate_slo_events_from_db(
+                session,
+                window_start=now - timedelta(minutes=1),
+                window_end=now + timedelta(minutes=5),
+            )
+
+        guardrail_events = [e for e in events if e.get("guardrail_triggered")]
+        assert len(guardrail_events) >= 1, (
+            "Expected at least one guardrail event from retrieval.context.blocked AuditEntry"
+        )
+
+        metrics = compute_slo_metrics(events)
+        assert metrics["guardrail_trigger_rate"] > 0, (
+            f"guardrail_trigger_rate must be > 0, got {metrics['guardrail_trigger_rate']}"
+        )
+
+        # Each guardrail event must carry only safe synthetic values — no detail bleed
+        for e in guardrail_events:
+            assert e["latency_ms"] == 0
+            assert e["error"] is False
+            assert e["cost_usd"] == 0.0
+            assert e["guardrail_triggered"] is True
+            serialized = json.dumps(e)
+            assert "Confidential Budget Q4" not in serialized, (
+                "AuditEntry detail raw_content must not appear in event"
+            )
+            assert "raw_content" not in serialized, (
+                "AuditEntry detail keys must not appear in event"
+            )
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 23. DB window aggregation excludes out-of-window audit entries ----------
+
+def test_aggregate_slo_events_excludes_out_of_window_audit_entries():
+    """retrieval.context.blocked AuditEntry rows with at before window_start must not
+    appear in aggregate_slo_events_from_db results."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete
+
+    from e2eai.audit import record as audit_record
+    from e2eai.db import AuditEntry, sessions
+    from e2eai.slo_metrics import aggregate_slo_events_from_db
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True)
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(AuditEntry))
+            await session.commit()
+
+            # Insert entry now; query a future window so the entry is before window_start
+            await audit_record(
+                session,
+                actor="user:budi",
+                action="retrieval.context.blocked",
+                target="doc:xyz",
+                details={"reason": "expired_share"},
+            )
+            await session.commit()
+
+            now = datetime.now(timezone.utc)
+            # Window starts 1 minute in the future — entry (at ≤ now) is excluded
+            events = await aggregate_slo_events_from_db(
+                session,
+                window_start=now + timedelta(minutes=1),
+                window_end=now + timedelta(minutes=5),
+            )
+
+        assert all(not e.get("guardrail_triggered") for e in events), (
+            "Out-of-window retrieval.context.blocked entry must not produce a guardrail event"
+        )
+
+    _migrate()
+    asyncio.run(run())

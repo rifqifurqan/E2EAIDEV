@@ -1041,6 +1041,17 @@ OWNER DECISIONS IN FORCE
       `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py tests/test_us_chat_conversations.py tests/test_us_quotas_rate_limits.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')" && uv run alembic upgrade head` -> 36 passed; app ok; Alembic head applied/current.
     - FR-O5 remains unchecked in `PRD_CRON_BACKLOG.md`; remaining work: aggregate guardrail triggers from audit/guardrail records, persist/deliver alert notifications, and dashboard/report integration.
 
+  - Guardrail audit aggregation sub-slice (2026-10-11):
+    - Claude Code was used first and produced the initial WIP with TDD, but exited at `error_max_turns`; the known broken SessionEnd hook noise was non-blocking. Hermes inspected the WIP and verified/finalized the focused gates.
+    - `aggregate_slo_events_from_db` now includes `retrieval.context.blocked` `AuditEntry` rows inside the requested time window as safe synthetic guardrail SLO events (`latency_ms=0`, `error=False`, `cost_usd=0.0`, `guardrail_triggered=True`). Audit details, targets, raw prompts/answers/document text, model names, tokens, credentials, titles, and snippets are never returned.
+    - Added tests for in-window guardrail audit aggregation, positive guardrail trigger rate, detail leakage guards, and out-of-window audit exclusion.
+    - RED evidence: with the production `slo_metrics.py` change temporarily reverted, `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py::test_aggregate_slo_events_includes_guardrail_audit_entries` failed as expected (`AssertionError: Expected at least one guardrail event...`).
+    - Verified:
+      `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py::test_aggregate_slo_events_includes_guardrail_audit_entries` -> 1 passed after implementation.
+      `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py::test_aggregate_slo_events_includes_guardrail_audit_entries tests/test_us_slo_metrics_p1.py::test_aggregate_slo_events_excludes_out_of_window_audit_entries` -> 2 passed.
+      `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py tests/test_us_chat_conversations.py tests/test_us_quotas_rate_limits.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 38 passed; app ok.
+    - FR-O5 remains unchecked in `PRD_CRON_BACKLOG.md`; remaining work: alert notification delivery and dashboard/report integration.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps

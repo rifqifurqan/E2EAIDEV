@@ -14,12 +14,12 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import current_session, require_scope
 from .core.errors import AppError
-from .db import Message, SloAlert, get_session
+from .db import AuditEntry, Message, SloAlert, get_session
 
 # Conservative token cost estimate; real cost depends on the LiteLLM model/provider.
 # ponytail: replace with per-model cost lookup when billing metadata is available (FR-O6).
@@ -127,16 +127,20 @@ async def aggregate_slo_events_from_db(
     window_start: datetime,
     window_end: datetime,
 ) -> list[dict]:
-    """Aggregate SLO events from persisted assistant Message rows in a time window.
+    """Aggregate SLO events from persisted assistant Message rows and retrieval guardrail
+    audit entries in a time window.
 
-    Reads only the latency_ms, tokens, and stop_reason columns of assistant messages —
-    never the content, role name, model string, or any credential. Returns a list of safe
-    event dicts compatible with ``compute_slo_metrics``.
+    Message events: reads only latency_ms, tokens, stop_reason — never content, role, model,
+    or any credential. guardrail_triggered=False for these rows.
 
-    guardrail_triggered is False in this slice; ponytail: correlate with audit_log
-    ``retrieval.context.blocked`` actions in a future slice (FR-O5 dashboard).
+    Guardrail events: counts AuditEntry rows where action == 'retrieval.context.blocked'
+    and at is within the window. Each matched entry becomes a synthetic safe event with
+    latency_ms=0, error=False, cost_usd=0.0, guardrail_triggered=True. AuditEntry.details
+    are never read or included.
+
+    Returns a list of safe event dicts compatible with ``compute_slo_metrics``.
     """
-    rows = (
+    message_rows = (
         await session.execute(
             select(Message.latency_ms, Message.tokens, Message.stop_reason)
             .where(Message.role == "assistant")
@@ -146,13 +150,30 @@ async def aggregate_slo_events_from_db(
     ).all()
 
     events: list[dict] = []
-    for row in rows:
+    for row in message_rows:
         events.append({
             "latency_ms": row.latency_ms or 0,
             "error": row.stop_reason == "error",
             "cost_usd": (row.tokens or 0) * _TOKEN_COST_USD,
             "guardrail_triggered": False,
         })
+
+    guardrail_count: int = await session.scalar(
+        select(func.count())
+        .select_from(AuditEntry)
+        .where(AuditEntry.action == "retrieval.context.blocked")
+        .where(AuditEntry.at >= window_start)
+        .where(AuditEntry.at <= window_end)
+    ) or 0
+
+    for _ in range(guardrail_count):
+        events.append({
+            "latency_ms": 0,
+            "error": False,
+            "cost_usd": 0.0,
+            "guardrail_triggered": True,
+        })
+
     return events
 
 
