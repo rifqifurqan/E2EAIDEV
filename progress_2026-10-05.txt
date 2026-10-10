@@ -1143,6 +1143,21 @@ OWNER DECISIONS IN FORCE
   - `PRD_CRON_BACKLOG.md` item 8: final sub-slice marked done; FR-O6 now fully implemented.
   - Full heavy verification intentionally deferred; focused FR-O6 + adjacent operate/quota gates passed.
 
+- Usage/ROI deterministic analytics service + API sub-slice (FR-O7) (2026-10-11):
+  - Claude Code was used first and completed the initial TDD implementation; the known broken SessionEnd hook noise was non-blocking. Hermes added one stricter RED/GREEN safety cycle for unsafe topic-label redaction.
+  - Added `usage_roi.py`: pure deterministic/offline helper `compute_usage_roi_report()` to aggregate active users, total questions, questions per division, answer rate, deflection count/rate, top unanswered topics, and estimated time saved from safe usage event dictionaries.
+  - Added `POST /api/v1/operate/usage-roi`, protected with the existing `evals` API scope until a dedicated operate scope exists.
+  - Output intentionally contains only aggregate counts/rates/minutes/division IDs and safe topic labels. It ignores raw question text and redacts topic labels containing secret/credential markers; no prompts, answers, document text, snippets, secrets, passwords, bearer tokens, API keys, credentials, or raw tokens are returned.
+  - Tests first via Claude: `tests/test_usage_roi_p1.py` covers all FR-O7 metrics, empty/single/missing-field edge cases, route wiring, and safe output.
+  - Additional RED evidence from Hermes:
+    `cd apps/api && uv run pytest -q tests/test_usage_roi_p1.py::test_unsafe_unanswered_topic_labels_are_redacted` -> failed as expected because raw topic `secret API key production bearer token` appeared in `top_unanswered_topics`.
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_usage_roi_p1.py::test_unsafe_unanswered_topic_labels_are_redacted` -> 1 passed.
+    `cd apps/api && uv run pytest -q tests/test_usage_roi_p1.py` -> 18 passed.
+    `cd apps/api && uv run pytest -q tests/test_usage_roi_p1.py tests/test_finops_p1.py tests/test_us_slo_metrics_p1.py tests/test_us_quotas_rate_limits.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 85 passed; app ok.
+  - `PRD_CRON_BACKLOG.md` item 9 split: deterministic/offline usage/ROI service + API slice marked done; remaining FR-O7 work is DB-backed aggregation from persisted chat/feedback/trace metadata with safe rolling-window dashboard/report integration.
+  - Full heavy verification intentionally deferred; focused FR-O7 + adjacent operate/quota gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
