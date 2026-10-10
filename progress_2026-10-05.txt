@@ -1091,6 +1091,17 @@ OWNER DECISIONS IN FORCE
       `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py tests/test_us_sharing_views_notifications.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 31 passed; app ok.
     - FR-O5 is now complete for the current backlog definition. `PRD_CRON_BACKLOG.md` item 7 marked done.
 
+- FinOps deterministic spend/budget/chargeback service + API sub-slice (FR-O6) (2026-10-11):
+  - Claude Code was used first and completed the initial TDD implementation; the known broken SessionEnd hook noise was non-blocking.
+  - Added `finops.py`: pure deterministic/offline helpers to aggregate spend by user/team/division/bot from safe metadata events, evaluate per-dimension budget alerts, and build safe chargeback reports.
+  - Added API routes under `/api/v1/operate`: `POST /finops-spend` and `POST /finops-chargeback`, protected with the existing `evals` API scope until a dedicated operate scope exists.
+  - Outputs contain aggregate IDs/counts/costs only and intentionally exclude raw prompts, answers, document text, snippets, credentials, bearer tokens, API keys, and secrets.
+  - Tests first via Claude: `tests/test_finops_p1.py` covers spend aggregation across all four FR-O6 dimensions, budget alert decisions, chargeback report shape/safety, token counts, edge cases, and route wiring.
+  - Verified by Hermes:
+    `cd apps/api && uv run pytest -q tests/test_finops_p1.py tests/test_us_slo_metrics_p1.py tests/test_us_quotas_rate_limits.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 57 passed; app ok.
+  - `PRD_CRON_BACKLOG.md` item 8 split: this deterministic/offline slice marked done; remaining FR-O6 work is DB-backed spend aggregation plus persisted/delivered budget alerts and dashboard/report integration.
+  - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-O6 + adjacent operate/quota gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps

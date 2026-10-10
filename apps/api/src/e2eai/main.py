@@ -10,6 +10,7 @@ from .bot_release import router as bot_router
 from .chat import router as chat_router
 from .documents import router as documents_router
 from .eval_lab import router as evals_router
+from .finops import router as finops_router
 from .offboarding import router as offboarding_router
 from .prompt_registry import router as prompt_router
 from .retrieval import router as retrieval_router
@@ -34,6 +35,7 @@ def create_app() -> FastAPI:
     app.include_router(offboarding_router)
     app.include_router(prompt_router)
     app.include_router(slo_metrics_router)
+    app.include_router(finops_router)
 
     from .api_keys import make_router as api_keys_router
     app.include_router(api_keys_router())
