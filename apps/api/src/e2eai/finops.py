@@ -9,15 +9,20 @@ answers, document text, restricted titles/snippets, secrets, tokens, or credenti
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import current_session, require_scope
 from .core.errors import AppError
-from .db import get_session
+from .db import Conversation, Message, TeamMember, User, get_session
+
+# Conservative token cost estimate; real cost depends on the LiteLLM model/provider.
+# ponytail: replace with persisted per-model LiteLLM cost metadata when available.
+_TOKEN_COST_USD: float = 2e-6  # 0.000002 USD/token ≈ $2/1M tokens
 
 
 @dataclass(frozen=True)
@@ -153,6 +158,88 @@ def build_chargeback_report(spend: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# DB-backed spend aggregation (FR-O6)
+# ---------------------------------------------------------------------------
+
+
+async def aggregate_spend_events_from_db(
+    session: AsyncSession,
+    window_start: datetime,
+    window_end: datetime,
+) -> list[dict]:
+    """Read safe spend metadata from persisted assistant messages in a time window.
+
+    Joins ``Message`` -> ``Conversation`` -> ``User`` plus ``TeamMember`` to emit event
+    dicts compatible with ``aggregate_spend``. Only IDs, token counts, and estimated
+    cost are returned. Message content, role, model name, prompts, answers, document
+    text, snippets, credentials, tokens-as-secrets, and API keys are never selected or
+    included in the returned payload.
+    """
+    rows = (
+        await session.execute(
+            select(
+                Conversation.user_id,
+                Conversation.bot_id,
+                User.division_id,
+                TeamMember.team_id,
+                Message.tokens,
+            )
+            .select_from(Message)
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .join(User, User.id == Conversation.user_id)
+            .outerjoin(TeamMember, TeamMember.user_id == User.id)
+            .where(Message.role == "assistant")
+            .where(Message.created_at >= window_start)
+            .where(Message.created_at <= window_end)
+        )
+    ).all()
+
+    events: list[dict] = []
+    for row in rows:
+        token_count = int(row.tokens or 0)
+        events.append({
+            "user_id": str(row.user_id),
+            "team_id": str(row.team_id) if row.team_id is not None else "unknown",
+            "division_id": str(row.division_id) if row.division_id is not None else "unknown",
+            "bot_id": str(row.bot_id) if row.bot_id is not None else "unknown",
+            "cost_usd": round(token_count * _TOKEN_COST_USD, 6),
+            "tokens": token_count,
+        })
+
+    return events
+
+
+async def get_finops_window_report(
+    session: AsyncSession,
+    window_start: datetime,
+    window_end: datetime,
+    policy: BudgetPolicy | None = None,
+) -> dict:
+    """Build a safe DB-backed FinOps report for a time window.
+
+    Returns window metadata, aggregate spend, budget alert decisions, and chargeback
+    report data. All fields are aggregate IDs/numbers only; no raw message content,
+    model names, prompts, answers, snippets, secrets, credentials, or API keys.
+    """
+    if policy is None:
+        policy = BudgetPolicy()
+
+    events = await aggregate_spend_events_from_db(session, window_start, window_end)
+    spend = aggregate_spend(events)
+    alerts = check_budget_alerts(spend, policy)
+    return {
+        "window": {
+            "start": window_start.isoformat(),
+            "end": window_end.isoformat(),
+        },
+        "event_count": len(events),
+        "spend": spend,
+        "alerts": alerts,
+        "report": build_chargeback_report(spend),
+    }
+
+
+# ---------------------------------------------------------------------------
 # API routes (FR-O6)
 # ---------------------------------------------------------------------------
 
@@ -217,3 +304,24 @@ async def finops_chargeback_api(
     alerts = check_budget_alerts(spend, BudgetPolicy())
 
     return {"report": report, "alerts": alerts}
+
+
+@router.get("/finops-window")
+async def finops_window_api(
+    window_hours: int = 24,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """FR-O6: DB-backed spend aggregation for a rolling time window.
+
+    Reads persisted assistant message metadata, aggregates spend by user/team/division/bot,
+    evaluates budget thresholds, and returns a safe chargeback report. The response never
+    includes raw prompts, answers, document text, model names, secrets, or credentials.
+    """
+    require_scope(sess, "evals")
+
+    now = datetime.now(timezone.utc)
+    hours = max(1, min(window_hours, 720))
+    window_start = now - timedelta(hours=hours)
+    return await get_finops_window_report(db, window_start, now)
+

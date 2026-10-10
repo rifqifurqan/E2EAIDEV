@@ -1102,6 +1102,20 @@ OWNER DECISIONS IN FORCE
   - `PRD_CRON_BACKLOG.md` item 8 split: this deterministic/offline slice marked done; remaining FR-O6 work is DB-backed spend aggregation plus persisted/delivered budget alerts and dashboard/report integration.
   - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-O6 + adjacent operate/quota gates passed.
 
+- FinOps DB-backed spend aggregation sub-slice (FR-O6) (2026-10-11):
+  - Claude Code was used first and produced the RED tests/migration/model field, then timed out before implementation; Hermes completed the GREEN implementation manually.
+  - Added nullable `conversations.bot_id` plus Alembic migration `0015_conversation_bot_id.py` so persisted chat conversations can be grouped by bot for FinOps.
+  - Added `aggregate_spend_events_from_db()` and `get_finops_window_report()` to read persisted assistant-message token metadata joined through conversation/user/team/division, convert it into safe spend events, and aggregate by user/team/division/bot.
+  - Added `GET /api/v1/operate/finops-window`, protected with the existing `evals` API scope, returning safe rolling-window spend, budget-alert decisions, and chargeback report data.
+  - Safety tests assert DB-derived FinOps payloads exclude raw message content, role, model names, prompts, answers, credentials, bearer tokens, API keys, and secrets.
+  - TDD RED observed:
+    `cd apps/api && uv run pytest -q tests/test_finops_p1.py` -> 5 failed, 22 passed because `aggregate_spend_events_from_db` and `/finops-window` were missing.
+  - Verified by Hermes:
+    `cd apps/api && uv run pytest -q tests/test_finops_p1.py` -> 27 passed.
+    `cd apps/api && uv run pytest -q tests/test_finops_p1.py tests/test_us_slo_metrics_p1.py tests/test_us_quotas_rate_limits.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 62 passed; app ok.
+  - `PRD_CRON_BACKLOG.md` item 8 updated: DB-backed spend aggregation marked done; remaining FR-O6 work is persisted/delivered FinOps budget alerts plus dashboard/report integration.
+  - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-O6 + adjacent operate/quota gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps

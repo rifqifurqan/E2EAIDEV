@@ -24,7 +24,7 @@ Rules for every cron tick:
 7. [x] [FR-O5] SLOs and alerting: latency, error rate, cost per conversation, guardrail trigger rate. Completed as deterministic metrics, DB-backed window aggregation/persistence, guardrail audit aggregation, admin/evaluator notification delivery, and safe dashboard/report API; see progress_2026-10-05.txt.
 8. [FR-O6] FinOps: spend per user/team/division/bot, budgets, alerts, chargeback reports.
    - [x] Deterministic/offline service + API slice: aggregate spend by user/team/division/bot from safe metadata events, evaluate budget alerts, and build safe chargeback reports. See progress_2026-10-05.txt.
-   - [ ] DB-backed spend aggregation from persisted trace/message/model-cost metadata.
+   - [x] DB-backed spend aggregation from persisted message/token metadata, with conversation bot grouping and a safe rolling-window API. See progress_2026-10-05.txt.
    - [ ] Persist/deliver FinOps budget alerts and expose dashboard/report integration.
 9. [FR-O7] Usage and ROI analytics: active users, questions per division, answer rate, deflection, unanswered topics, estimated time saved.
 10. [FR-I2] Top unanswered questions report for knowledge owners.

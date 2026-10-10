@@ -365,3 +365,331 @@ def test_token_counts_aggregated_per_dimension():
     # Verify u1 total tokens: 500 + 750 + 350 = 1600
     u1_entry = next(e for e in result["by_user"] if e["id"] == "u1")
     assert u1_entry["tokens"] == 1600
+
+
+# ---------- 23. DB FinOps: spend aggregation groups by user/team/division ----------
+
+def test_db_finops_spend_aggregation_groups_by_user_team_division():
+    """aggregate_spend_events_from_db reads persisted assistant Message rows, joins to
+    Conversation/User/TeamMember/Team, and returns safe spend event dicts compatible
+    with aggregate_spend, grouped by user_id, team_id, division_id, and bot_id."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select
+
+    from e2eai.db import (
+        Conversation, Division, Message, Team, TeamMember, User, sessions,
+    )
+    from e2eai.finops import aggregate_spend, aggregate_spend_events_from_db
+    from e2eai.seed import seed_demo
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, cwd=".")
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(Message))
+            await session.execute(delete(Conversation))
+            await session.commit()
+
+            await seed_demo(session, password="TestFinOpsDB_1234567")
+
+            andi = await session.scalar(select(User).where(func.lower(User.email) == "andi@demo.e2eai"))
+            budi = await session.scalar(select(User).where(func.lower(User.email) == "budi@demo.e2eai"))
+            sales_div = await session.scalar(select(Division).where(Division.name == "Sales"))
+            hr_div = await session.scalar(select(Division).where(Division.name == "HR"))
+
+            # Teams (idempotent)
+            sales_team = await session.scalar(select(Team).where(Team.name == "FinOpsTestSales"))
+            if sales_team is None:
+                sales_team = Team(division_id=sales_div.id, name="FinOpsTestSales", created_by="finops_test")
+                session.add(sales_team)
+                await session.flush()
+
+            hr_team = await session.scalar(select(Team).where(Team.name == "FinOpsTestHR"))
+            if hr_team is None:
+                hr_team = Team(division_id=hr_div.id, name="FinOpsTestHR", created_by="finops_test")
+                session.add(hr_team)
+                await session.flush()
+
+            # Team memberships (idempotent)
+            andi_tm = await session.scalar(
+                select(TeamMember)
+                .where(TeamMember.team_id == sales_team.id)
+                .where(TeamMember.user_id == andi.id)
+            )
+            if andi_tm is None:
+                session.add(TeamMember(team_id=sales_team.id, user_id=andi.id))
+
+            budi_tm = await session.scalar(
+                select(TeamMember)
+                .where(TeamMember.team_id == hr_team.id)
+                .where(TeamMember.user_id == budi.id)
+            )
+            if budi_tm is None:
+                session.add(TeamMember(team_id=hr_team.id, user_id=budi.id))
+            await session.commit()
+
+            now = datetime.now(timezone.utc)
+
+            andi_conv = Conversation(user_id=andi.id, title="Andi finops conv")
+            budi_conv = Conversation(user_id=budi.id, title="Budi finops conv")
+            session.add(andi_conv)
+            session.add(budi_conv)
+            await session.flush()
+
+            # 2 assistant messages from Andi (100+150=250 tokens), 1 from Budi (80 tokens)
+            session.add(Message(conversation_id=andi_conv.id, role="assistant",
+                                content="safe answer 1", tokens=100, latency_ms=200, stop_reason="stop"))
+            session.add(Message(conversation_id=andi_conv.id, role="assistant",
+                                content="safe answer 2", tokens=150, latency_ms=300, stop_reason="stop"))
+            session.add(Message(conversation_id=budi_conv.id, role="assistant",
+                                content="safe answer 3", tokens=80, latency_ms=100, stop_reason="stop"))
+            # user message — must NOT appear in events
+            session.add(Message(conversation_id=andi_conv.id, role="user",
+                                content="user question", tokens=None, latency_ms=None, stop_reason=None))
+            await session.commit()
+
+            events = await aggregate_spend_events_from_db(
+                session,
+                window_start=now - timedelta(minutes=1),
+                window_end=now + timedelta(minutes=5),
+            )
+
+            # 3 assistant messages → 3 events
+            assert len(events) == 3
+
+            for e in events:
+                assert "user_id" in e
+                assert "team_id" in e
+                assert "division_id" in e
+                assert "bot_id" in e
+                assert "cost_usd" in e
+                assert "tokens" in e
+                # No raw content fields
+                assert "content" not in e
+                assert "role" not in e
+                assert "model" not in e
+                assert isinstance(e["cost_usd"], float)
+                assert isinstance(e["tokens"], int)
+
+            # Aggregate and verify groupings
+            spend = aggregate_spend(events)
+            by_user = {e["id"]: e for e in spend["by_user"]}
+            assert str(andi.id) in by_user, f"Andi not in by_user: {list(by_user.keys())}"
+            assert str(budi.id) in by_user, f"Budi not in by_user: {list(by_user.keys())}"
+            assert by_user[str(andi.id)]["tokens"] == 250  # 100 + 150
+
+            by_team = {e["id"]: e for e in spend["by_team"]}
+            assert str(sales_team.id) in by_team, f"SalesTeam not in by_team: {list(by_team.keys())}"
+            assert str(hr_team.id) in by_team, f"HRTeam not in by_team: {list(by_team.keys())}"
+
+            by_div = {e["id"]: e for e in spend["by_division"]}
+            assert str(sales_div.id) in by_div
+            assert str(hr_div.id) in by_div
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 24. DB FinOps: time window boundary ----------
+
+def test_db_finops_spend_window_boundary():
+    """Messages outside the time window are excluded from FinOps spend aggregation."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select, text
+
+    from e2eai.db import Conversation, Message, User, sessions
+    from e2eai.finops import aggregate_spend_events_from_db
+    from e2eai.seed import seed_demo
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, cwd=".")
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(Message))
+            await session.execute(delete(Conversation))
+            await session.commit()
+
+            await seed_demo(session, password="TestFinOpsDB_1234567")
+            andi = await session.scalar(select(User).where(func.lower(User.email) == "andi@demo.e2eai"))
+
+            now = datetime.now(timezone.utc)
+            window_start = now - timedelta(minutes=30)
+            window_end = now - timedelta(minutes=10)
+
+            conv = Conversation(user_id=andi.id, title="Boundary test conv")
+            session.add(conv)
+            await session.flush()
+
+            # Message inside the window (backdated via direct SQL)
+            msg_in = Message(conversation_id=conv.id, role="assistant",
+                             content="in window", tokens=50, latency_ms=100, stop_reason="stop")
+            session.add(msg_in)
+            await session.flush()
+            await session.execute(
+                text("UPDATE messages SET created_at = :ts WHERE id = :id"),
+                {"ts": window_start + timedelta(minutes=10), "id": str(msg_in.id)},
+            )
+
+            # Message outside window (created_at = now, after window_end)
+            msg_out = Message(conversation_id=conv.id, role="assistant",
+                              content="out of window", tokens=999, latency_ms=999, stop_reason="stop")
+            session.add(msg_out)
+            await session.commit()
+
+            events = await aggregate_spend_events_from_db(session, window_start, window_end)
+
+            tokens_seen = [e["tokens"] for e in events]
+            assert 50 in tokens_seen, "In-window message must be included"
+            assert 999 not in tokens_seen, "Out-of-window message must be excluded"
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 25. DB FinOps: serialization excludes raw content ----------
+
+def test_db_finops_spend_event_serialization_excludes_raw_content():
+    """FinOps spend events from DB must not contain content, role, model, or any raw text —
+    only safe aggregate fields: user_id, team_id, division_id, bot_id, cost_usd, tokens."""
+    import asyncio
+    import json
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select
+
+    from e2eai.db import Conversation, Message, User, sessions
+    from e2eai.finops import aggregate_spend_events_from_db
+    from e2eai.seed import seed_demo
+
+    FORBIDDEN_CONTENT = "WhatsApp revenue share is 30 percent"
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, cwd=".")
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(Message))
+            await session.execute(delete(Conversation))
+            await session.commit()
+
+            await seed_demo(session, password="TestFinOpsDB_1234567")
+            andi = await session.scalar(select(User).where(func.lower(User.email) == "andi@demo.e2eai"))
+            now = datetime.now(timezone.utc)
+
+            conv = Conversation(user_id=andi.id, title="Safety test conv")
+            session.add(conv)
+            await session.flush()
+
+            session.add(Message(
+                conversation_id=conv.id,
+                role="assistant",
+                content=FORBIDDEN_CONTENT,
+                model="secret-model-xyz",
+                tokens=42,
+                latency_ms=100,
+                stop_reason="stop",
+            ))
+            await session.commit()
+
+            events = await aggregate_spend_events_from_db(
+                session,
+                window_start=now - timedelta(minutes=1),
+                window_end=now + timedelta(minutes=5),
+            )
+
+            assert len(events) >= 1
+            for e in events:
+                serialized = json.dumps(e)
+                assert FORBIDDEN_CONTENT not in serialized, "Raw message content must not appear in event"
+                assert "secret-model-xyz" not in serialized, "Model name must not appear in event"
+                for forbidden in ("content", "model", "role", "prompt", "answer",
+                                  "password", "credential", "bearer", "api_key"):
+                    assert forbidden not in serialized.lower(), (
+                        f"Forbidden term '{forbidden}' found in FinOps event"
+                    )
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 26. DB FinOps: bot_id groups spend by bot ----------
+
+def test_db_finops_spend_groups_by_bot_id():
+    """Conversations with bot_id set produce spend events carrying that bot_id, enabling
+    bot-level FinOps aggregation. Conversations without bot_id produce 'unknown' bot_id."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select
+
+    from e2eai.db import Bot, Conversation, Message, User, sessions
+    from e2eai.finops import aggregate_spend, aggregate_spend_events_from_db
+    from e2eai.seed import seed_demo
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, cwd=".")
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(Message))
+            await session.execute(delete(Conversation))
+            await session.commit()
+
+            await seed_demo(session, password="TestFinOpsDB_1234567")
+            andi = await session.scalar(select(User).where(func.lower(User.email) == "andi@demo.e2eai"))
+            now = datetime.now(timezone.utc)
+
+            bot = Bot(name="FinOpsTestBot", owner_id=andi.id)
+            session.add(bot)
+            await session.flush()
+
+            conv_with_bot = Conversation(user_id=andi.id, title="Bot conv", bot_id=bot.id)
+            conv_no_bot = Conversation(user_id=andi.id, title="No-bot conv")
+            session.add(conv_with_bot)
+            session.add(conv_no_bot)
+            await session.flush()
+
+            session.add(Message(conversation_id=conv_with_bot.id, role="assistant",
+                                content="bot answer", tokens=100, latency_ms=200, stop_reason="stop"))
+            session.add(Message(conversation_id=conv_no_bot.id, role="assistant",
+                                content="direct answer", tokens=60, latency_ms=150, stop_reason="stop"))
+            await session.commit()
+
+            events = await aggregate_spend_events_from_db(
+                session,
+                window_start=now - timedelta(minutes=1),
+                window_end=now + timedelta(minutes=5),
+            )
+
+            assert len(events) == 2
+
+            bot_ids = {e["bot_id"] for e in events}
+            assert str(bot.id) in bot_ids, f"Bot UUID not in events. bot_ids={bot_ids}"
+            assert "unknown" in bot_ids, "No-bot conversation must produce 'unknown' bot_id"
+
+            spend = aggregate_spend(events)
+            by_bot = {e["id"]: e for e in spend["by_bot"]}
+            assert str(bot.id) in by_bot, f"Bot not in by_bot: {list(by_bot.keys())}"
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 27. DB FinOps: finops-window API route is wired ----------
+
+def test_finops_window_api_route_is_wired():
+    """The GET /api/v1/operate/finops-window endpoint exists in the FastAPI app."""
+    from e2eai.main import app
+
+    openapi = app.openapi()
+    assert "/api/v1/operate/finops-window" in openapi["paths"]
