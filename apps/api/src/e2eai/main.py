@@ -14,6 +14,7 @@ from .offboarding import router as offboarding_router
 from .prompt_registry import router as prompt_router
 from .retrieval import router as retrieval_router
 from .security_red_team import router as security_red_team_router
+from .slo_metrics import router as slo_metrics_router
 from .core.errors import install
 from .db import sessions
 
@@ -32,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(security_red_team_router)
     app.include_router(offboarding_router)
     app.include_router(prompt_router)
+    app.include_router(slo_metrics_router)
 
     from .api_keys import make_router as api_keys_router
     app.include_router(api_keys_router())

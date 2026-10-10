@@ -987,6 +987,50 @@ OWNER DECISIONS IN FORCE
     Secret scan: FR-RL6 committed files checked against deploy/compose/.env values -> no secrets (false positive: "admin" role name != KEYCLOAK_ADMIN_USER credential).
     Commit: 9839f74 feat(release): add bot environment promotion [FR-RL6] — already pushed to origin/main.
 
+- SLO metrics and alert firing decisions — deterministic/offline sub-slice (FR-O5):
+  - TDD approach: wrote `test_us_slo_metrics_p1.py` first (16 tests), observed RED (ModuleNotFoundError:
+    e2eai.slo_metrics), then implemented service module and went GREEN.
+  - New `slo_metrics.py`: pure deterministic service module (no DB, no network, no secrets):
+    - `SloPolicy` dataclass: configurable thresholds for latency p50/p95, error rate, cost per
+      conversation, and guardrail trigger rate (all four FR-O5 metric families).
+    - `compute_slo_metrics(events)`: computes latency p50/p95/mean (linear interpolation), error rate,
+      cost per conversation (mean cost_usd), and guardrail trigger rate from event dicts. Safe zero
+      defaults for empty input (no division errors). Events represent already-recorded chat/message/
+      guardrail/audit-like data with latency_ms, error, cost_usd, guardrail_triggered fields.
+    - `check_slo_alerts(metrics, policy)`: evaluates alert firing decisions against SLO thresholds.
+      Returns any_firing, total_checked, and fired alert list with name/actual/threshold.
+    - Outputs contain only aggregated numeric metrics and alert metadata — never raw prompts, answers,
+      document text, restricted titles/snippets, secrets, tokens, or credentials.
+  - New API route: `POST /api/v1/operate/slo-metrics` on a new `operate` router, wired in main.py.
+    Accepts events list + optional policy override. Uses existing `evals` scope (no dedicated operate
+    scope exists yet). Returns `{metrics, alerts}`.
+  - Tests cover:
+    (1) all four metric families present in output;
+    (2) latency percentile computation with linear interpolation;
+    (3) error rate computation;
+    (4) cost per conversation computation;
+    (5) guardrail trigger rate computation;
+    (6) empty events return safe zero defaults;
+    (7) all-within-SLO → no alerts fire;
+    (8-11) individual breaches for latency, error rate, cost, guardrail rate;
+    (12) all four alert types fire simultaneously;
+    (13) output safety: no forbidden terms (prompt, answer, secret, password, etc.);
+    (14) single event edge case;
+    (15) SloPolicy defaults are reasonable;
+    (16) API route wiring smoke test via OpenAPI schema.
+  - FR-O5 status: sub-slice only. This covers the deterministic/offline service layer for SLO metric
+    computation and alert firing. Remaining for full FR-O5: wiring to real DB aggregation of messages/
+    conversations/guardrail events, time-window filtering, alert persistence/notification delivery,
+    and dashboard integration. Leaving FR-O5 unchecked in PRD_CRON_BACKLOG.md.
+  - Verified by Claude Code:
+    `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py` -> 16 passed in 1.30s.
+    Baseline regression:
+    `cd apps/api && uv run pytest -q tests/test_us_quotas_rate_limits.py tests/test_us_chat_conversations.py tests/test_us_release_gates_p1.py` -> 27 passed in 27.66s.
+  - Hermes follow-up TDD fix: changed `total_checked` to match the five concrete SLO alert checks
+    (latency p50, latency p95, error rate, cost, guardrail rate). RED:
+    `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py::test_check_slo_alerts_all_within_slo` -> failed `assert 4 == 5`; GREEN/focused gate:
+    `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py::test_check_slo_alerts_all_within_slo && uv run pytest -q tests/test_us_slo_metrics_p1.py tests/test_us_quotas_rate_limits.py tests/test_us_chat_conversations.py tests/test_us_release_gates_p1.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 1 passed; 43 passed; app ok.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
