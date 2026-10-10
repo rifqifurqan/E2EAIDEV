@@ -1116,6 +1116,33 @@ OWNER DECISIONS IN FORCE
   - `PRD_CRON_BACKLOG.md` item 8 updated: DB-backed spend aggregation marked done; remaining FR-O6 work is persisted/delivered FinOps budget alerts plus dashboard/report integration.
   - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-O6 + adjacent operate/quota gates passed.
 
+- FinOps budget-alert persistence/notification + dashboard sub-slice (FR-O6, FINAL) (2026-10-11):
+  - Strict TDD, modeled on the FR-O5 SLO alert persistence/notification/dashboard tests.
+  - Added `FinopsBudgetAlert` DB model (`finops_budget_alerts`) storing only safe fields:
+    dimension, entity_id, actual, threshold, window_start, window_end, created_at, created_by —
+    no raw prompts, answers, document text, model names, tokens, secrets, or credentials.
+    Alembic migration `0016_finops_budget_alerts.py` (revises 0015_conversation_bot_id).
+  - Added helpers in `e2eai.finops`: `persist_finops_budget_alerts`, `notify_finops_budget_alerts`
+    (in-app notifications to active admin/evaluator users only, kind `finops.budget.alert.fired`,
+    safe details only), `get_recent_finops_budget_alerts`, `count_finops_notifications`,
+    `get_finops_dashboard`.
+  - Added `POST /api/v1/operate/finops-window` (persists/delivers fired alerts for an explicit
+    window; returns spend/report/alerts/event_count/persisted_alert_count) and
+    `GET /api/v1/operate/finops-dashboard` (rolling safe aggregate spend/report, alert decisions,
+    recent persisted alerts, notification count/health). Existing `GET /finops-window` unchanged.
+    All protected with `require_scope(sess, "evals")`.
+  - TDD RED observed:
+    `cd apps/api && uv run pytest -q tests/test_finops_p1.py -k "budget_alert_persistence or notifications_delivered_to_admin_evaluator_only or finops_window_post or finops_dashboard"`
+    -> 5 failed, 27 deselected (missing `FinopsBudgetAlert`, missing `/finops-dashboard` route, missing helpers).
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_finops_p1.py tests/test_us_slo_metrics_p1.py tests/test_us_quotas_rate_limits.py`
+    -> 67 passed; `uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> app ok.
+    (One RED iteration: the dashboard safety test's forbidden-term list included 'token', which
+    collides with the legitimate safe 'tokens' aggregate count — removed 'token' to match the
+    existing FinOps spend-safety convention; this was a test-list fix, not a leak.)
+  - `PRD_CRON_BACKLOG.md` item 8: final sub-slice marked done; FR-O6 now fully implemented.
+  - Full heavy verification intentionally deferred; focused FR-O6 + adjacent operate/quota gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps

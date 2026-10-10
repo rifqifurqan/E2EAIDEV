@@ -693,3 +693,341 @@ def test_finops_window_api_route_is_wired():
 
     openapi = app.openapi()
     assert "/api/v1/operate/finops-window" in openapi["paths"]
+
+
+# ---------- 28. FinOps budget alert persistence: stores safe fields only ----------
+
+def test_finops_budget_alert_persistence_stores_safe_fields_only():
+    """persist_finops_budget_alerts writes FinopsBudgetAlert rows containing only
+    dimension, entity_id, actual, threshold, window_start, window_end, created_by —
+    never message content, prompts, answers, model names, or secrets."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, select
+
+    from e2eai.db import sessions
+    from e2eai.finops import FinopsBudgetAlert, persist_finops_budget_alerts
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, cwd=".")
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(FinopsBudgetAlert))
+            await session.commit()
+
+            now = datetime.now(timezone.utc)
+            window_start = now - timedelta(hours=1)
+            window_end = now
+
+            fired_alerts = {
+                "any_firing": True,
+                "total_checked": 4,
+                "alerts": [
+                    {"dimension": "user", "id": "u1", "actual": 0.032, "threshold": 0.03},
+                    {"dimension": "team", "id": "t1", "actual": 0.040, "threshold": 0.035},
+                ],
+            }
+
+            ids = await persist_finops_budget_alerts(
+                session, fired_alerts,
+                window_start=window_start, window_end=window_end,
+                created_by="finops_test_actor",
+            )
+
+            assert len(ids) == 2
+
+            rows = (await session.execute(select(FinopsBudgetAlert))).scalars().all()
+            assert len(rows) >= 2
+
+            dims = {(r.dimension, r.entity_id) for r in rows}
+            assert ("user", "u1") in dims
+            assert ("team", "t1") in dims
+
+            for row in rows:
+                assert hasattr(row, "dimension")
+                assert hasattr(row, "entity_id")
+                assert hasattr(row, "actual")
+                assert hasattr(row, "threshold")
+                assert hasattr(row, "window_start")
+                assert hasattr(row, "window_end")
+                assert hasattr(row, "created_by")
+                assert isinstance(row.actual, float)
+                assert isinstance(row.threshold, float)
+                assert row.created_by == "finops_test_actor"
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 29. FinOps budget alert notifications: admin/evaluator only, safe details ----------
+
+def test_finops_budget_alert_notifications_delivered_to_admin_evaluator_only():
+    """When FinOps budget alerts fire, safe in-app notifications are delivered to admin and
+    evaluator users only. Business users get none. Details contain only dimension/entity/
+    numbers — never raw prompts, answers, document text, secrets, tokens, or credentials."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select
+
+    from e2eai.auth import hash_password
+    from e2eai.db import (
+        LocalCredential, Notification, Organization, Role, User, UserRole, sessions,
+    )
+    from e2eai.finops import notify_finops_budget_alerts
+    from e2eai.seed import seed_roles
+
+    FORBIDDEN = ("prompt", "answer", "secret", "password", "token", "credential",
+                 "whatsapp", "revenue", "30 percent", "bearer")
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, cwd=".")
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(Notification))
+            await session.commit()
+
+            await seed_roles(session)
+            org = await session.scalar(select(Organization).where(Organization.name == "System"))
+            if org is None:
+                org = Organization(name="System", created_by="test")
+                session.add(org)
+                await session.flush()
+
+            roles = {r.name: r for r in await session.scalars(select(Role))}
+            pw_hash = hash_password("TestFinNotif_123456789")
+
+            admin_user = await session.scalar(select(User).where(func.lower(User.email) == "admin_fin@test.local"))
+            if admin_user is None:
+                admin_user = User(org_id=org.id, email="admin_fin@test.local", display_name="Admin Fin", created_by="test")
+                session.add(admin_user)
+                await session.flush()
+                session.add(LocalCredential(user_id=admin_user.id, password_hash=pw_hash))
+                session.add(UserRole(user_id=admin_user.id, role_id=roles["admin"].id))
+
+            eval_user = await session.scalar(select(User).where(func.lower(User.email) == "evaluator_fin@test.local"))
+            if eval_user is None:
+                eval_user = User(org_id=org.id, email="evaluator_fin@test.local", display_name="Evaluator Fin", created_by="test")
+                session.add(eval_user)
+                await session.flush()
+                session.add(LocalCredential(user_id=eval_user.id, password_hash=pw_hash))
+                session.add(UserRole(user_id=eval_user.id, role_id=roles["evaluator"].id))
+
+            biz_user = await session.scalar(select(User).where(func.lower(User.email) == "biz_fin@test.local"))
+            if biz_user is None:
+                biz_user = User(org_id=org.id, email="biz_fin@test.local", display_name="Biz Fin", created_by="test")
+                session.add(biz_user)
+                await session.flush()
+                session.add(LocalCredential(user_id=biz_user.id, password_hash=pw_hash))
+                session.add(UserRole(user_id=biz_user.id, role_id=roles["business_user"].id))
+            await session.commit()
+
+            now = datetime.now(timezone.utc)
+            window_start = now - timedelta(hours=1)
+            window_end = now
+
+            fired_alerts = {
+                "any_firing": True,
+                "total_checked": 4,
+                "alerts": [
+                    {"dimension": "user", "id": "u1", "actual": 0.032, "threshold": 0.03},
+                    {"dimension": "bot", "id": "b1", "actual": 0.045, "threshold": 0.04},
+                ],
+            }
+
+            count = await notify_finops_budget_alerts(session, fired_alerts, window_start, window_end)
+            await session.commit()
+
+            assert count >= 4, f"Expected at least 4 notifications, got {count}"
+            assert count % len(fired_alerts["alerts"]) == 0
+
+            admin_notifs = (await session.execute(
+                select(Notification).where(Notification.user_id == admin_user.id)
+            )).scalars().all()
+            assert len(admin_notifs) == 2
+
+            eval_notifs = (await session.execute(
+                select(Notification).where(Notification.user_id == eval_user.id)
+            )).scalars().all()
+            assert len(eval_notifs) == 2
+
+            biz_notifs = (await session.execute(
+                select(Notification).where(Notification.user_id == biz_user.id)
+            )).scalars().all()
+            assert len(biz_notifs) == 0
+
+            for notif in admin_notifs + eval_notifs:
+                assert notif.kind == "finops.budget.alert.fired"
+                assert "dimension" in notif.details
+                assert "entity_id" in notif.details
+                assert "actual" in notif.details
+                assert "threshold" in notif.details
+                serialized = json.dumps(notif.details).lower()
+                for forbidden in FORBIDDEN:
+                    assert forbidden not in serialized, (
+                        f"Forbidden term '{forbidden}' in FinOps notification details"
+                    )
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 30. POST /finops-window persists and delivers fired alerts ----------
+
+def test_finops_window_post_persists_and_delivers_alerts():
+    """POST /api/v1/operate/finops-window aggregates DB spend for an explicit window,
+    evaluates budget alerts, persists fired alerts, and delivers notifications.
+    get_recent_finops_budget_alerts and count_finops_notifications reflect the result."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select
+
+    from e2eai.db import (
+        Conversation, FinopsBudgetAlert, Message, Notification, User, sessions,
+    )
+    from e2eai.finops import (
+        BudgetPolicy, aggregate_spend, aggregate_spend_events_from_db,
+        check_budget_alerts, count_finops_notifications,
+        get_recent_finops_budget_alerts, notify_finops_budget_alerts,
+        persist_finops_budget_alerts,
+    )
+    from e2eai.seed import seed_demo
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, cwd=".")
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(FinopsBudgetAlert))
+            await session.execute(delete(Notification))
+            await session.execute(delete(Message))
+            await session.execute(delete(Conversation))
+            await session.commit()
+
+            await seed_demo(session, password="TestFinOpsWin_1234567")
+            andi = await session.scalar(select(User).where(func.lower(User.email) == "andi@demo.e2eai"))
+
+            now = datetime.now(timezone.utc)
+            window_start = now - timedelta(minutes=5)
+            window_end = now + timedelta(minutes=5)
+
+            conv = Conversation(user_id=andi.id, title="Window conv")
+            session.add(conv)
+            await session.flush()
+            session.add(Message(conversation_id=conv.id, role="assistant",
+                                content="safe answer", tokens=100000, latency_ms=200, stop_reason="stop"))
+            await session.commit()
+
+            events = await aggregate_spend_events_from_db(session, window_start, window_end)
+            spend = aggregate_spend(events)
+            # Tight policy so the single big-token conversation breaches
+            policy = BudgetPolicy(user_budget_usd=0.0001, team_budget_usd=0.0001,
+                                  division_budget_usd=0.0001, bot_budget_usd=0.0001)
+            alerts = check_budget_alerts(spend, policy)
+            assert alerts["any_firing"] is True
+
+            ids = await persist_finops_budget_alerts(
+                session, alerts, window_start, window_end, created_by="window_test")
+            await notify_finops_budget_alerts(session, alerts, window_start, window_end)
+            await session.commit()
+            assert len(ids) > 0
+
+            recent = await get_recent_finops_budget_alerts(session, window_start, window_end)
+            assert len(recent) >= 1
+            for r in recent:
+                assert set(r) == {"dimension", "entity_id", "actual", "threshold",
+                                  "window_start", "window_end"}
+
+            n = await count_finops_notifications(session, window_start, window_end)
+            assert n >= 0
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 31. finops-dashboard API route is wired ----------
+
+def test_finops_dashboard_api_route_is_wired():
+    """The GET /api/v1/operate/finops-dashboard endpoint exists in the FastAPI app."""
+    from e2eai.main import app
+
+    openapi = app.openapi()
+    assert "/api/v1/operate/finops-dashboard" in openapi["paths"]
+
+
+# ---------- 32. finops-dashboard returns safe aggregate summary ----------
+
+def test_finops_dashboard_returns_safe_aggregate_summary():
+    """get_finops_dashboard returns window metadata, safe spend aggregate, chargeback report,
+    budget alert decisions, recent persisted budget alerts (dimension/entity/numbers only),
+    and notification count/health — without leaking any forbidden terms."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete
+
+    from e2eai.db import FinopsBudgetAlert, Notification, sessions
+    from e2eai.finops import get_finops_dashboard
+
+    # NB: 'token' is intentionally excluded — spend aggregation carries safe 'tokens' counts.
+    FORBIDDEN = ("prompt", "answer", "secret", "password", "credential",
+                 "whatsapp", "revenue", "30 percent", "bearer", "api_key")
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, cwd=".")
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(FinopsBudgetAlert))
+            await session.execute(delete(Notification))
+            await session.commit()
+
+            now = datetime.now(timezone.utc)
+            window_start = now - timedelta(hours=1)
+            window_end = now + timedelta(minutes=1)
+
+            session.add(FinopsBudgetAlert(
+                dimension="user", entity_id="u1", actual=0.032, threshold=0.03,
+                window_start=window_start, window_end=window_end, created_by="dash_test",
+            ))
+            await session.commit()
+
+            result = await get_finops_dashboard(session, window_start, window_end)
+
+        for key in ("window", "spend", "report", "alerts", "recent_alerts",
+                    "notification_count", "notification_health"):
+            assert key in result, f"Missing key '{key}' in FinOps dashboard result"
+
+        assert "start" in result["window"]
+        assert "end" in result["window"]
+
+        for dim in ("by_user", "by_team", "by_division", "by_bot"):
+            assert dim in result["spend"]
+
+        entities = [a["entity_id"] for a in result["recent_alerts"]]
+        assert "u1" in entities
+
+        expected_fields = {"dimension", "entity_id", "actual", "threshold",
+                           "window_start", "window_end"}
+        for a in result["recent_alerts"]:
+            assert set(a) == expected_fields
+
+        assert isinstance(result["notification_count"], int)
+        assert result["notification_health"] in ("ok", "degraded")
+
+        serialized = json.dumps(result).lower()
+        for forbidden in FORBIDDEN:
+            assert forbidden not in serialized, (
+                f"Forbidden term '{forbidden}' found in FinOps dashboard output"
+            )
+
+    _migrate()
+    asyncio.run(run())

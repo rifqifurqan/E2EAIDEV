@@ -425,6 +425,25 @@ class SloAlert(Base):
     created_by: Mapped[str | None] = mapped_column(String(80))
 
 
+class FinopsBudgetAlert(Base):
+    """FR-O6: persisted FinOps budget alert — safe storage only.
+
+    Stores the breaching dimension, entity id, actual spend, threshold, and window metadata.
+    Never stores message content, prompts, answers, document text, model names, tokens,
+    secrets, or credentials.
+    """
+    __tablename__ = "finops_budget_alerts"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    dimension: Mapped[str] = mapped_column(String(40))
+    entity_id: Mapped[str] = mapped_column(String(80))
+    actual: Mapped[float] = mapped_column(Float)
+    threshold: Mapped[float] = mapped_column(Float)
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+
+
 ROLE_NAMES = ("admin", "ai_engineer", "evaluator", "compliance", "business_user")  # FR-F3
 
 

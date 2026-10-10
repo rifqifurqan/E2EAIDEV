@@ -6,6 +6,7 @@ are safe: only aggregated spend, budget metadata, and alert decisions — never 
 answers, document text, restricted titles/snippets, secrets, tokens, or credentials.
 """
 
+import uuid
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -13,12 +14,22 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import current_session, require_scope
 from .core.errors import AppError
-from .db import Conversation, Message, TeamMember, User, get_session
+from .db import (
+    Conversation,
+    FinopsBudgetAlert,
+    Message,
+    Notification,
+    Role,
+    TeamMember,
+    User,
+    UserRole,
+    get_session,
+)
 
 # Conservative token cost estimate; real cost depends on the LiteLLM model/provider.
 # ponytail: replace with persisted per-model LiteLLM cost metadata when available.
@@ -240,6 +251,172 @@ async def get_finops_window_report(
 
 
 # ---------------------------------------------------------------------------
+# Alert persistence / notification / dashboard (FR-O6)
+# ---------------------------------------------------------------------------
+
+
+async def persist_finops_budget_alerts(
+    session: AsyncSession,
+    alerts: dict,
+    window_start: datetime,
+    window_end: datetime,
+    created_by: str | None = None,
+) -> list[uuid.UUID]:
+    """Persist fired FinOps budget alerts to the ``finops_budget_alerts`` table.
+
+    Stores only dimension, entity_id, actual, threshold, window boundaries, and created_by.
+    Never stores message content, prompts, answers, model names, tokens, secrets, or credentials.
+
+    Returns a list of persisted FinopsBudgetAlert ids (one per fired alert).
+    """
+    ids: list[uuid.UUID] = []
+    for alert in alerts.get("alerts", []):
+        row = FinopsBudgetAlert(
+            dimension=str(alert["dimension"]),
+            entity_id=str(alert["id"]),
+            actual=float(alert["actual"]),
+            threshold=float(alert["threshold"]),
+            window_start=window_start,
+            window_end=window_end,
+            created_by=created_by,
+        )
+        session.add(row)
+        await session.flush()
+        ids.append(row.id)
+    await session.commit()
+    return ids
+
+
+async def notify_finops_budget_alerts(
+    session: AsyncSession,
+    alerts: dict,
+    window_start: datetime,
+    window_end: datetime,
+) -> int:
+    """Deliver safe in-app notifications for fired budget alerts to admin and evaluator users.
+
+    Details contain only dimension, entity_id, actual, threshold, and window boundaries —
+    never raw prompts, answers, document text, secrets, tokens, or credentials.
+
+    Returns the number of Notification rows created.
+    """
+    if not alerts.get("any_firing"):
+        return 0
+
+    operator_users = list((await session.execute(
+        select(User)
+        .join(UserRole, UserRole.user_id == User.id)
+        .join(Role, Role.id == UserRole.role_id)
+        .where(Role.name.in_(["admin", "evaluator"]))
+        .where(User.status == "active")
+        .distinct()
+    )).scalars().all())
+
+    count = 0
+    for user in operator_users:
+        for alert in alerts.get("alerts", []):
+            session.add(Notification(
+                user_id=user.id,
+                kind="finops.budget.alert.fired",
+                details={
+                    "dimension": str(alert["dimension"]),
+                    "entity_id": str(alert["id"]),
+                    "actual": float(alert["actual"]),
+                    "threshold": float(alert["threshold"]),
+                    "window_start": window_start.isoformat(),
+                    "window_end": window_end.isoformat(),
+                },
+            ))
+            count += 1
+
+    return count
+
+
+async def get_recent_finops_budget_alerts(
+    session: AsyncSession,
+    window_start: datetime,
+    window_end: datetime,
+    limit: int = 50,
+) -> list[dict]:
+    """Query FinopsBudgetAlert rows created in the window. Returns safe dicts only —
+    dimension, entity_id, actual, threshold, and window boundaries. Never message content."""
+    rows = (await session.execute(
+        select(FinopsBudgetAlert)
+        .where(FinopsBudgetAlert.created_at >= window_start)
+        .where(FinopsBudgetAlert.created_at <= window_end)
+        .order_by(FinopsBudgetAlert.created_at.desc())
+        .limit(limit)
+    )).scalars().all()
+    return [
+        {
+            "dimension": r.dimension,
+            "entity_id": r.entity_id,
+            "actual": r.actual,
+            "threshold": r.threshold,
+            "window_start": r.window_start.isoformat(),
+            "window_end": r.window_end.isoformat(),
+        }
+        for r in rows
+    ]
+
+
+async def count_finops_notifications(
+    session: AsyncSession,
+    window_start: datetime,
+    window_end: datetime,
+) -> int:
+    """Count finops.budget.alert.fired Notification rows created in the window."""
+    return await session.scalar(
+        select(func.count())
+        .select_from(Notification)
+        .where(Notification.kind == "finops.budget.alert.fired")
+        .where(Notification.created_at >= window_start)
+        .where(Notification.created_at <= window_end)
+    ) or 0
+
+
+async def get_finops_dashboard(
+    session: AsyncSession,
+    window_start: datetime,
+    window_end: datetime,
+    policy: BudgetPolicy | None = None,
+) -> dict:
+    """Build the FinOps dashboard summary for a time window.
+
+    Returns window metadata, safe aggregate spend, chargeback report, budget alert decisions,
+    recent persisted budget alerts (dimension/entity/numbers only), and notification
+    count/health. Never returns raw message content, prompts, answers, model names, document
+    text, snippets, tokens, credentials, or titles.
+    """
+    if policy is None:
+        policy = BudgetPolicy()
+
+    events = await aggregate_spend_events_from_db(session, window_start, window_end)
+    spend = aggregate_spend(events)
+    alerts = check_budget_alerts(spend, policy)
+    report = build_chargeback_report(spend)
+    recent_alerts = await get_recent_finops_budget_alerts(session, window_start, window_end)
+    notification_count = await count_finops_notifications(session, window_start, window_end)
+
+    # degraded if the window has persisted alerts but no notifications were sent
+    notification_health = "degraded" if (recent_alerts and notification_count == 0) else "ok"
+
+    return {
+        "window": {
+            "start": window_start.isoformat(),
+            "end": window_end.isoformat(),
+        },
+        "event_count": len(events),
+        "spend": spend,
+        "report": report,
+        "alerts": alerts,
+        "recent_alerts": recent_alerts,
+        "notification_count": notification_count,
+        "notification_health": notification_health,
+    }
+
+
+# ---------------------------------------------------------------------------
 # API routes (FR-O6)
 # ---------------------------------------------------------------------------
 
@@ -247,6 +424,13 @@ async def get_finops_window_report(
 class FinopsSpendIn(BaseModel):
     events: list[dict]
     policy: dict | None = None
+
+
+class FinopsWindowIn(BaseModel):
+    window_start: datetime
+    window_end: datetime
+    policy: dict | None = None
+    created_by: str | None = None
 
 
 router = APIRouter(prefix="/api/v1/operate", tags=["operate"])
@@ -324,4 +508,77 @@ async def finops_window_api(
     hours = max(1, min(window_hours, 720))
     window_start = now - timedelta(hours=hours)
     return await get_finops_window_report(db, window_start, now)
+
+
+def _policy_from_dict(data: dict | None) -> BudgetPolicy:
+    """Build a BudgetPolicy from a partial dict, falling back to defaults."""
+    p = BudgetPolicy()
+    if not data:
+        return p
+    return BudgetPolicy(
+        user_budget_usd=float(data.get("user_budget_usd", p.user_budget_usd)),
+        team_budget_usd=float(data.get("team_budget_usd", p.team_budget_usd)),
+        division_budget_usd=float(data.get("division_budget_usd", p.division_budget_usd)),
+        bot_budget_usd=float(data.get("bot_budget_usd", p.bot_budget_usd)),
+    )
+
+
+@router.post("/finops-window")
+async def finops_window_persist_api(
+    body: FinopsWindowIn,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """FR-O6: aggregate DB spend for an explicit window, persist fired budget alerts, and
+    deliver safe in-app notifications to admin/evaluator users.
+
+    Returns aggregate spend, chargeback report, budget alert decisions, event count, window
+    boundaries, and persisted alert count. Never returns raw prompts, answers, model names,
+    document text, snippets, secrets, or credentials.
+    """
+    require_scope(sess, "evals")
+
+    policy = _policy_from_dict(body.policy)
+    events = await aggregate_spend_events_from_db(db, body.window_start, body.window_end)
+    spend = aggregate_spend(events)
+    alerts = check_budget_alerts(spend, policy)
+
+    persisted_ids: list[uuid.UUID] = []
+    if alerts["any_firing"]:
+        persisted_ids = await persist_finops_budget_alerts(
+            db, alerts, body.window_start, body.window_end, created_by=body.created_by
+        )
+        await notify_finops_budget_alerts(db, alerts, body.window_start, body.window_end)
+        await db.commit()
+
+    return {
+        "spend": spend,
+        "report": build_chargeback_report(spend),
+        "alerts": alerts,
+        "event_count": len(events),
+        "window_start": body.window_start.isoformat(),
+        "window_end": body.window_end.isoformat(),
+        "persisted_alert_count": len(persisted_ids),
+    }
+
+
+@router.get("/finops-dashboard")
+async def finops_dashboard_api(
+    window_hours: int = 24,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """FR-O6: FinOps dashboard — aggregate spend, chargeback report, budget alert decisions,
+    recent persisted alert history, and notification health for a rolling time window.
+
+    Safe read-only view for operators. Returns aggregated numeric spend/report, alert firing
+    status, recent persisted alert entities/values, and notification count. Never returns raw
+    prompts, answers, model names, document text, snippets, tokens, credentials, or titles.
+    """
+    require_scope(sess, "evals")
+
+    now = datetime.now(timezone.utc)
+    hours = max(1, min(window_hours, 720))
+    window_start = now - timedelta(hours=hours)
+    return await get_finops_dashboard(db, window_start, now)
 
