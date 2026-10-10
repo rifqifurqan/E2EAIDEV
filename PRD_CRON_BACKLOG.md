@@ -18,15 +18,14 @@ Rules for every cron tick:
 3. [x] [FR-T13] Document-understanding test set: table QA, chart QA, figure/diagram QA, OCR character-error-rate, and safety-warning-included checks. Completed as deterministic/offline doc-understanding.local slice; see progress_2026-10-05.txt.
 4. [x] [FR-T8] OWASP LLM security tests / red-team suites with promptfoo/garak boundaries. Completed as deterministic/offline `security-red-team.local` slice (prompt injection, data exfiltration, sensitive disclosure, unsafe tool use, over-refusal) with a promptfoo/garak adapter boundary metadata map and leak-safe EvalRun storage; see progress_2026-10-05.txt.
 5. [x] [FR-RL2] Release gates: eval thresholds, zero permission leaks, red-team pass, human sign-off. Completed as deterministic/offline per-bot release-gate slice; see progress_2026-10-05.txt.
-6. [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI.
-7. [FR-RL6] Environments: dev -> staging -> prod promotion model, with Lite-tier simplified mode.
+6. [FR-RL6] Environments: dev -> staging -> prod promotion model, with Lite-tier simplified mode.
 
 ### B. Operate / analytics / feedback loop P1
-8. [FR-O5] SLOs and alerting: latency, error rate, cost per conversation, guardrail trigger rate.
-9. [FR-O6] FinOps: spend per user/team/division/bot, budgets, alerts, chargeback reports.
-10. [FR-O7] Usage and ROI analytics: active users, questions per division, answer rate, deflection, unanswered topics, estimated time saved.
-11. [FR-I2] Top unanswered questions report for knowledge owners.
-12. [FR-B3] Structured-output tests: JSON/schema validity rate per model.
+7. [FR-O5] SLOs and alerting: latency, error rate, cost per conversation, guardrail trigger rate.
+8. [FR-O6] FinOps: spend per user/team/division/bot, budgets, alerts, chargeback reports.
+9. [FR-O7] Usage and ROI analytics: active users, questions per division, answer rate, deflection, unanswered topics, estimated time saved.
+10. [FR-I2] Top unanswered questions report for knowledge owners.
+11. [FR-B3] Structured-output tests: JSON/schema validity rate per model.
 
 ### C. Live tools / MCP / systems integration P1
 13. [FR-B4] Live tools through MCP: one MCP server per system generated from OpenAPI.
@@ -103,6 +102,9 @@ Rules for every cron tick:
 72. [FR-B5] Agent workflows and trajectory evaluation.
 73. [FR-O10] GPU scheduling/sharing.
 74. [FR-E4] Role-based learning paths.
+
+### Z. Deferred until CI/deploy is needed
+75. [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 
 ## Notes
 - Items already completed before this file should not be repeated; cron must verify and skip them.

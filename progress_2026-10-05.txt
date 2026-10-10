@@ -958,6 +958,14 @@ OWNER DECISIONS IN FORCE
   - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-RL2 +
     adjacent release/eval/security gates passed.
 
+[FR-RL3] CI integration deferred (2026-10-10)
+  - User decided CI/workflow should not block active development yet; GitHub Actions workflow push also needs
+    GitHub `workflow` scope, so the local CI-gate commit was removed from `main` and moved to the end of
+    `PRD_CRON_BACKLOG.md`.
+  - Deferred backup kept locally as branch `deferred/fr-rl3-ci-workflow` and patch
+    `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
+  - Next active backlog item is FR-RL6 environments/promotion model.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps
