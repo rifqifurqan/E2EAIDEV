@@ -7,16 +7,23 @@ titles/snippets, secrets, tokens, or credentials.
 """
 
 import math
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import current_session, require_scope
 from .core.errors import AppError
-from .db import get_session
+from .db import Message, SloAlert, get_session
+
+# Conservative token cost estimate; real cost depends on the LiteLLM model/provider.
+# ponytail: replace with per-model cost lookup when billing metadata is available (FR-O6).
+_TOKEN_COST_USD: float = 2e-6  # 0.000002 USD/token ≈ $2/1M tokens
 
 
 @dataclass(frozen=True)
@@ -111,13 +118,90 @@ def check_slo_alerts(metrics: dict, policy: SloPolicy) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# API route (FR-O5)
+# DB-backed window aggregation (FR-O5)
+# ---------------------------------------------------------------------------
+
+
+async def aggregate_slo_events_from_db(
+    session: AsyncSession,
+    window_start: datetime,
+    window_end: datetime,
+) -> list[dict]:
+    """Aggregate SLO events from persisted assistant Message rows in a time window.
+
+    Reads only the latency_ms, tokens, and stop_reason columns of assistant messages —
+    never the content, role name, model string, or any credential. Returns a list of safe
+    event dicts compatible with ``compute_slo_metrics``.
+
+    guardrail_triggered is False in this slice; ponytail: correlate with audit_log
+    ``retrieval.context.blocked`` actions in a future slice (FR-O5 dashboard).
+    """
+    rows = (
+        await session.execute(
+            select(Message.latency_ms, Message.tokens, Message.stop_reason)
+            .where(Message.role == "assistant")
+            .where(Message.created_at >= window_start)
+            .where(Message.created_at <= window_end)
+        )
+    ).all()
+
+    events: list[dict] = []
+    for row in rows:
+        events.append({
+            "latency_ms": row.latency_ms or 0,
+            "error": row.stop_reason == "error",
+            "cost_usd": (row.tokens or 0) * _TOKEN_COST_USD,
+            "guardrail_triggered": False,
+        })
+    return events
+
+
+async def persist_slo_alerts(
+    session: AsyncSession,
+    alerts: dict,
+    window_start: datetime,
+    window_end: datetime,
+    created_by: str | None = None,
+) -> list[uuid.UUID]:
+    """Persist fired SLO alerts to the ``slo_alerts`` table.
+
+    Stores only alert_name, actual, threshold, window_start, window_end, and created_by.
+    Never stores message content, prompts, answers, document text, tokens, secrets, or credentials.
+
+    Returns a list of persisted SloAlert ids (one per fired alert).
+    """
+    ids: list[uuid.UUID] = []
+    for alert in alerts.get("alerts", []):
+        row = SloAlert(
+            alert_name=str(alert["name"]),
+            actual=float(alert["actual"]),
+            threshold=float(alert["threshold"]),
+            window_start=window_start,
+            window_end=window_end,
+            created_by=created_by,
+        )
+        session.add(row)
+        await session.flush()
+        ids.append(row.id)
+    await session.commit()
+    return ids
+
+
+# ---------------------------------------------------------------------------
+# API routes (FR-O5)
 # ---------------------------------------------------------------------------
 
 
 class SloMetricsIn(BaseModel):
     events: list[dict]
     policy: dict | None = None
+
+
+class SloWindowIn(BaseModel):
+    window_start: datetime
+    window_end: datetime
+    policy: dict | None = None
+    created_by: str | None = None
 
 
 router = APIRouter(prefix="/api/v1/operate", tags=["operate"])
@@ -153,3 +237,49 @@ async def slo_metrics_api(
     alerts = check_slo_alerts(metrics, policy)
 
     return {"metrics": metrics, "alerts": alerts}
+
+
+@router.post("/slo-window")
+async def slo_window_api(
+    body: SloWindowIn,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """FR-O5: aggregate SLO metrics from DB messages for a time window and persist fired alerts.
+
+    Reads assistant Message rows in the specified time window, computes aggregated SLO metrics,
+    evaluates alert firing decisions, and persists any fired alerts with safe metadata only.
+
+    Returns aggregated metrics, alert decisions, event count, window boundaries, and persisted
+    alert count. Never returns raw message content, prompts, answers, or secrets.
+    """
+    require_scope(sess, "evals")
+
+    policy = SloPolicy()
+    if body.policy:
+        policy = SloPolicy(
+            latency_p50_ms=float(body.policy.get("latency_p50_ms", policy.latency_p50_ms)),
+            latency_p95_ms=float(body.policy.get("latency_p95_ms", policy.latency_p95_ms)),
+            error_rate=float(body.policy.get("error_rate", policy.error_rate)),
+            cost_per_conversation_usd=float(body.policy.get("cost_per_conversation_usd", policy.cost_per_conversation_usd)),
+            guardrail_trigger_rate=float(body.policy.get("guardrail_trigger_rate", policy.guardrail_trigger_rate)),
+        )
+
+    events = await aggregate_slo_events_from_db(db, body.window_start, body.window_end)
+    metrics = compute_slo_metrics(events)
+    alerts = check_slo_alerts(metrics, policy)
+
+    persisted_ids: list[uuid.UUID] = []
+    if alerts["any_firing"]:
+        persisted_ids = await persist_slo_alerts(
+            db, alerts, body.window_start, body.window_end, created_by=body.created_by
+        )
+
+    return {
+        "metrics": metrics,
+        "alerts": alerts,
+        "event_count": len(events),
+        "window_start": body.window_start.isoformat(),
+        "window_end": body.window_end.isoformat(),
+        "persisted_alert_count": len(persisted_ids),
+    }

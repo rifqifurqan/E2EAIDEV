@@ -291,3 +291,352 @@ def test_slo_metrics_api_route_is_wired():
 
     openapi = app.openapi()
     assert "/api/v1/operate/slo-metrics" in openapi["paths"]
+
+
+# ---------- 17. DB window aggregation: safe event dicts from messages ----------
+
+def test_db_slo_window_aggregation_returns_safe_event_dicts():
+    """aggregate_slo_events_from_db reads assistant Message rows and returns event dicts
+    with numeric/boolean fields only — never message content, role, model, or credentials."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select
+
+    from e2eai.db import Conversation, Message, User, sessions
+    from e2eai.seed import seed_demo
+    from e2eai.slo_metrics import aggregate_slo_events_from_db
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True)
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(Message))
+            await session.execute(delete(Conversation))
+            await session.commit()
+
+            await seed_demo(session, password="TestPassword_123456789")
+            user = await session.scalar(
+                select(User).where(func.lower(User.email) == "andi@demo.e2eai")
+            )
+
+            now = datetime.now(timezone.utc)
+
+            # Seed a conversation + assistant message inside the window
+            conv = Conversation(user_id=user.id, title="SLO test conv")
+            session.add(conv)
+            await session.flush()
+
+            msg = Message(
+                conversation_id=conv.id,
+                role="assistant",
+                content="WhatsApp revenue share is 30 percent",  # must NOT appear in events
+                model="test-model",
+                tokens=150,
+                latency_ms=300,
+                stop_reason="stop",
+            )
+            session.add(msg)
+            # Also add a user message (should be excluded from aggregation)
+            user_msg = Message(
+                conversation_id=conv.id,
+                role="user",
+                content="What is the revenue share?",  # must NOT appear
+                model=None,
+                tokens=None,
+                latency_ms=None,
+                stop_reason=None,
+            )
+            session.add(user_msg)
+            await session.commit()
+
+            events = await aggregate_slo_events_from_db(
+                session,
+                window_start=now - timedelta(minutes=5),
+                window_end=now + timedelta(minutes=5),
+            )
+
+            # Must have at least one event (the assistant message)
+            assert len(events) >= 1
+
+            for e in events:
+                # Shape: only expected safe keys present
+                assert "latency_ms" in e
+                assert "error" in e
+                assert "cost_usd" in e
+                assert "guardrail_triggered" in e
+                # Raw content / sensitive fields must be absent
+                assert "content" not in e
+                assert "role" not in e
+                assert "model" not in e
+                serialized = json.dumps(e)
+                assert "WhatsApp" not in serialized
+                assert "revenue share" not in serialized
+                assert "30 percent" not in serialized
+                assert "What is the revenue" not in serialized
+
+            # Verify the numeric values for the assistant message
+            matching = [e for e in events if e["latency_ms"] == 300]
+            assert len(matching) == 1
+            assert matching[0]["error"] is False
+            assert matching[0]["cost_usd"] > 0
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 18. DB window aggregation: time window boundary ----------
+
+def test_db_slo_window_aggregation_respects_time_window():
+    """Messages with created_at outside the window are excluded from aggregation."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select, text
+
+    from e2eai.db import Conversation, Message, User, sessions
+    from e2eai.seed import seed_demo
+    from e2eai.slo_metrics import aggregate_slo_events_from_db
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True)
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(Message))
+            await session.execute(delete(Conversation))
+            await session.commit()
+
+            await seed_demo(session, password="TestPassword_123456789")
+            user = await session.scalar(
+                select(User).where(func.lower(User.email) == "andi@demo.e2eai")
+            )
+
+            now = datetime.now(timezone.utc)
+            window_start = now - timedelta(minutes=30)
+            window_end = now - timedelta(minutes=10)  # in the past
+
+            conv = Conversation(user_id=user.id, title="SLO window test conv")
+            session.add(conv)
+            await session.flush()
+
+            # Message INSIDE window: backdate via INSERT with explicit created_at
+            msg_in = Message(
+                conversation_id=conv.id,
+                role="assistant",
+                content="Inside window content",
+                model="test-model",
+                tokens=50,
+                latency_ms=100,
+                stop_reason="stop",
+            )
+            session.add(msg_in)
+            await session.flush()
+            # Force created_at into the window
+            await session.execute(
+                text("UPDATE messages SET created_at = :ts WHERE id = :id"),
+                {"ts": window_start + timedelta(minutes=10), "id": str(msg_in.id)},
+            )
+
+            # Message OUTSIDE window: created_at = now (after window_end)
+            msg_out = Message(
+                conversation_id=conv.id,
+                role="assistant",
+                content="Outside window content",
+                model="test-model",
+                tokens=200,
+                latency_ms=999,
+                stop_reason="stop",
+            )
+            session.add(msg_out)
+            await session.commit()
+
+            events = await aggregate_slo_events_from_db(session, window_start, window_end)
+
+            # Only msg_in should be in events (latency_ms=100, not latency_ms=999)
+            latencies = [e["latency_ms"] for e in events]
+            assert 100 in latencies, "In-window message must be included"
+            assert 999 not in latencies, "Out-of-window message must be excluded"
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 19. Alert persistence: stores safe fields only ----------
+
+def test_slo_alert_persistence_stores_safe_fields_only():
+    """persist_slo_alerts writes SloAlert rows containing only alert_name, actual,
+    threshold, window_start, window_end, created_by — never message content or secrets."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, select
+
+    from e2eai.db import sessions
+    from e2eai.slo_metrics import SloAlert, persist_slo_alerts
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True)
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(SloAlert))
+            await session.commit()
+
+            now = datetime.now(timezone.utc)
+            window_start = now - timedelta(hours=1)
+            window_end = now
+
+            fired_alerts = {
+                "any_firing": True,
+                "total_checked": 5,
+                "alerts": [
+                    {"name": "error_rate", "actual": 0.25, "threshold": 0.10},
+                    {"name": "latency_p95", "actual": 1800.0, "threshold": 1000.0},
+                ],
+            }
+
+            ids = await persist_slo_alerts(
+                session,
+                fired_alerts,
+                window_start=window_start,
+                window_end=window_end,
+                created_by="test_actor",
+            )
+
+            assert len(ids) == 2
+
+            rows = (await session.execute(select(SloAlert))).scalars().all()
+            persisted = [r for r in rows]
+            assert len(persisted) >= 2
+
+            names = {r.alert_name for r in persisted}
+            assert "error_rate" in names
+            assert "latency_p95" in names
+
+            for row in persisted:
+                # Only safe numeric/string fields should exist on the model
+                assert hasattr(row, "alert_name")
+                assert hasattr(row, "actual")
+                assert hasattr(row, "threshold")
+                assert hasattr(row, "window_start")
+                assert hasattr(row, "window_end")
+                assert hasattr(row, "created_by")
+                # Values must be numeric/string, not blobs of message text
+                assert isinstance(row.actual, float)
+                assert isinstance(row.threshold, float)
+                assert row.created_by == "test_actor"
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 20. Leakage guard: raw message content absent from persisted alerts ----------
+
+def test_slo_alert_persistence_leakage_guard_raw_content_absent():
+    """Raw message content ('WhatsApp revenue share is 30 percent') must not appear
+    in persisted SloAlert rows or in the slo-window endpoint output."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select
+
+    from e2eai.db import Conversation, Message, User, sessions
+    from e2eai.seed import seed_demo
+    from e2eai.slo_metrics import (
+        SloAlert,
+        SloPolicy,
+        aggregate_slo_events_from_db,
+        check_slo_alerts,
+        compute_slo_metrics,
+        persist_slo_alerts,
+    )
+
+    FORBIDDEN = "WhatsApp revenue share is 30 percent"
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True)
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(SloAlert))
+            await session.execute(delete(Message))
+            await session.execute(delete(Conversation))
+            await session.commit()
+
+            await seed_demo(session, password="TestPassword_123456789")
+            user = await session.scalar(
+                select(User).where(func.lower(User.email) == "andi@demo.e2eai")
+            )
+
+            now = datetime.now(timezone.utc)
+
+            conv = Conversation(user_id=user.id, title="Leakage guard conv")
+            session.add(conv)
+            await session.flush()
+
+            # Message containing sensitive content that must NOT leak into alerts
+            session.add(Message(
+                conversation_id=conv.id,
+                role="assistant",
+                content=FORBIDDEN,
+                model="test-model",
+                tokens=10,
+                latency_ms=5000,  # very high latency → will trigger alert
+                stop_reason="stop",
+            ))
+            await session.commit()
+
+            events = await aggregate_slo_events_from_db(
+                session,
+                window_start=now - timedelta(minutes=5),
+                window_end=now + timedelta(minutes=5),
+            )
+
+            # Events must not contain forbidden content
+            for e in events:
+                assert FORBIDDEN not in json.dumps(e)
+
+            metrics = compute_slo_metrics(events)
+            tight_policy = SloPolicy(latency_p50_ms=10, latency_p95_ms=20, error_rate=1.0,
+                                     cost_per_conversation_usd=1.0, guardrail_trigger_rate=1.0)
+            alerts = check_slo_alerts(metrics, tight_policy)
+            assert alerts["any_firing"] is True
+
+            ids = await persist_slo_alerts(
+                session, alerts,
+                window_start=now - timedelta(minutes=5),
+                window_end=now + timedelta(minutes=5),
+                created_by="leakage_guard_test",
+            )
+            assert len(ids) > 0
+
+            rows = (await session.execute(select(SloAlert))).scalars().all()
+            for row in rows:
+                row_str = json.dumps({
+                    "alert_name": row.alert_name,
+                    "actual": row.actual,
+                    "threshold": row.threshold,
+                    "created_by": row.created_by,
+                })
+                assert FORBIDDEN not in row_str, (
+                    f"Forbidden content found in persisted alert: {row_str!r}"
+                )
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 21. slo-window API endpoint wiring smoke ----------
+
+def test_slo_window_api_route_is_wired():
+    """The /api/v1/operate/slo-window endpoint exists in the FastAPI app."""
+    from e2eai.main import app
+
+    openapi = app.openapi()
+    assert "/api/v1/operate/slo-window" in openapi["paths"]

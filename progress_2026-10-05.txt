@@ -1030,6 +1030,16 @@ OWNER DECISIONS IN FORCE
     (latency p50, latency p95, error rate, cost, guardrail rate). RED:
     `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py::test_check_slo_alerts_all_within_slo` -> failed `assert 4 == 5`; GREEN/focused gate:
     `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py::test_check_slo_alerts_all_within_slo && uv run pytest -q tests/test_us_slo_metrics_p1.py tests/test_us_quotas_rate_limits.py tests/test_us_chat_conversations.py tests/test_us_release_gates_p1.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 1 passed; 43 passed; app ok.
+  - DB-backed SLO window + safe alert persistence sub-slice (2026-10-10):
+    - Claude Code was used first, added the initial DB-backed slice with TDD, but exited at `error_max_turns`; the known broken SessionEnd hook noise was non-blocking. Hermes inspected the WIP and verified/finalized the focused gates.
+    - Added `SloAlert` ORM table and Alembic migration `0014_slo_alerts`; persisted rows store only alert_name, actual, threshold, window_start/window_end, created_at, and created_by.
+    - Added `aggregate_slo_events_from_db` to build safe SLO events from persisted assistant `Message` rows inside a time window using only latency/tokens/stop_reason metadata; message content, model names, prompts, answers, document text, and credentials are never returned or persisted.
+    - Added `persist_slo_alerts` plus `POST /api/v1/operate/slo-window`, keeping the existing `/slo-metrics` manual-events API backward compatible.
+    - Tests added to `test_us_slo_metrics_p1.py` cover DB window aggregation, time-window filtering, safe alert persistence, raw-content leakage guard (`"WhatsApp revenue share is 30 percent"` absent from events/alerts), and route wiring.
+    - Verified:
+      `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py` -> 21 passed.
+      `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py tests/test_us_chat_conversations.py tests/test_us_quotas_rate_limits.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')" && uv run alembic upgrade head` -> 36 passed; app ok; Alembic head applied/current.
+    - FR-O5 remains unchecked in `PRD_CRON_BACKLOG.md`; remaining work: aggregate guardrail triggers from audit/guardrail records, persist/deliver alert notifications, and dashboard/report integration.
 
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
