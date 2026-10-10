@@ -1052,6 +1052,26 @@ OWNER DECISIONS IN FORCE
       `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py tests/test_us_chat_conversations.py tests/test_us_quotas_rate_limits.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 38 passed; app ok.
     - FR-O5 remains unchecked in `PRD_CRON_BACKLOG.md`; remaining work: alert notification delivery and dashboard/report integration.
 
+  - Alert notification delivery sub-slice (2026-10-11):
+    - Claude Code completed this slice with TDD.
+    - Added `notify_slo_alerts(session, alerts, window_start, window_end)` to `slo_metrics.py`.
+      Queries all active `admin` and `evaluator` role users and creates `Notification` rows with
+      `kind="slo.alert.fired"` and details containing only: `alert_name`, `actual`, `threshold`,
+      `window_start`, `window_end`. Raw prompts, answers, document text, tokens, secrets, and
+      credentials are never written to notification details.
+    - `slo_window_api` now calls `notify_slo_alerts` after `persist_slo_alerts` when any alert fires.
+    - Added test 24 to `test_us_slo_metrics_p1.py`:
+      `test_slo_alert_notifications_delivered_to_admin_evaluator_only` — seeds admin, evaluator,
+      and business_user; fires 2 alerts; asserts admin and evaluator each receive 2 notifications
+      (one per fired alert); business_user receives 0; notification details contain no forbidden
+      terms (prompt, answer, secret, password, token, credential, whatsapp, revenue, 30 percent, bearer).
+    - RED evidence: `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py::test_slo_alert_notifications_delivered_to_admin_evaluator_only`
+      -> `ImportError: cannot import name 'notify_slo_alerts' from 'e2eai.slo_metrics'`.
+    - Verified:
+      `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py::test_slo_alert_notifications_delivered_to_admin_evaluator_only` -> 1 passed.
+      `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py tests/test_us_sharing_views_notifications.py` -> 29 passed in 16.75s.
+    - FR-O5 remains unchecked in `PRD_CRON_BACKLOG.md`; remaining work: dashboard/report integration.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps

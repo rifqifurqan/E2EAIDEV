@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import current_session, require_scope
 from .core.errors import AppError
-from .db import AuditEntry, Message, SloAlert, get_session
+from .db import AuditEntry, Message, Notification, Role, SloAlert, User, UserRole, get_session
 
 # Conservative token cost estimate; real cost depends on the LiteLLM model/provider.
 # ponytail: replace with per-model cost lookup when billing metadata is available (FR-O6).
@@ -208,6 +208,50 @@ async def persist_slo_alerts(
     return ids
 
 
+async def notify_slo_alerts(
+    session: AsyncSession,
+    alerts: dict,
+    window_start: datetime,
+    window_end: datetime,
+) -> int:
+    """Deliver safe in-app notifications for fired SLO alerts to admin and evaluator users.
+
+    Details contain only alert_name, actual, threshold, and window boundaries —
+    never raw prompts, answers, document text, secrets, tokens, or credentials.
+
+    Returns the number of Notification rows created.
+    """
+    if not alerts.get("any_firing"):
+        return 0
+
+    operator_users = list((await session.execute(
+        select(User)
+        .join(UserRole, UserRole.user_id == User.id)
+        .join(Role, Role.id == UserRole.role_id)
+        .where(Role.name.in_(["admin", "evaluator"]))
+        .where(User.status == "active")
+        .distinct()
+    )).scalars().all())
+
+    count = 0
+    for user in operator_users:
+        for alert in alerts.get("alerts", []):
+            session.add(Notification(
+                user_id=user.id,
+                kind="slo.alert.fired",
+                details={
+                    "alert_name": str(alert["name"]),
+                    "actual": float(alert["actual"]),
+                    "threshold": float(alert["threshold"]),
+                    "window_start": window_start.isoformat(),
+                    "window_end": window_end.isoformat(),
+                },
+            ))
+            count += 1
+
+    return count
+
+
 # ---------------------------------------------------------------------------
 # API routes (FR-O5)
 # ---------------------------------------------------------------------------
@@ -295,6 +339,8 @@ async def slo_window_api(
         persisted_ids = await persist_slo_alerts(
             db, alerts, body.window_start, body.window_end, created_by=body.created_by
         )
+        await notify_slo_alerts(db, alerts, body.window_start, body.window_end)
+        await db.commit()
 
     return {
         "metrics": metrics,

@@ -759,3 +759,126 @@ def test_aggregate_slo_events_excludes_out_of_window_audit_entries():
 
     _migrate()
     asyncio.run(run())
+
+
+# ---------- 24. SLO alert notifications delivered to admin/evaluator only ----------
+
+def test_slo_alert_notifications_delivered_to_admin_evaluator_only():
+    """When SLO alerts fire, safe in-app notifications are delivered to admin and evaluator
+    users. Business users get no notification. Details contain only alert metadata —
+    never raw prompts, answers, document text, secrets, tokens, or credentials."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select
+
+    from e2eai.auth import hash_password
+    from e2eai.db import (
+        LocalCredential,
+        Notification,
+        Organization,
+        Role,
+        User,
+        UserRole,
+        sessions,
+    )
+    from e2eai.seed import seed_roles
+    from e2eai.slo_metrics import notify_slo_alerts
+
+    FORBIDDEN = ("prompt", "answer", "secret", "password", "token", "credential",
+                 "whatsapp", "revenue", "30 percent", "bearer")
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True)
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(Notification))
+            await session.commit()
+
+            await seed_roles(session)
+            org = await session.scalar(select(Organization).where(Organization.name == "System"))
+            if org is None:
+                org = Organization(name="System", created_by="test")
+                session.add(org)
+                await session.flush()
+
+            roles = {r.name: r for r in await session.scalars(select(Role))}
+            pw_hash = hash_password("TestNotif_123456789")
+
+            admin_user = await session.scalar(select(User).where(func.lower(User.email) == "admin_slo@test.local"))
+            if admin_user is None:
+                admin_user = User(org_id=org.id, email="admin_slo@test.local", display_name="Admin SLO", created_by="test")
+                session.add(admin_user)
+                await session.flush()
+                session.add(LocalCredential(user_id=admin_user.id, password_hash=pw_hash))
+                session.add(UserRole(user_id=admin_user.id, role_id=roles["admin"].id))
+
+            eval_user = await session.scalar(select(User).where(func.lower(User.email) == "evaluator_slo@test.local"))
+            if eval_user is None:
+                eval_user = User(org_id=org.id, email="evaluator_slo@test.local", display_name="Evaluator SLO", created_by="test")
+                session.add(eval_user)
+                await session.flush()
+                session.add(LocalCredential(user_id=eval_user.id, password_hash=pw_hash))
+                session.add(UserRole(user_id=eval_user.id, role_id=roles["evaluator"].id))
+
+            biz_user = await session.scalar(select(User).where(func.lower(User.email) == "biz_slo@test.local"))
+            if biz_user is None:
+                biz_user = User(org_id=org.id, email="biz_slo@test.local", display_name="Biz SLO", created_by="test")
+                session.add(biz_user)
+                await session.flush()
+                session.add(LocalCredential(user_id=biz_user.id, password_hash=pw_hash))
+                session.add(UserRole(user_id=biz_user.id, role_id=roles["business_user"].id))
+            await session.commit()
+
+            now = datetime.now(timezone.utc)
+            window_start = now - timedelta(hours=1)
+            window_end = now
+
+            fired_alerts = {
+                "any_firing": True,
+                "total_checked": 5,
+                "alerts": [
+                    {"name": "error_rate", "actual": 0.25, "threshold": 0.10},
+                    {"name": "latency_p95", "actual": 1800.0, "threshold": 1000.0},
+                ],
+            }
+
+            count = await notify_slo_alerts(session, fired_alerts, window_start, window_end)
+            await session.commit()
+
+            # At least 2 alerts × 2 recipients (admin + evaluator); may be more if other
+            # admin/evaluator users exist in the DB from prior test setup.
+            assert count >= 4, f"Expected at least 4 notifications, got {count}"
+            assert count % len(fired_alerts["alerts"]) == 0, "Count must be a multiple of fired alert count"
+
+            admin_notifs = (await session.execute(
+                select(Notification).where(Notification.user_id == admin_user.id)
+            )).scalars().all()
+            assert len(admin_notifs) == 2
+
+            eval_notifs = (await session.execute(
+                select(Notification).where(Notification.user_id == eval_user.id)
+            )).scalars().all()
+            assert len(eval_notifs) == 2
+
+            # Business user must get no notifications
+            biz_notifs = (await session.execute(
+                select(Notification).where(Notification.user_id == biz_user.id)
+            )).scalars().all()
+            assert len(biz_notifs) == 0
+
+            for notif in admin_notifs + eval_notifs:
+                assert notif.kind == "slo.alert.fired"
+                assert "alert_name" in notif.details
+                assert "actual" in notif.details
+                assert "threshold" in notif.details
+                serialized = json.dumps(notif.details).lower()
+                for forbidden in FORBIDDEN:
+                    assert forbidden not in serialized, (
+                        f"Forbidden term '{forbidden}' in SLO notification details"
+                    )
+
+    _migrate()
+    asyncio.run(run())
