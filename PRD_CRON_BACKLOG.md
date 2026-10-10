@@ -26,9 +26,9 @@ Rules for every cron tick:
    - [x] Deterministic/offline service + API slice: aggregate spend by user/team/division/bot from safe metadata events, evaluate budget alerts, and build safe chargeback reports. See progress_2026-10-05.txt.
    - [x] DB-backed spend aggregation from persisted message/token metadata, with conversation bot grouping and a safe rolling-window API. See progress_2026-10-05.txt.
    - [x] Persist/deliver FinOps budget alerts and expose dashboard/report integration. `FinopsBudgetAlert` model + migration 0016, persist/notify/dashboard helpers, POST /finops-window + GET /finops-dashboard. See progress_2026-10-05.txt.
-9. [FR-O7] Usage and ROI analytics: active users, questions per division, answer rate, deflection, unanswered topics, estimated time saved.
+9. [x] [FR-O7] Usage and ROI analytics: active users, questions per division, answer rate, deflection, unanswered topics, estimated time saved.
    - [x] Deterministic/offline service + API slice: aggregate active users, questions per division, answer rate, deflection, top unanswered topics, and estimated time saved from safe usage events. See progress_2026-10-05.txt.
-   - [ ] DB-backed usage/ROI aggregation from persisted chat/feedback/trace metadata, with safe rolling-window dashboard/report integration.
+   - [x] DB-backed usage/ROI aggregation from persisted chat/feedback/trace metadata, with safe rolling-window dashboard/report integration. See progress_2026-10-05.txt.
 10. [FR-I2] Top unanswered questions report for knowledge owners.
 11. [FR-B3] Structured-output tests: JSON/schema validity rate per model.
 

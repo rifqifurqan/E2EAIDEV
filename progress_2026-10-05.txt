@@ -1158,6 +1158,17 @@ OWNER DECISIONS IN FORCE
   - `PRD_CRON_BACKLOG.md` item 9 split: deterministic/offline usage/ROI service + API slice marked done; remaining FR-O7 work is DB-backed aggregation from persisted chat/feedback/trace metadata with safe rolling-window dashboard/report integration.
   - Full heavy verification intentionally deferred; focused FR-O7 + adjacent operate/quota gates passed.
 
+- Usage/ROI DB-backed dashboard/report sub-slice (FR-O7) (2026-10-11):
+  - Claude Code was used first; it timed out without producing a JSON summary but left a useful WIP diff. Hermes inspected the diff, found the failing pair-inference tests, fixed the root cause, and verified the slice.
+  - Added `aggregate_usage_events_from_db()` to read safe persisted chat metadata from `Message` -> `Conversation` -> `User`, infer question events from user messages, pair the next assistant response, and infer answered/deflected/time-saved without selecting or returning raw prompts, answers, model names, document text, snippets, credentials, or API keys.
+  - Added `get_usage_roi_dashboard()` and `GET /api/v1/operate/usage-roi-dashboard` for a safe rolling-window Usage/ROI dashboard/report. Output contains only window metadata, event count, aggregate report metrics, division/user IDs, counts/rates/minutes, and safe constant topic buckets.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_usage_roi_p1.py` -> 2 failed, 24 passed after Claude WIP; the failures showed assistant-pair inference missed same-transaction messages because PostgreSQL `now()` gives identical `created_at` values.
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_usage_roi_p1.py` -> 26 passed.
+    `cd apps/api && uv run pytest -q tests/test_usage_roi_p1.py tests/test_finops_p1.py tests/test_us_slo_metrics_p1.py` -> 84 passed.
+  - `PRD_CRON_BACKLOG.md` item 9 marked fully done. Full heavy verification intentionally deferred; focused FR-O7 + adjacent operate gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps

@@ -272,3 +272,456 @@ def test_top_unanswered_topics_excludes_answered():
     topic_names = [t["topic"] for t in report["top_unanswered_topics"]]
     assert "unanswered-topic" in topic_names
     assert "answered-topic" not in topic_names
+
+
+# ---------- 18. DB usage/ROI: grouping by user/division ----------
+
+def test_db_usage_roi_groups_by_user_division():
+    """aggregate_usage_events_from_db reads persisted user Message rows, joins to
+    Conversation->User, and returns safe usage event dicts grouped by user_id/division_id."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select
+
+    from e2eai.db import Conversation, Division, Message, User, sessions
+    from e2eai.usage_roi import aggregate_usage_events_from_db, compute_usage_roi_report
+    from e2eai.seed import seed_demo
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, cwd=".")
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(Message))
+            await session.execute(delete(Conversation))
+            await session.commit()
+
+            await seed_demo(session, password="TestUsageROIDB_123456")
+
+            andi = await session.scalar(select(User).where(func.lower(User.email) == "andi@demo.e2eai"))
+            budi = await session.scalar(select(User).where(func.lower(User.email) == "budi@demo.e2eai"))
+            sales_div = await session.scalar(select(Division).where(Division.name == "Sales"))
+            hr_div = await session.scalar(select(Division).where(Division.name == "HR"))
+
+            now = datetime.now(timezone.utc)
+
+            andi_conv = Conversation(user_id=andi.id, title="Andi usage conv")
+            budi_conv = Conversation(user_id=budi.id, title="Budi usage conv")
+            session.add(andi_conv)
+            session.add(budi_conv)
+            await session.flush()
+
+            # 2 user messages from Andi, 1 from Budi
+            session.add(Message(conversation_id=andi_conv.id, role="user",
+                                content="q1", tokens=10, latency_ms=None, stop_reason=None))
+            session.add(Message(conversation_id=andi_conv.id, role="user",
+                                content="q2", tokens=10, latency_ms=None, stop_reason=None))
+            session.add(Message(conversation_id=budi_conv.id, role="user",
+                                content="q3", tokens=10, latency_ms=None, stop_reason=None))
+            # assistant message — must NOT be counted as a question event
+            session.add(Message(conversation_id=andi_conv.id, role="assistant",
+                                content="a1", tokens=100, latency_ms=200, stop_reason="stop"))
+            await session.commit()
+
+            events = await aggregate_usage_events_from_db(
+                session,
+                window_start=now - timedelta(minutes=1),
+                window_end=now + timedelta(minutes=5),
+            )
+
+            # 3 user messages → 3 events
+            assert len(events) == 3
+
+            for e in events:
+                assert "user_id" in e
+                assert "division_id" in e
+                assert "answered" in e
+                assert "deflected" in e
+                assert "topic" in e
+                assert "time_saved_minutes" in e
+                # No raw content fields
+                assert "content" not in e
+                assert "role" not in e
+                assert "model" not in e
+
+            # Verify grouping
+            report = compute_usage_roi_report(events)
+            assert report["active_users"] >= 2  # andi + budi
+            assert report["total_questions"] == 3
+
+            by_div = {d["division_id"]: d["count"] for d in report["questions_per_division"]}
+            assert str(sales_div.id) in by_div
+            assert str(hr_div.id) in by_div
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 19. DB usage/ROI: answer/deflection inference from citations ----------
+
+def test_db_usage_roi_answer_inference_from_citations():
+    """answered=True when a subsequent assistant Message exists with acceptable stop_reason
+    and at least one MessageCitation. deflected=True when citations exist."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select
+
+    from e2eai.db import Conversation, Message, MessageCitation, User, sessions
+    from e2eai.usage_roi import aggregate_usage_events_from_db
+    from e2eai.seed import seed_demo
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, cwd=".")
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(MessageCitation))
+            await session.execute(delete(Message))
+            await session.execute(delete(Conversation))
+            await session.commit()
+
+            await seed_demo(session, password="TestUsageROIDB_123456")
+            andi = await session.scalar(select(User).where(func.lower(User.email) == "andi@demo.e2eai"))
+            now = datetime.now(timezone.utc)
+
+            conv = Conversation(user_id=andi.id, title="Citation test conv")
+            session.add(conv)
+            await session.flush()
+
+            # User message → assistant with citation → answered=True, deflected=True
+            user_msg1 = Message(conversation_id=conv.id, role="user",
+                                content="q cited", tokens=10, latency_ms=None, stop_reason=None)
+            session.add(user_msg1)
+            await session.flush()
+            asst_msg1 = Message(conversation_id=conv.id, role="assistant",
+                                content="cited answer", tokens=100, latency_ms=200, stop_reason="stop")
+            session.add(asst_msg1)
+            await session.flush()
+            session.add(MessageCitation(message_id=asst_msg1.id, document_id=None, page=1))
+            await session.flush()
+
+            # User message → assistant with error stop_reason → answered=False
+            user_msg2 = Message(conversation_id=conv.id, role="user",
+                                content="q error", tokens=10, latency_ms=None, stop_reason=None)
+            session.add(user_msg2)
+            await session.flush()
+            session.add(Message(conversation_id=conv.id, role="assistant",
+                                content="", tokens=0, latency_ms=100, stop_reason="error"))
+            await session.flush()
+
+            # User message → no assistant reply → answered=False
+            session.add(Message(conversation_id=conv.id, role="user",
+                                content="q unanswered", tokens=10, latency_ms=None, stop_reason=None))
+            await session.commit()
+
+            events = await aggregate_usage_events_from_db(
+                session,
+                window_start=now - timedelta(minutes=1),
+                window_end=now + timedelta(minutes=5),
+            )
+
+            assert len(events) == 3
+
+            answered_events = [e for e in events if e["answered"]]
+            unanswered_events = [e for e in events if not e["answered"]]
+            deflected_events = [e for e in events if e["deflected"]]
+
+            assert len(answered_events) == 1, f"Expected 1 answered, got {len(answered_events)}"
+            assert len(unanswered_events) == 2, f"Expected 2 unanswered, got {len(unanswered_events)}"
+            assert len(deflected_events) >= 1, f"Expected >=1 deflected, got {len(deflected_events)}"
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 20. DB usage/ROI: deflection from positive feedback ----------
+
+def test_db_usage_roi_deflection_from_positive_feedback():
+    """deflected=True when the paired assistant message has positive (up) feedback."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select
+
+    from e2eai.db import Conversation, Message, MessageFeedback, User, sessions
+    from e2eai.usage_roi import aggregate_usage_events_from_db
+    from e2eai.seed import seed_demo
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, cwd=".")
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(MessageFeedback))
+            await session.execute(delete(Message))
+            await session.execute(delete(Conversation))
+            await session.commit()
+
+            await seed_demo(session, password="TestUsageROIDB_123456")
+            andi = await session.scalar(select(User).where(func.lower(User.email) == "andi@demo.e2eai"))
+            now = datetime.now(timezone.utc)
+
+            conv = Conversation(user_id=andi.id, title="Feedback test conv")
+            session.add(conv)
+            await session.flush()
+
+            user_msg = Message(conversation_id=conv.id, role="user",
+                               content="q feedback", tokens=10, latency_ms=None, stop_reason=None)
+            session.add(user_msg)
+            await session.flush()
+            asst_msg = Message(conversation_id=conv.id, role="assistant",
+                               content="answer with feedback", tokens=80, latency_ms=150,
+                               stop_reason="stop")
+            session.add(asst_msg)
+            await session.flush()
+            session.add(MessageFeedback(message_id=asst_msg.id, rating="up"))
+            await session.commit()
+
+            events = await aggregate_usage_events_from_db(
+                session,
+                window_start=now - timedelta(minutes=1),
+                window_end=now + timedelta(minutes=5),
+            )
+
+            assert len(events) == 1
+            assert events[0]["deflected"] is True
+            assert events[0]["answered"] is True
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 21. DB usage/ROI: window boundary ----------
+
+def test_db_usage_roi_window_boundary():
+    """User messages outside the time window are excluded from usage/ROI aggregation."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select, text
+
+    from e2eai.db import Conversation, Message, User, sessions
+    from e2eai.usage_roi import aggregate_usage_events_from_db
+    from e2eai.seed import seed_demo
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, cwd=".")
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(Message))
+            await session.execute(delete(Conversation))
+            await session.commit()
+
+            await seed_demo(session, password="TestUsageROIDB_123456")
+            andi = await session.scalar(select(User).where(func.lower(User.email) == "andi@demo.e2eai"))
+
+            now = datetime.now(timezone.utc)
+            window_start = now - timedelta(minutes=30)
+            window_end = now - timedelta(minutes=10)
+
+            conv = Conversation(user_id=andi.id, title="Window test conv")
+            session.add(conv)
+            await session.flush()
+
+            # Inside window (backdated)
+            msg_in = Message(conversation_id=conv.id, role="user",
+                             content="in window", tokens=10, latency_ms=None, stop_reason=None)
+            session.add(msg_in)
+            await session.flush()
+            await session.execute(
+                text("UPDATE messages SET created_at = :ts WHERE id = :id"),
+                {"ts": window_start + timedelta(minutes=10), "id": str(msg_in.id)},
+            )
+
+            # Outside window (created_at = now, after window_end)
+            session.add(Message(conversation_id=conv.id, role="user",
+                                content="out of window", tokens=10, latency_ms=None, stop_reason=None))
+            await session.commit()
+
+            events = await aggregate_usage_events_from_db(session, window_start, window_end)
+            assert len(events) == 1, f"Expected 1 in-window event, got {len(events)}"
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 22. DB usage/ROI: serialization excludes raw content ----------
+
+def test_db_usage_roi_serialization_excludes_raw_content():
+    """Usage/ROI events from DB must not contain content, model, role, or any raw text —
+    only safe aggregate fields."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select
+
+    from e2eai.db import Conversation, Message, User, sessions
+    from e2eai.usage_roi import aggregate_usage_events_from_db
+    from e2eai.seed import seed_demo
+
+    FORBIDDEN_CONTENT = "WhatsApp revenue share is 30 percent"
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, cwd=".")
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(Message))
+            await session.execute(delete(Conversation))
+            await session.commit()
+
+            await seed_demo(session, password="TestUsageROIDB_123456")
+            andi = await session.scalar(select(User).where(func.lower(User.email) == "andi@demo.e2eai"))
+            now = datetime.now(timezone.utc)
+
+            conv = Conversation(user_id=andi.id, title="Safety test conv")
+            session.add(conv)
+            await session.flush()
+            session.add(Message(conversation_id=conv.id, role="user",
+                                content=FORBIDDEN_CONTENT, tokens=10, latency_ms=None,
+                                stop_reason=None))
+            await session.commit()
+
+            events = await aggregate_usage_events_from_db(
+                session,
+                window_start=now - timedelta(minutes=1),
+                window_end=now + timedelta(minutes=5),
+            )
+
+            assert len(events) >= 1
+            for e in events:
+                serialized = json.dumps(e)
+                assert FORBIDDEN_CONTENT not in serialized
+                for forbidden in ("content", "model", "role", "prompt",
+                                  "password", "credential", "bearer", "api_key"):
+                    assert forbidden not in serialized.lower(), (
+                        f"Forbidden term '{forbidden}' found in usage/ROI event"
+                    )
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 23. DB usage/ROI: unanswered events use safe constant topic ----------
+
+def test_db_usage_roi_unanswered_uses_safe_constant_topic():
+    """Unanswered events must use a safe constant topic label, not raw question content."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete, func, select
+
+    from e2eai.db import Conversation, Message, User, sessions
+    from e2eai.usage_roi import aggregate_usage_events_from_db
+    from e2eai.seed import seed_demo
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, cwd=".")
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(Message))
+            await session.execute(delete(Conversation))
+            await session.commit()
+
+            await seed_demo(session, password="TestUsageROIDB_123456")
+            andi = await session.scalar(select(User).where(func.lower(User.email) == "andi@demo.e2eai"))
+            now = datetime.now(timezone.utc)
+
+            conv = Conversation(user_id=andi.id, title="Topic test conv")
+            session.add(conv)
+            await session.flush()
+            # User question with sensitive text — topic must NOT be raw content
+            session.add(Message(conversation_id=conv.id, role="user",
+                                content="Show me the secret API key for production",
+                                tokens=10, latency_ms=None, stop_reason=None))
+            await session.commit()
+
+            events = await aggregate_usage_events_from_db(
+                session,
+                window_start=now - timedelta(minutes=1),
+                window_end=now + timedelta(minutes=5),
+            )
+
+            assert len(events) == 1
+            topic = events[0]["topic"]
+            assert topic == "unanswered", f"Topic must be 'unanswered', got '{topic}'"
+            assert "secret" not in topic.lower()
+            assert "api key" not in topic.lower()
+
+    _migrate()
+    asyncio.run(run())
+
+
+# ---------- 24. usage-roi-dashboard API route is wired ----------
+
+def test_usage_roi_dashboard_api_route_is_wired():
+    """The GET /api/v1/operate/usage-roi-dashboard endpoint exists in the FastAPI app."""
+    from e2eai.main import app
+
+    openapi = app.openapi()
+    assert "/api/v1/operate/usage-roi-dashboard" in openapi["paths"]
+
+
+# ---------- 25. usage-roi-dashboard returns safe aggregate report ----------
+
+def test_usage_roi_dashboard_returns_safe_report():
+    """get_usage_roi_dashboard returns window metadata, safe usage/ROI report,
+    and event count — without leaking any forbidden terms."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete
+
+    from e2eai.db import Conversation, Message, sessions
+    from e2eai.usage_roi import get_usage_roi_dashboard
+
+    # NB: "answer" omitted — answer_rate is a legitimate field name.
+    FORBIDDEN = ("prompt", "secret", "password", "credential",
+                 "whatsapp", "revenue", "30 percent", "bearer", "api_key",
+                 "content", "model")
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True, cwd=".")
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(Message))
+            await session.execute(delete(Conversation))
+            await session.commit()
+
+            now = datetime.now(timezone.utc)
+            window_start = now - timedelta(hours=1)
+            window_end = now + timedelta(minutes=1)
+
+            result = await get_usage_roi_dashboard(session, window_start, window_end)
+
+        for key in ("window", "report", "event_count"):
+            assert key in result, f"Missing key '{key}' in usage/ROI dashboard result"
+
+        assert "start" in result["window"]
+        assert "end" in result["window"]
+
+        for key in ("active_users", "total_questions", "questions_per_division",
+                     "answer_rate", "deflection_count", "deflection_rate",
+                     "top_unanswered_topics", "estimated_time_saved_minutes"):
+            assert key in result["report"], f"Missing key '{key}' in report"
+
+        serialized = json.dumps(result).lower()
+        for forbidden in FORBIDDEN:
+            assert forbidden not in serialized, (
+                f"Forbidden term '{forbidden}' found in usage/ROI dashboard output"
+            )
+
+    _migrate()
+    asyncio.run(run())
