@@ -1072,6 +1072,25 @@ OWNER DECISIONS IN FORCE
       `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py tests/test_us_sharing_views_notifications.py` -> 29 passed in 16.75s.
     - FR-O5 remains unchecked in `PRD_CRON_BACKLOG.md`; remaining work: dashboard/report integration.
 
+  - Dashboard/report integration sub-slice (2026-10-11):
+    - Claude Code was used first for the slice and produced the initial TDD implementation. Hermes tightened
+      the safe-output contract with an additional RED/GREEN cycle so persisted alert `created_by` actor data is
+      not returned by the dashboard report.
+    - Added safe dashboard helpers in `slo_metrics.py`:
+      `get_recent_slo_alerts`, `count_slo_notifications`, and `get_slo_dashboard`.
+    - Added `GET /api/v1/operate/slo-dashboard?window_hours=...` using the existing `evals` scope. It returns
+      rolling window metadata, aggregate SLO metrics, alert decisions, recent persisted alert name/actual/threshold
+      rows, notification count, and notification health. It does not return prompts, answers, document text,
+      snippets, model names, tokens, credentials, titles, or actor/user identifiers.
+    - Added tests 25-26 to `test_us_slo_metrics_p1.py` for route wiring and safe aggregate dashboard output.
+    - RED evidence:
+      `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py::test_slo_dashboard_returns_safe_aggregate_summary`
+      -> failed as expected because `recent_alerts` included extra `created_by` actor data.
+    - Verified:
+      `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py::test_slo_dashboard_api_route_is_wired tests/test_us_slo_metrics_p1.py::test_slo_dashboard_returns_safe_aggregate_summary` -> 2 passed.
+      `cd apps/api && uv run pytest -q tests/test_us_slo_metrics_p1.py tests/test_us_sharing_views_notifications.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 31 passed; app ok.
+    - FR-O5 is now complete for the current backlog definition. `PRD_CRON_BACKLOG.md` item 7 marked done.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps

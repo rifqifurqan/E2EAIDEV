@@ -882,3 +882,94 @@ def test_slo_alert_notifications_delivered_to_admin_evaluator_only():
 
     _migrate()
     asyncio.run(run())
+
+
+# ---------- 25. slo-dashboard API route wiring ----------
+
+def test_slo_dashboard_api_route_is_wired():
+    """The /api/v1/operate/slo-dashboard endpoint exists in the FastAPI app."""
+    from e2eai.main import app
+
+    openapi = app.openapi()
+    assert "/api/v1/operate/slo-dashboard" in openapi["paths"]
+
+
+# ---------- 26. slo-dashboard returns safe aggregate summary ----------
+
+def test_slo_dashboard_returns_safe_aggregate_summary():
+    """get_slo_dashboard returns window metadata, safe aggregate metrics, alert decisions,
+    recent persisted alert rows (names/values only), and notification count/health —
+    without leaking any forbidden terms."""
+    import asyncio
+    import subprocess
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import delete
+
+    from e2eai.db import Notification, SloAlert, sessions
+    from e2eai.slo_metrics import get_slo_dashboard
+
+    FORBIDDEN = ("prompt", "answer", "secret", "password", "token", "credential",
+                 "whatsapp", "revenue", "30 percent", "bearer")
+
+    def _migrate():
+        subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True)
+
+    async def run():
+        async with sessions()() as session:
+            await session.execute(delete(SloAlert))
+            await session.execute(delete(Notification))
+            await session.commit()
+
+            now = datetime.now(timezone.utc)
+            window_start = now - timedelta(hours=1)
+            window_end = now + timedelta(minutes=1)  # +1 min: DB server_default fires after Python now
+
+            # Seed one persisted alert in the window
+            session.add(SloAlert(
+                alert_name="error_rate",
+                actual=0.25,
+                threshold=0.10,
+                window_start=window_start,
+                window_end=window_end,
+                created_by="test_dashboard",
+            ))
+            await session.commit()
+
+            result = await get_slo_dashboard(session, window_start, window_end)
+
+        # Shape: all required top-level keys present
+        for key in ("window", "metrics", "alerts", "recent_alerts", "notification_count",
+                    "notification_health"):
+            assert key in result, f"Missing key '{key}' in dashboard result"
+
+        assert "start" in result["window"]
+        assert "end" in result["window"]
+
+        # metrics must have all four FR-O5 families
+        for mkey in ("latency_p50_ms", "latency_p95_ms", "error_rate",
+                     "cost_per_conversation_usd", "guardrail_trigger_rate"):
+            assert mkey in result["metrics"], f"Missing metric '{mkey}'"
+
+        # recent_alerts must include the seeded row by name
+        names = [a["alert_name"] for a in result["recent_alerts"]]
+        assert "error_rate" in names
+
+        # recent_alerts rows carry only safe fields, not actors/user identifiers.
+        expected_alert_fields = {"alert_name", "actual", "threshold", "window_start", "window_end"}
+        for a in result["recent_alerts"]:
+            assert set(a) == expected_alert_fields
+
+        assert isinstance(result["notification_count"], int)
+        assert result["notification_count"] >= 0
+        assert result["notification_health"] in ("ok", "degraded")
+
+        # No forbidden terms anywhere in the full output
+        serialized = json.dumps(result).lower()
+        for forbidden in FORBIDDEN:
+            assert forbidden not in serialized, (
+                f"Forbidden term '{forbidden}' found in dashboard output"
+            )
+
+    _migrate()
+    asyncio.run(run())

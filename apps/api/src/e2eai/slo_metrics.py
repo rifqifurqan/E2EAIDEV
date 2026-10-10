@@ -10,7 +10,7 @@ import math
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -253,6 +253,94 @@ async def notify_slo_alerts(
 
 
 # ---------------------------------------------------------------------------
+# Dashboard helpers (FR-O5)
+# ---------------------------------------------------------------------------
+
+
+async def get_recent_slo_alerts(
+    session: AsyncSession,
+    window_start: datetime,
+    window_end: datetime,
+    limit: int = 50,
+) -> list[dict]:
+    """Query SloAlert rows created in the window. Returns safe dicts only — alert_name,
+    actual, threshold, and window boundaries. Never returns message content or secrets."""
+    rows = (await session.execute(
+        select(SloAlert)
+        .where(SloAlert.created_at >= window_start)
+        .where(SloAlert.created_at <= window_end)
+        .order_by(SloAlert.created_at.desc())
+        .limit(limit)
+    )).scalars().all()
+    return [
+        {
+            "alert_name": r.alert_name,
+            "actual": r.actual,
+            "threshold": r.threshold,
+            "window_start": r.window_start.isoformat(),
+            "window_end": r.window_end.isoformat(),
+        }
+        for r in rows
+    ]
+
+
+async def count_slo_notifications(
+    session: AsyncSession,
+    window_start: datetime,
+    window_end: datetime,
+) -> int:
+    """Count slo.alert.fired Notification rows created in the window."""
+    return await session.scalar(
+        select(func.count())
+        .select_from(Notification)
+        .where(Notification.kind == "slo.alert.fired")
+        .where(Notification.created_at >= window_start)
+        .where(Notification.created_at <= window_end)
+    ) or 0
+
+
+async def get_slo_dashboard(
+    session: AsyncSession,
+    window_start: datetime,
+    window_end: datetime,
+    policy: SloPolicy | None = None,
+) -> dict:
+    """Build the SLO dashboard summary for a time window.
+
+    Returns window metadata, safe aggregate metrics, alert decisions, recent persisted
+    alert rows (name/actual/threshold only), and notification count/health.
+    Never returns raw message content, prompts, answers, model names, document text,
+    snippets, tokens, credentials, or titles.
+    """
+    if policy is None:
+        policy = SloPolicy()
+
+    events = await aggregate_slo_events_from_db(session, window_start, window_end)
+    metrics = compute_slo_metrics(events)
+    alerts = check_slo_alerts(metrics, policy)
+    recent_alerts = await get_recent_slo_alerts(session, window_start, window_end)
+    notification_count = await count_slo_notifications(session, window_start, window_end)
+
+    # degraded if the window has persisted alerts but no notifications were sent
+    if recent_alerts and notification_count == 0:
+        notification_health = "degraded"
+    else:
+        notification_health = "ok"
+
+    return {
+        "window": {
+            "start": window_start.isoformat(),
+            "end": window_end.isoformat(),
+        },
+        "metrics": metrics,
+        "alerts": alerts,
+        "recent_alerts": recent_alerts,
+        "notification_count": notification_count,
+        "notification_health": notification_health,
+    }
+
+
+# ---------------------------------------------------------------------------
 # API routes (FR-O5)
 # ---------------------------------------------------------------------------
 
@@ -350,3 +438,27 @@ async def slo_window_api(
         "window_end": body.window_end.isoformat(),
         "persisted_alert_count": len(persisted_ids),
     }
+
+
+@router.get("/slo-dashboard")
+async def slo_dashboard_api(
+    window_hours: int = 24,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """FR-O5: SLO dashboard — aggregate metrics, alert decisions, recent alert history,
+    and notification health for a rolling time window.
+
+    Safe read-only view for operators. Returns aggregated numeric metrics, alert
+    firing status, recent persisted alert names/values, and notification count.
+    Never returns raw prompts, answers, model names, document text, snippets,
+    tokens, credentials, or titles.
+    """
+    require_scope(sess, "evals")
+
+    now = datetime.now(timezone.utc)
+    # clamp window to 1h–720h (30 days)
+    hours = max(1, min(window_hours, 720))
+    window_start = now - timedelta(hours=hours)
+
+    return await get_slo_dashboard(db, window_start, now)
