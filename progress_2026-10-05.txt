@@ -980,6 +980,12 @@ OWNER DECISIONS IN FORCE
     `cd apps/api && uv run pytest -q tests/test_us_bot_environments_p1.py tests/test_us_release_gates_p1.py tests/test_us_release_bundle_p0.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 22 passed; app ok.
     `cd apps/api && uv run alembic upgrade head` -> head migration applied/already current.
   - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-RL6 + adjacent release gates passed.
+  - Re-verified by Claude Code (2026-10-10):
+    `cd apps/api && uv run pytest -q tests/test_us_bot_environments_p1.py` -> 6 passed in 9.61s.
+    `cd apps/api && uv run pytest -q tests/test_us_bot_environments_p1.py tests/test_us_release_gates_p1.py tests/test_us_release_bundle_p0.py` -> 22 passed in 31.07s.
+    `cd apps/api && uv run alembic upgrade head` -> already at head (0013_bot_environments).
+    Secret scan: FR-RL6 committed files checked against deploy/compose/.env values -> no secrets (false positive: "admin" role name != KEYCLOAK_ADMIN_USER credential).
+    Commit: 9839f74 feat(release): add bot environment promotion [FR-RL6] — already pushed to origin/main.
 
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
