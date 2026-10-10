@@ -966,6 +966,21 @@ OWNER DECISIONS IN FORCE
     `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
   - Next active backlog item is FR-RL6 environments/promotion model.
 
+[FR-RL6] Bot environments and promotion model P1 (2026-10-10)
+  - Claude Code was used first and implemented the initial environment-promotion slice with TDD; Hermes verified the focused gates and migration afterwards.
+  - Added migration `0013_bot_environments` and ORM `BotEnvironment`, storing one deployment pointer per bot/environment (`dev`, `staging`, `prod`) plus the P1 `allow_production_data` flag for staging/prod data policy.
+  - `bot_release.py` now supports `release_to_environment` and `promote_bundle`:
+    - releases create immutable `BotBundle` versions and point the selected environment at the bundle;
+    - promotion is ordered `dev -> staging -> prod` and repoints the target environment at the same immutable bundle, so prod is never edited in place;
+    - promotion can reuse the existing server-side release gates and human sign-off checks before mutating staging/prod state;
+    - Lite/single-environment mode remains backward compatible: existing `release_bundle`/`production_bundle_id` behavior still works, and a direct prod environment release updates the production pointer.
+  - Added API routes `POST /api/v1/bots/{bot_id}/environments/release` and `POST /api/v1/bots/{bot_id}/environments/promote`; request bodies carry environment, gate policy, sign-off, and production-data flags only — no raw eval payloads.
+  - Tests first: `test_us_bot_environments_p1.py` was created by Claude and initially failed with missing FR-RL6 exports, then passed after implementation.
+  - Verified by Hermes:
+    `cd apps/api && uv run pytest -q tests/test_us_bot_environments_p1.py tests/test_us_release_gates_p1.py tests/test_us_release_bundle_p0.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 22 passed; app ok.
+    `cd apps/api && uv run alembic upgrade head` -> head migration applied/already current.
+  - Full heavy verification intentionally deferred while developing PRD backlog quickly; focused FR-RL6 + adjacent release gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps

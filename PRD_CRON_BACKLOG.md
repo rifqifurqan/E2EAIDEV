@@ -18,7 +18,7 @@ Rules for every cron tick:
 3. [x] [FR-T13] Document-understanding test set: table QA, chart QA, figure/diagram QA, OCR character-error-rate, and safety-warning-included checks. Completed as deterministic/offline doc-understanding.local slice; see progress_2026-10-05.txt.
 4. [x] [FR-T8] OWASP LLM security tests / red-team suites with promptfoo/garak boundaries. Completed as deterministic/offline `security-red-team.local` slice (prompt injection, data exfiltration, sensitive disclosure, unsafe tool use, over-refusal) with a promptfoo/garak adapter boundary metadata map and leak-safe EvalRun storage; see progress_2026-10-05.txt.
 5. [x] [FR-RL2] Release gates: eval thresholds, zero permission leaks, red-team pass, human sign-off. Completed as deterministic/offline per-bot release-gate slice; see progress_2026-10-05.txt.
-6. [FR-RL6] Environments: dev -> staging -> prod promotion model, with Lite-tier simplified mode.
+6. [x] [FR-RL6] Environments: dev -> staging -> prod promotion model, with Lite-tier simplified mode. Completed as a focused bot-environment promotion slice; see progress_2026-10-05.txt.
 
 ### B. Operate / analytics / feedback loop P1
 7. [FR-O5] SLOs and alerting: latency, error rate, cost per conversation, guardrail trigger rate.

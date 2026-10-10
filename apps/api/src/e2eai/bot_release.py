@@ -13,7 +13,7 @@ from . import audit
 from .auth import current_session, require_scope
 from .authz import principals
 from .core.errors import AppError
-from .db import Bot, BotBundle, BotGrant, BotScope, EvalRun, User, get_session
+from .db import Bot, BotBundle, BotEnvironment, BotGrant, BotScope, EvalRun, User, get_session
 from .retrieval import Embedder, LiteLLMEmbedder, answer_question
 
 
@@ -218,6 +218,129 @@ async def rollback_bundle(session: AsyncSession, *, actor: User, bot_id: uuid.UU
     return target
 
 
+# ---------------------------------------------------------------------------
+# FR-RL6  Environments: dev -> staging -> prod promotion (Lite = single env)
+# ---------------------------------------------------------------------------
+
+ENVIRONMENTS: tuple[str, ...] = ("dev", "staging", "prod")
+
+
+def _check_environment(environment: str) -> None:
+    if environment not in ENVIRONMENTS:
+        raise AppError(400, "Unknown environment", f"Valid environments: {', '.join(ENVIRONMENTS)}")
+
+
+async def _set_env_pointer(
+    session: AsyncSession,
+    *,
+    bot_id: uuid.UUID,
+    environment: str,
+    bundle_id: uuid.UUID,
+    allow_production_data: bool | None = None,
+) -> None:
+    row = await session.get(BotEnvironment, (bot_id, environment))
+    if row is None:
+        row = BotEnvironment(bot_id=bot_id, environment=environment)
+        session.add(row)
+    row.bundle_id = bundle_id
+    if allow_production_data is not None:
+        row.allow_production_data = allow_production_data
+
+
+async def release_to_environment(
+    session: AsyncSession,
+    *,
+    actor: User,
+    bot_id: uuid.UUID,
+    bundle: dict,
+    environment: str = "dev",
+) -> BotBundle:
+    """Create an immutable bundle version and point one environment at it (FR-RL6).
+
+    Default target is ``dev``. Lite tier may release straight to ``prod`` (single environment).
+    Releasing to prod also updates ``production_bundle_id`` so the answer path reflects prod.
+    """
+    _check_environment(environment)
+    bot = await _load_bot(session, bot_id)
+    version = (await session.scalar(select(func.max(BotBundle.version)).where(BotBundle.bot_id == bot_id))) or 0
+    created = BotBundle(
+        bot_id=bot_id,
+        version=version + 1,
+        status="draft",
+        bundle=dict(bundle),
+        released_by=str(actor.id),
+    )
+    session.add(created)
+    await session.flush()
+    await _set_env_pointer(session, bot_id=bot_id, environment=environment, bundle_id=created.id)
+    if environment == "prod":
+        bot.production_bundle_id = created.id
+    await audit.record(
+        session, f"user:{actor.id}", "bot.env.release", f"bot:{bot_id}",
+        {"environment": environment, "version": created.version},
+    )
+    await session.commit()
+    return created
+
+
+async def promote_bundle(
+    session: AsyncSession,
+    *,
+    actor: User,
+    bot_id: uuid.UUID,
+    source_env: str,
+    target_env: str,
+    gate_policy: ReleaseGatePolicy | None = None,
+    gate_eval_runs: Sequence[dict] | None = None,
+    gate_human_signoff: bool = False,
+    allow_production_data: bool = False,
+) -> BotBundle:
+    """Promote the immutable bundle in ``source_env`` to ``target_env`` (FR-RL6).
+
+    Promotion only follows the chain dev -> staging -> prod and repoints the target environment at
+    the same immutable bundle — it never edits the prod bundle in place. Staging/prod promotion can
+    require that environment's release gates plus human sign-off; a failed gate changes nothing.
+    """
+    _check_environment(source_env)
+    _check_environment(target_env)
+    if ENVIRONMENTS.index(target_env) != ENVIRONMENTS.index(source_env) + 1:
+        raise AppError(400, "Invalid promotion path", f"Promote in order: {' -> '.join(ENVIRONMENTS)}")
+
+    bot = await _load_bot(session, bot_id)
+    source = await session.get(BotEnvironment, (bot_id, source_env))
+    if source is None or source.bundle_id is None:
+        raise AppError(409, "Nothing to promote", f"No bundle deployed in {source_env}")
+    bundle_id = source.bundle_id
+
+    gate_result: dict | None = None
+    if gate_policy is not None:
+        eval_runs = list(gate_eval_runs) if gate_eval_runs is not None else await _load_release_gate_eval_runs(session)
+        gate_result = check_release_gates(eval_runs=eval_runs, policy=gate_policy, human_signoff=gate_human_signoff)
+        if not gate_result["passed"]:
+            failed_names = [name for name, g in gate_result["gates"].items() if not g["passed"]]
+            await audit.record(
+                session, f"user:{actor.id}", "bot.env.promote.blocked", f"bot:{bot_id}",
+                {"source": source_env, "target": target_env, "gates_passed": False, "failed_gates": failed_names},
+            )
+            await session.commit()
+            raise AppError(422, "Promotion blocked by failed gates", f"Failed gates: {', '.join(failed_names)}")
+
+    await _set_env_pointer(
+        session, bot_id=bot_id, environment=target_env, bundle_id=bundle_id,
+        allow_production_data=allow_production_data,
+    )
+    if target_env == "prod":
+        bot.production_bundle_id = bundle_id
+
+    details: dict = {"source": source_env, "target": target_env}
+    if gate_result is not None:
+        details["gates_passed"] = True
+        details["gate_count"] = len(gate_result["gates"])
+    await audit.record(session, f"user:{actor.id}", "bot.env.promote", f"bot:{bot_id}", details)
+    await session.commit()
+    return await session.get(BotBundle, bundle_id)
+
+
 async def grant_bot_access(
     session: AsyncSession, *, actor: User, bot_id: uuid.UUID, principal: str, level: str = "user"
 ) -> BotGrant:
@@ -336,6 +459,19 @@ class BundleIn(BaseModel):
     human_signoff: bool = False
 
 
+class EnvironmentReleaseIn(BaseModel):
+    bundle: dict
+    environment: str = "dev"
+
+
+class PromoteIn(BaseModel):
+    source_env: str
+    target_env: str
+    release_gates: ReleaseGatePolicyIn | None = None
+    human_signoff: bool = False
+    allow_production_data: bool = False
+
+
 class GrantIn(BaseModel):
     principal: str
     level: str = "user"
@@ -375,6 +511,28 @@ async def release_bundle_api(bot_id: uuid.UUID, body: BundleIn, sess: dict = Dep
         gate_human_signoff=body.human_signoff,
     )
     return {"id": str(bundle.id), "version": bundle.version, "status": bundle.status}
+
+
+@router.post("/{bot_id}/environments/release")
+async def release_to_environment_api(bot_id: uuid.UUID, body: EnvironmentReleaseIn, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
+    require_scope(sess, "bots")
+    user = await _current_user(db, sess)
+    bundle = await release_to_environment(db, actor=user, bot_id=bot_id, bundle=body.bundle, environment=body.environment)
+    return {"id": str(bundle.id), "version": bundle.version, "environment": body.environment}
+
+
+@router.post("/{bot_id}/environments/promote")
+async def promote_bundle_api(bot_id: uuid.UUID, body: PromoteIn, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
+    require_scope(sess, "bots")
+    user = await _current_user(db, sess)
+    bundle = await promote_bundle(
+        db, actor=user, bot_id=bot_id,
+        source_env=body.source_env, target_env=body.target_env,
+        gate_policy=body.release_gates.to_policy() if body.release_gates else None,
+        gate_human_signoff=body.human_signoff,
+        allow_production_data=body.allow_production_data,
+    )
+    return {"id": str(bundle.id), "version": bundle.version, "source_env": body.source_env, "target_env": body.target_env}
 
 
 @router.post("/{bot_id}/bundles/{bundle_id}/rollback")

@@ -340,6 +340,20 @@ class BotScope(Base):
     target_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
 
 
+class BotEnvironment(Base):
+    """FR-RL6: per-environment deployment pointer (dev/staging/prod).
+
+    Promotion repoints an environment at an immutable bundle; it never edits the bundle in place.
+    Lite tier uses a single environment where the prod pointer / production_bundle_id still applies.
+    """
+    __tablename__ = "bot_environments"
+    bot_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bots.id", ondelete="CASCADE"), primary_key=True)
+    environment: Mapped[str] = mapped_column(String(16), primary_key=True)  # dev/staging/prod
+    bundle_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    allow_production_data: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class ApiKey(Base):
     """FR-F12: scoped API keys for public REST clients. Raw key is never stored — only sha256 hash.
     Prefix (first 12 chars) is stored for display/identification purposes."""
