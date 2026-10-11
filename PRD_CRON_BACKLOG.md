@@ -35,10 +35,10 @@ Rules for every cron tick:
 ### C. Live tools / MCP / systems integration P1
 13. [x] [FR-B4] Live tools through MCP: one MCP server per system generated from OpenAPI.
    - [x] OpenAPI-to-MCP descriptor generator slice: validate minimal OpenAPI 3.x spec, build safe MCPServerDescriptor/MCPToolDescriptor with allowed operations, read_only defaults (GET=True, mutating=False), explicit overrides, no auth secrets or server URLs in output. POST /api/v1/systems/{system_id}/mcp-descriptor. See progress_2026-10-05.txt.
-14. [FR-X2] Live system tools are called at question time through MCP; data is not copied into vectors.
+14. [x] [FR-X2] Live system tools are called at question time through MCP; data is not copied into vectors. Completed as planner + persisted/audited chat pipeline + MCPClientExecutor boundary behind delegated identity; live results are citation-only/sanitized and never vectorized. See progress_2026-10-05.txt.
    - [x] Deterministic/offline question-time MCP tool-call planner and no-vectorize guard: selects safe tool-call records from generated descriptors, flags mutating tools for confirmation, exposes a safe plan API, and rejects live MCP results before embedding/indexing. See progress_2026-10-05.txt.
    - [x] Wire the planner into the chat answer pipeline with persisted/audited tool-call records and an offline executor boundary (no real MCP network calls in tests). See progress_2026-10-05.txt.
-   - [ ] Add real MCP client execution behind delegated identity once FR-X3 is in progress.
+   - [x] Add real MCP client execution behind delegated identity once FR-X3 is in progress: MCPClient protocol + MCPClientExecutor boundary, intended to be wrapped by DelegatedExecutor so user-data calls validate delegated/token-exchange identity before execution. See progress_2026-10-05.txt.
 15. [x] [FR-X3] AI acts as the real user using delegated identity/token exchange.
    - [x] Deterministic/offline delegated-identity boundary: AuthMode enum (DELEGATED/TOKEN_EXCHANGE/SERVICE_ACCOUNT), DelegatedIdentityContext (safe metadata only, no raw tokens), validate_identity_for_user_data (rejects SERVICE_ACCOUNT, rejects empty user_id), DelegatedExecutor wrapping Executor protocol, safe audit metadata, McpToolCall auth_mode + acting_user_id persistence, API validation route. See progress_2026-10-05.txt.
    - [ ] Real external OAuth provider / token exchange integration (deferred: requires external IdP setup).

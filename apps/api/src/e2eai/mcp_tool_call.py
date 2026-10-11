@@ -205,6 +205,47 @@ class OfflineExecutor:
         return {**base, **self._results.get(record.operation_id, {})}
 
 
+class MCPClient(Protocol):
+    """Minimal real MCP client boundary for question-time tool execution.
+
+    Implementations may talk to stdio/SSE/HTTP MCP servers, but this interface
+    intentionally carries only safe operation metadata from the descriptor. Raw
+    auth tokens stay outside this layer and are enforced by DelegatedExecutor.
+    """
+
+    async def call_tool(
+        self,
+        *,
+        system_id: str,
+        operation_id: str,
+        method: str,
+        path: str,
+        read_only: bool,
+    ) -> dict: ...
+
+
+class MCPClientExecutor:
+    """Executor backed by a real MCP client implementation (FR-X2/FR-X3).
+
+    This is the production boundary: the caller wraps it with DelegatedExecutor
+    so user-data calls are made only after delegated identity/token-exchange
+    validation. Tests inject a fake client; real transports can implement
+    MCPClient without changing chat/tool-call persistence.
+    """
+
+    def __init__(self, *, client: MCPClient) -> None:
+        self._client = client
+
+    async def execute(self, record: MCPToolCallRecord) -> dict:
+        return await self._client.call_tool(
+            system_id=record.system_id,
+            operation_id=record.operation_id,
+            method=record.method,
+            path=record.path,
+            read_only=record.read_only,
+        )
+
+
 _DANGEROUS_RESULT_KEY_PARTS = (
     "authorization",
     "bearer",

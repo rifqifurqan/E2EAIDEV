@@ -489,3 +489,51 @@ def test_send_message_without_descriptors_backward_compatible():
 
     subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True)
     asyncio.run(run())
+
+
+def test_mcp_client_executor_runs_behind_delegated_identity_boundary():
+    """FR-X2/FR-X3: real MCP client boundary executes only after delegated identity validation."""
+    import asyncio
+
+    from e2eai.delegated_identity import AuthMode, DelegatedExecutor, DelegatedIdentityContext
+    from e2eai.mcp_tool_call import MCPClientExecutor, MCPToolCallRecord
+
+    class FakeMCPClient:
+        def __init__(self):
+            self.calls = []
+
+        async def call_tool(self, *, system_id, operation_id, method, path, read_only):
+            self.calls.append({
+                "system_id": system_id,
+                "operation_id": operation_id,
+                "method": method,
+                "path": path,
+                "read_only": read_only,
+            })
+            return {"status": "ok", "record_id": "hr:employees", "record_count": 5}
+
+    async def run():
+        client = FakeMCPClient()
+        executor = DelegatedExecutor(
+            inner=MCPClientExecutor(client=client),
+            identity=DelegatedIdentityContext(
+                user_id="user-123", system_id="hr-system", auth_mode=AuthMode.TOKEN_EXCHANGE,
+            ),
+        )
+        record = MCPToolCallRecord(
+            system_id="hr-system", operation_id="list_employees", method="GET", path="/employees",
+            read_only=True, needs_confirmation=False, tool_description="List employees", match_score=1.0,
+        )
+
+        result = await executor.execute(record)
+
+        assert result["record_id"] == "hr:employees"
+        assert client.calls == [{
+            "system_id": "hr-system",
+            "operation_id": "list_employees",
+            "method": "GET",
+            "path": "/employees",
+            "read_only": True,
+        }]
+
+    asyncio.run(run())

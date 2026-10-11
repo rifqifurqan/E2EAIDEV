@@ -1417,3 +1417,14 @@ HOW TO RESUME
     (7) send_message returns combined_citations with both sources.
   - `PRD_CRON_BACKLOG.md` item 18 marked done.
   - Full heavy verification intentionally deferred; focused FR-X6 + adjacent MCP/chat gates passed.
+
+- Real MCP client execution boundary behind delegated identity (FR-X2 final sub-slice) (2026-10-11):
+  - Claude Code hit the plan limit while attempting the next slices; Hermes continued manually per user fallback instruction.
+  - Added `MCPClient` protocol and `MCPClientExecutor` to `mcp_tool_call.py`. This is the real MCP client execution boundary: transport implementations call `call_tool(system_id, operation_id, method, path, read_only)` while delegated identity is enforced by wrapping the executor in `DelegatedExecutor` from FR-X3.
+  - The boundary carries only safe operation metadata from descriptors; raw tokens/auth material stay outside persisted summaries and are still sanitized before DB persistence/response.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_us_mcp_tool_call.py::test_mcp_client_executor_runs_behind_delegated_identity_boundary` -> failed with `ImportError: cannot import name 'MCPClientExecutor'`.
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_us_mcp_tool_call.py::test_mcp_client_executor_runs_behind_delegated_identity_boundary` -> 1 passed.
+  - `PRD_CRON_BACKLOG.md` FR-X2 marked done. External OAuth provider setup remains deferred under FR-X3 because it needs IdP/admin configuration.
+
