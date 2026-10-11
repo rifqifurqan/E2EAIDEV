@@ -14,7 +14,7 @@ from .auth import current_session, require_scope
 from .authz import principals
 from .core.errors import AppError
 from .db import Bot, BotBundle, BotEnvironment, BotGrant, BotScope, EvalRun, User, get_session
-from .retrieval import Embedder, LiteLLMEmbedder, answer_question
+from .retrieval import Embedder, LiteLLMEmbedder, answer_question, select_reranker
 
 
 # ---------------------------------------------------------------------------
@@ -397,6 +397,10 @@ async def answer_bot_question(
     scopes = list((await session.execute(select(BotScope).where(BotScope.bot_id == bot_id))).scalars().all())
     scoped_document_ids = [s.target_id for s in scopes if s.target_type == "document"]
     scoped_folder_ids = [s.target_id for s in scopes if s.target_type == "folder"]
+    # FR-R2: resolve reranker from the bot bundle's reranker field ("none" => no reranker)
+    bundle = await session.get(BotBundle, bot.production_bundle_id)
+    reranker_name = (bundle.bundle or {}).get("reranker") if bundle else None
+    reranker = select_reranker(reranker_name)
     return await answer_question(
         session,
         embedder=embedder,
@@ -405,6 +409,7 @@ async def answer_bot_question(
         scoped_document_ids=scoped_document_ids,
         scoped_folder_ids=scoped_folder_ids,
         include_explainability=include_explainability,
+        reranker=reranker,
     )
 
 
