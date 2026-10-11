@@ -1556,3 +1556,24 @@ HOW TO RESUME
     `cd apps/api && uv run pytest tests/test_us_revoked_citations_p1.py tests/test_us_combined_citations_p1.py tests/test_us_chat_conversations.py -q && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 17 passed in 14.16s; app ok.
   - `PRD_CRON_BACKLOG.md` item 31 marked done.
   - Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Tool adapter framework P0 (FR-F8) (2026-10-11):
+  - `tool_adapter.py`: `ToolAdapter` protocol, `ToolCapabilities`, `AdapterHealth`, `ToolAdapterRegistry`,
+    `check_adapter_contract` / `check_registry_contract`. Tests: `test_us_tool_adapter_p1.py` (8 passed).
+  - Verified: `cd apps/api && uv run pytest -q tests/test_us_tool_adapter_p1.py` -> 8 passed.
+  - Full suite regression: `cd apps/api && uv run pytest -q` -> 478 passed, 1 skipped.
+
+- Job / workflow engine interface P0 (Celery) + Temporal P1 boundary (FR-F20) (2026-10-11, cron):
+  - New `job_engine.py`: `JobRequest`, `JobResult`, `JobEngine` protocol (runtime_checkable),
+    `NullJobEngine` (deterministic offline), `check_job_engine_contract`, `make_job_engine`
+    dispatching to `make_celery_engine` / `make_temporal_engine` with NullJobEngine fallback when
+    the engine SDK is unavailable (Lite without a worker).
+  - `make_celery_engine`: real adapter boundary that uses `celery_app.send_task(task_id=job_id)`
+    for idempotent submission, `AsyncResult` for status, `control.revoke` for cancel.
+  - `make_temporal_engine`: Temporal boundary behind `e2eai.temporal_app` import guard; raises
+    NotImplementedError for status/cancel until the SDK + server are wired (P1).
+  - TDD: `tests/test_us_job_engine_p0.py` (16 tests) — RED observed on the first run before the
+    contract check idempotency assertion was corrected, GREEN after.
+  - Verified: `cd apps/api && uv run pytest -q tests/test_us_job_engine_p0.py` -> 16 passed.
+    Full suite regression: `cd apps/api && uv run pytest -q` -> 478 passed, 1 skipped.
+  - `PRD_CRON_BACKLOG.md` item 32 marked done.

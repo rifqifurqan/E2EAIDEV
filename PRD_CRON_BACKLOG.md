@@ -64,8 +64,14 @@ Rules for every cron tick:
 31. [x] [FR-C7] Chat history after access revocation hides revoked citations with source-no-longer-accessible notice. Completed as deterministic/revoked-citations helpers; see progress_2026-10-05.txt.
 
 ### F. Platform foundation gaps / hardening P0-P1
-32. [FR-F8] Tool adapter framework with standard interface and contract tests for every Lab tool.
-33. [FR-F20] Job/workflow engine interface: Celery default P0 and Temporal P1 boundary/contract tests.
+32. [x] [FR-F8] Tool adapter framework with standard interface and contract tests for every Lab tool.
+    - [x] `tool_adapter.py`: `ToolAdapter` protocol, `ToolCapabilities`, `AdapterHealth`, `ToolAdapterRegistry`,
+      `check_adapter_contract` / `check_registry_contract`. Tests: `test_us_tool_adapter_p1.py` (8 passed).
+    - Verified: `cd apps/api && uv run pytest -q tests/test_us_tool_adapter_p1.py` -> 8 passed.
+33. [x] [FR-F20] Job/workflow engine interface: Celery default P0 and Temporal P1 boundary/contract tests.
+    - [x] `job_engine.py`: `JobEngine` protocol, `NullJobEngine`, `check_job_engine_contract`,
+      `make_celery_engine`/`make_temporal_engine` with NullJobEngine fallback. Tests: `test_us_job_engine_p0.py` (16 passed).
+    - Verified: `cd apps/api && uv run pytest -q tests/test_us_job_engine_p0.py` -> 16 passed.
 34. [FR-F4] Install profiles: core, lab-stage, lab-all, GPU/CPU variants for compose/Helm.
 35. [FR-F1] OIDC SSO option and identity-provider-down fallback path integration.
 36. [FR-F2] Complete Org -> Division -> Team -> User and roles/project scoping gaps; leave SCIM sync for P2.
