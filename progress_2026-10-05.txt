@@ -1201,3 +1201,14 @@ HOW TO RESUME
 - Web tests:     cd apps/web && pnpm test
 - Web build:     cd apps/web && pnpm build
 - API migrate:   cd apps/api && uv run alembic upgrade head
+
+- OpenAPI-to-MCP descriptor generator (FR-B4) (2026-10-11):
+  - Resumed existing FR-B4 WIP in the worktree; used Claude Code first, then verified with Hermes.
+  - Added `mcp_gen.py`: validates minimal OpenAPI 3.x specs, builds safe `MCPServerDescriptor` / `MCPToolDescriptor` objects from allowed operations, defaults GET/HEAD/OPTIONS to read-only and mutating methods to not-read-only, supports explicit read-only overrides, and exposes `POST /api/v1/systems/{system_id}/mcp-descriptor` protected by the existing `bots` scope.
+  - Descriptor output intentionally excludes `servers`, security schemes, request bodies, response schemas, examples, defaults, descriptions, auth secrets, bearer tokens, API keys, credentials, and internal URLs.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_us_mcp_gen_p1.py` -> 1 failed, 21 passed; failing regression showed parameter schema `default`/`example`/`description` leaked through raw schema copying.
+  - Root cause: `build_mcp_server_descriptor` used an inline dict comprehension that copied the raw parameter `schema` dict verbatim; `_sanitize_parameter` / `_sanitize_schema` already existed but were not used.
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_us_mcp_gen_p1.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 22 passed; app ok.
+  - `PRD_CRON_BACKLOG.md` item 13 marked done. Full heavy verification intentionally deferred; focused FR-B4 descriptor + app import smoke passed.

@@ -33,7 +33,8 @@ Rules for every cron tick:
 11. [x] [FR-B3] Structured-output tests: JSON/schema validity rate per model. Completed as deterministic/offline structured-output validity slice with per-model JSON/schema rates, safe item-level error codes, and API route; see progress_2026-10-05.txt.
 
 ### C. Live tools / MCP / systems integration P1
-13. [FR-B4] Live tools through MCP: one MCP server per system generated from OpenAPI.
+13. [x] [FR-B4] Live tools through MCP: one MCP server per system generated from OpenAPI.
+   - [x] OpenAPI-to-MCP descriptor generator slice: validate minimal OpenAPI 3.x spec, build safe MCPServerDescriptor/MCPToolDescriptor with allowed operations, read_only defaults (GET=True, mutating=False), explicit overrides, no auth secrets or server URLs in output. POST /api/v1/systems/{system_id}/mcp-descriptor. See progress_2026-10-05.txt.
 14. [FR-X2] Live system tools are called at question time through MCP; data is not copied into vectors.
 15. [FR-X3] AI acts as the real user using delegated identity/token exchange.
 16. [FR-X4] Admin flow to register a system, upload OpenAPI spec, choose endpoints, configure auth, test, and grant roles.
