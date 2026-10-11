@@ -461,6 +461,8 @@ class McpToolCall(Base):
     needs_confirmation: Mapped[bool] = mapped_column(Boolean)
     status: Mapped[str] = mapped_column(String(32), default="planned")
     safe_result: Mapped[dict] = mapped_column(JSONB, default=dict)
+    auth_mode: Mapped[str | None] = mapped_column(String(32))  # FR-X3: delegated/token_exchange/None
+    acting_user_id: Mapped[str | None] = mapped_column(String(80))  # FR-X3: user who the AI acts as
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

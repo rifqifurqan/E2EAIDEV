@@ -1255,3 +1255,60 @@ HOW TO RESUME
   - `PRD_CRON_BACKLOG.md` item 14 second sub-slice marked done. Remaining FR-X2: real MCP client
     execution behind delegated identity (FR-X3).
   - Full heavy verification intentionally deferred; focused FR-X2 + adjacent chat gates passed.
+
+- Delegated identity / token exchange boundary for MCP tool calls (FR-X3) (2026-10-11):
+  - Claude Code implemented this slice with strict TDD.
+  - Added `delegated_identity.py`: offline contract/boundary for FR-X3 delegated identity:
+    - `AuthMode` enum: DELEGATED, TOKEN_EXCHANGE, SERVICE_ACCOUNT.
+    - `DelegatedIdentityContext` frozen dataclass: carries user_id, system_id, auth_mode only —
+      never stores raw tokens, bearer values, passwords, API keys, or secrets.
+    - `validate_identity_for_user_data`: fails closed if auth_mode is SERVICE_ACCOUNT (never
+      allowed for user data) or user_id is empty/missing.
+    - `safe_audit_metadata`: builds audit-safe dict (acting_user_id, system_id, auth_mode) from
+      a context — never includes raw token values.
+    - `DelegatedExecutor`: wraps any Executor, validates identity before each call, rejects
+      SERVICE_ACCOUNT with ValueError. The pipeline catches the error and records the tool call
+      as `rejected_service_account` (fail safe, not fail open).
+    - `POST /api/v1/systems/{system_id}/delegated-identity/validate`: validates a delegated
+      identity context for a system, protected by `bots` scope. Returns validation result and
+      safe metadata only.
+  - Added `auth_mode` (String(32), nullable) and `acting_user_id` (String(80), nullable) columns
+    to `McpToolCall` ORM model in `db.py`.
+  - Added Alembic migration `0018_delegated_identity` (revises 0017_mcp_tool_calls): adds
+    `auth_mode` and `acting_user_id` to `mcp_tool_calls`. Reversible.
+  - Updated `execute_and_persist_tool_calls` in `mcp_tool_call.py`:
+    - Extracts identity metadata from executor if it carries a `DelegatedIdentityContext`.
+    - Persists `auth_mode` and `acting_user_id` in McpToolCall rows.
+    - Includes `auth_mode` and `acting_user_id` in audit records.
+    - Catches ValueError from DelegatedExecutor (SERVICE_ACCOUNT rejection) and records the
+      tool call as `rejected_service_account` instead of aborting the whole request.
+    - Backward compatible: callers without identity context store None for auth_mode/acting_user_id.
+  - Registered `delegated_identity.router` in `main.py`.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_us_delegated_identity_p1.py` -> 14 failed
+    with `ModuleNotFoundError: No module named 'e2eai.delegated_identity'`.
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_us_delegated_identity_p1.py` -> 14 passed in 7.38s.
+    Adjacent MCP/chat regression:
+    `cd apps/api && uv run pytest -q tests/test_us_mcp_tool_call.py tests/test_us_mcp_gen_p1.py tests/test_us_chat_conversations.py` -> 43 passed in 16.28s.
+    Migration gate: `cd apps/api && uv run alembic downgrade 0017_mcp_tool_calls && uv run alembic upgrade head` -> downgrade 0018 -> 0017 and upgrade 0017 -> 0018 succeeded.
+    App wiring smoke: `cd apps/api && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> app ok.
+  - Tests cover:
+    (1) DelegatedIdentityContext carries safe metadata (user_id, system_id, auth_mode) without tokens;
+    (2) DELEGATED auth mode accepted;
+    (3) SERVICE_ACCOUNT rejected/fails closed for user-data calls;
+    (4) TOKEN_EXCHANGE accepted for user-data calls;
+    (5) DELEGATED mode accepted for user-data calls;
+    (6) Missing/empty user_id rejected;
+    (7) safe_audit_metadata contains acting_user_id/system_id/auth_mode, no tokens;
+    (8) DelegatedExecutor rejects SERVICE_ACCOUNT;
+    (9) DelegatedExecutor passes through with valid identity;
+    (10) Pipeline persists auth_mode + acting_user_id in McpToolCall + audit with TOKEN_EXCHANGE;
+    (11) SERVICE_ACCOUNT blocked in pipeline records rejection safely, doesn't abort request;
+    (12) Backward compat: callers without identity context store auth_mode=None, acting_user_id=None;
+    (13) DB rows with delegated identity never contain raw token values;
+    (14) API validation route wired.
+  - `PRD_CRON_BACKLOG.md` item 15 marked done for the offline contract/boundary slice.
+    Remaining FR-X3: real external OAuth provider / token exchange integration is deferred
+    (requires external IdP setup, not implementable offline).
+  - Full heavy verification intentionally deferred; focused FR-X3 + adjacent MCP/chat gates passed.

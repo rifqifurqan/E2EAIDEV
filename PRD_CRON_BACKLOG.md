@@ -39,7 +39,9 @@ Rules for every cron tick:
    - [x] Deterministic/offline question-time MCP tool-call planner and no-vectorize guard: selects safe tool-call records from generated descriptors, flags mutating tools for confirmation, exposes a safe plan API, and rejects live MCP results before embedding/indexing. See progress_2026-10-05.txt.
    - [x] Wire the planner into the chat answer pipeline with persisted/audited tool-call records and an offline executor boundary (no real MCP network calls in tests). See progress_2026-10-05.txt.
    - [ ] Add real MCP client execution behind delegated identity once FR-X3 is in progress.
-15. [FR-X3] AI acts as the real user using delegated identity/token exchange.
+15. [x] [FR-X3] AI acts as the real user using delegated identity/token exchange.
+   - [x] Deterministic/offline delegated-identity boundary: AuthMode enum (DELEGATED/TOKEN_EXCHANGE/SERVICE_ACCOUNT), DelegatedIdentityContext (safe metadata only, no raw tokens), validate_identity_for_user_data (rejects SERVICE_ACCOUNT, rejects empty user_id), DelegatedExecutor wrapping Executor protocol, safe audit metadata, McpToolCall auth_mode + acting_user_id persistence, API validation route. See progress_2026-10-05.txt.
+   - [ ] Real external OAuth provider / token exchange integration (deferred: requires external IdP setup).
 16. [FR-X4] Admin flow to register a system, upload OpenAPI spec, choose endpoints, configure auth, test, and grant roles.
 17. [FR-X5] Read-only by default; write actions require explicit confirmation and audit.
 18. [FR-X6] Answers combine documents and live data with citations for document pages and system record IDs.

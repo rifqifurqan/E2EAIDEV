@@ -257,6 +257,18 @@ def sanitize_mcp_safe_result(value):
     return str(value)
 
 
+def _identity_metadata(executor) -> tuple[str | None, str | None]:
+    """Extract safe identity metadata from an executor if it carries delegated identity (FR-X3).
+
+    Returns (auth_mode, acting_user_id) — both None if the executor has no identity context.
+    Never returns raw tokens, bearer values, API keys, or secrets.
+    """
+    identity = getattr(executor, "identity", None)
+    if identity is None:
+        return None, None
+    return getattr(identity, "auth_mode", None) and identity.auth_mode.value, identity.user_id
+
+
 async def execute_and_persist_tool_calls(
     session: AsyncSession,
     *,
@@ -270,8 +282,20 @@ async def execute_and_persist_tool_calls(
     Mutating tools (needs_confirmation=True) are skipped — FR-X5 confirmation flow is not yet
     implemented. Only safe metadata is stored: never raw question text, auth secrets, server URLs,
     bearer tokens, API keys, or request/response payloads.
+
+    FR-X3: if the executor carries a DelegatedIdentityContext (via ``identity`` property), its
+    auth_mode and acting_user_id are persisted in the McpToolCall row and audit record. If the
+    executor raises ValueError (e.g. SERVICE_ACCOUNT rejected), the tool call is recorded as
+    ``rejected_service_account`` and the request is not aborted — fail safe, not fail open.
     """
     from .db import McpToolCall
+
+    auth_mode, acting_user_id = _identity_metadata(executor)
+    identity_audit = {}
+    if auth_mode:
+        identity_audit["auth_mode"] = auth_mode
+    if acting_user_id:
+        identity_audit["acting_user_id"] = acting_user_id
 
     summaries: list[dict] = []
     for r in records:
@@ -286,32 +310,58 @@ async def execute_and_persist_tool_calls(
                 needs_confirmation=True,
                 status="skipped_confirmation",
                 safe_result={"reason": "needs_confirmation"},
+                auth_mode=auth_mode,
+                acting_user_id=acting_user_id,
             ))
             await audit.record(
                 session, actor, "mcp.tool_call.skipped",
                 f"system:{r.system_id}:{r.operation_id}",
-                {"read_only": r.read_only, "needs_confirmation": True},
+                {"read_only": r.read_only, "needs_confirmation": True, **identity_audit},
             )
             summaries.append({"operation_id": r.operation_id, "status": "skipped_confirmation"})
         else:
-            safe = sanitize_mcp_safe_result(await executor.execute(r))
-            session.add(McpToolCall(
-                message_id=message_id,
-                system_id=r.system_id,
-                operation_id=r.operation_id,
-                method=r.method,
-                path=r.path,
-                read_only=r.read_only,
-                needs_confirmation=False,
-                status="executed",
-                safe_result=safe,
-            ))
-            await audit.record(
-                session, actor, "mcp.tool_call.executed",
-                f"system:{r.system_id}:{r.operation_id}",
-                {"read_only": r.read_only, "status": "executed"},
-            )
-            summaries.append({"operation_id": r.operation_id, "status": "executed"})
+            try:
+                safe = sanitize_mcp_safe_result(await executor.execute(r))
+                session.add(McpToolCall(
+                    message_id=message_id,
+                    system_id=r.system_id,
+                    operation_id=r.operation_id,
+                    method=r.method,
+                    path=r.path,
+                    read_only=r.read_only,
+                    needs_confirmation=False,
+                    status="executed",
+                    safe_result=safe,
+                    auth_mode=auth_mode,
+                    acting_user_id=acting_user_id,
+                ))
+                await audit.record(
+                    session, actor, "mcp.tool_call.executed",
+                    f"system:{r.system_id}:{r.operation_id}",
+                    {"read_only": r.read_only, "status": "executed", **identity_audit},
+                )
+                summaries.append({"operation_id": r.operation_id, "status": "executed"})
+            except ValueError:
+                # FR-X3: SERVICE_ACCOUNT or missing user_id — record rejection, don't abort
+                session.add(McpToolCall(
+                    message_id=message_id,
+                    system_id=r.system_id,
+                    operation_id=r.operation_id,
+                    method=r.method,
+                    path=r.path,
+                    read_only=r.read_only,
+                    needs_confirmation=False,
+                    status="rejected_service_account",
+                    safe_result={"reason": "service_account_not_allowed"},
+                    auth_mode=auth_mode,
+                    acting_user_id=acting_user_id,
+                ))
+                await audit.record(
+                    session, actor, "mcp.tool_call.rejected",
+                    f"system:{r.system_id}:{r.operation_id}",
+                    {"read_only": r.read_only, "status": "rejected_service_account", **identity_audit},
+                )
+                summaries.append({"operation_id": r.operation_id, "status": "rejected_service_account"})
     return summaries
 
 
