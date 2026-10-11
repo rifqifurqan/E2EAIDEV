@@ -227,3 +227,265 @@ def test_mcp_tool_call_plan_route_is_wired():
     assert "/api/v1/chat/mcp-tool-plan" in openapi["paths"], (
         f"Route not found. Registered paths: {sorted(openapi['paths'].keys())}"
     )
+
+
+# ---------------------------------------------------------------------------
+# DB-backed pipeline integration tests (FR-X2 chat pipeline wiring)
+# ---------------------------------------------------------------------------
+
+
+def test_send_message_with_descriptors_persists_tool_call_records():
+    """FR-X2: send_message with MCP descriptors plans, executes (offline), persists, and audits tool calls."""
+    import asyncio
+    import subprocess
+
+    from sqlalchemy import delete, func, select
+
+    async def run():
+        from e2eai.chat import create_conversation, send_message
+        from e2eai.db import (
+            AuditEntry, Chunk, ChunkEmbedding, Conversation, DocPrincipal,
+            Document, DocumentVersion, Folder, McpToolCall, Message, MessageCitation, User, sessions,
+        )
+        from e2eai.documents import create_seeded_document, share_document
+        from e2eai.mcp_tool_call import OfflineExecutor
+        from e2eai.retrieval import index_document_chunks
+        from e2eai.seed import seed_demo
+
+        class _Authz:
+            async def write(self, writes=(), deletes=()):
+                return None
+
+        class _Embedder:
+            model = "fake-v1"
+            _axes = ("employees", "revenue")
+            async def embed(self, texts):
+                return [[float(t.lower().count(a)) for a in self._axes] for t in texts]
+
+        async with sessions()() as session:
+            for m in (MessageCitation, Message, Conversation,
+                      ChunkEmbedding, DocPrincipal, Chunk, DocumentVersion, Document, Folder):
+                await session.execute(delete(m))
+            await session.commit()
+
+            await seed_demo(session, password="TestPassword_123456789")
+            owner = await session.scalar(select(User).where(func.lower(User.email) == "intern@demo.e2eai"))
+            andi = await session.scalar(select(User).where(func.lower(User.email) == "andi@demo.e2eai"))
+
+            doc = await create_seeded_document(
+                session, owner=owner,
+                title="HR Policy", text="The HR policy covers employee benefits.", page=1,
+            )
+            await share_document(session, _Authz(), actor=owner,
+                                 document_id=doc.id, principal=f"user:{andi.id}")
+            await index_document_chunks(session, embedder=_Embedder(), document_id=doc.id)
+
+            conv = await create_conversation(session, user=andi, title="HR chat")
+            executor = OfflineExecutor(results={"list_employees": {"record_count": 5, "status": "ok"}})
+
+            result = await send_message(
+                session, user=andi, conversation_id=conv.id,
+                question="How many employees are there?",
+                embedder=_Embedder(),
+                descriptors=[HR_DESCRIPTOR],
+                executor=executor,
+            )
+
+            asst_msg = await session.scalar(
+                select(Message).where(Message.conversation_id == conv.id, Message.role == "assistant")
+            )
+            assert asst_msg is not None
+
+            tc_rows = (await session.execute(
+                select(McpToolCall).where(McpToolCall.message_id == asst_msg.id)
+            )).scalars().all()
+            assert len(tc_rows) >= 1
+            tc = next((t for t in tc_rows if t.operation_id == "list_employees"), None)
+            assert tc is not None, "list_employees tool call not persisted"
+            assert tc.system_id == "hr-system"
+            assert tc.read_only is True
+            assert tc.status == "executed"
+
+            audit_rows = (await session.execute(
+                select(AuditEntry).where(AuditEntry.action.in_([
+                    "mcp.tool_call.executed", "mcp.tool_call.skipped"
+                ]))
+            )).scalars().all()
+            assert len(audit_rows) >= 1
+
+            assert "tool_calls" in result
+
+    subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True)
+    asyncio.run(run())
+
+
+def test_tool_call_records_store_safe_metadata_only():
+    """FR-X2: McpToolCall rows never contain secrets, server URLs, raw question text, or payloads."""
+    import asyncio
+    import subprocess
+
+    from sqlalchemy import delete, func, select
+
+    async def run():
+        from e2eai.chat import create_conversation, send_message
+        from e2eai.db import (
+            Chunk, ChunkEmbedding, Conversation, DocPrincipal,
+            Document, DocumentVersion, Folder, McpToolCall, Message, MessageCitation, User, sessions,
+        )
+        from e2eai.documents import create_seeded_document, share_document
+        from e2eai.mcp_tool_call import OfflineExecutor
+        from e2eai.retrieval import index_document_chunks
+        from e2eai.seed import seed_demo
+
+        class _Authz:
+            async def write(self, writes=(), deletes=()):
+                return None
+
+        class _Embedder:
+            model = "fake-v1"
+            _axes = ("employees", "revenue")
+            async def embed(self, texts):
+                return [[float(t.lower().count(a)) for a in self._axes] for t in texts]
+
+        async with sessions()() as session:
+            for m in (MessageCitation, Message, Conversation,
+                      ChunkEmbedding, DocPrincipal, Chunk, DocumentVersion, Document, Folder):
+                await session.execute(delete(m))
+            await session.commit()
+
+            await seed_demo(session, password="TestPassword_123456789")
+            owner = await session.scalar(select(User).where(func.lower(User.email) == "intern@demo.e2eai"))
+            andi = await session.scalar(select(User).where(func.lower(User.email) == "andi@demo.e2eai"))
+
+            doc = await create_seeded_document(
+                session, owner=owner, title="Employees doc",
+                text="There are 10 employees in HR.", page=1,
+            )
+            await share_document(session, _Authz(), actor=owner,
+                                 document_id=doc.id, principal=f"user:{andi.id}")
+            await index_document_chunks(session, embedder=_Embedder(), document_id=doc.id)
+
+            conv = await create_conversation(session, user=andi, title="Leak check")
+            await send_message(
+                session, user=andi, conversation_id=conv.id,
+                question="List employees with bearer token secret-key-abc",
+                embedder=_Embedder(),
+                descriptors=[HR_DESCRIPTOR],
+                executor=OfflineExecutor(),
+            )
+
+            asst_msg = await session.scalar(
+                select(Message).where(Message.conversation_id == conv.id, Message.role == "assistant")
+            )
+            tc_rows = (await session.execute(
+                select(McpToolCall).where(McpToolCall.message_id == asst_msg.id)
+            )).scalars().all()
+
+            for tc in tc_rows:
+                row_str = str({
+                    "system_id": tc.system_id, "operation_id": tc.operation_id,
+                    "method": tc.method, "path": tc.path, "safe_result": tc.safe_result,
+                }).lower()
+                assert "secret-key-abc" not in row_str
+                assert "bearer token" not in row_str
+                assert "list employees with" not in row_str  # raw question not stored
+
+    subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True)
+    asyncio.run(run())
+
+
+def test_sanitize_mcp_safe_result_removes_secret_like_fields_recursively():
+    """FR-X2: executor result summaries must be scrubbed before persistence/response."""
+    from e2eai.mcp_tool_call import sanitize_mcp_safe_result
+
+    raw = {
+        "status": "ok",
+        "record_count": 2,
+        "authorization": "Bearer secret-token-123",
+        "server_url": "https://internal.example.local/hr",
+        "payload": {"employee": "Andi", "token": "abc123"},
+        "nested": {"api_key": "key-123", "safe_count": 4},
+        "items": [{"result_count": 4, "access_token": "tok"}],
+    }
+
+    safe = sanitize_mcp_safe_result(raw)
+    safe_str = str(safe).lower()
+
+    assert safe["status"] == "ok"
+    assert safe["record_count"] == 2
+    assert safe["nested"]["safe_count"] == 4
+    assert safe["items"][0]["result_count"] == 4
+    assert "secret-token-123" not in safe_str
+    assert "internal.example.local" not in safe_str
+    assert "abc123" not in safe_str
+    assert "key-123" not in safe_str
+    assert "authorization" not in safe_str
+    assert "server_url" not in safe_str
+    assert "payload" not in safe_str
+    assert "api_key" not in safe_str
+    assert "access_token" not in safe_str
+
+
+
+def test_send_message_without_descriptors_backward_compatible():
+    """FR-X2: send_message without descriptors param works unchanged (no tool_calls or empty list)."""
+    import asyncio
+    import subprocess
+
+    from sqlalchemy import delete, func, select
+
+    async def run():
+        from e2eai.chat import create_conversation, send_message
+        from e2eai.db import (
+            Chunk, ChunkEmbedding, Conversation, DocPrincipal,
+            Document, DocumentVersion, Folder, Message, MessageCitation, User, sessions,
+        )
+        from e2eai.documents import create_seeded_document, share_document
+        from e2eai.retrieval import index_document_chunks
+        from e2eai.seed import seed_demo
+
+        class _Authz:
+            async def write(self, writes=(), deletes=()):
+                return None
+
+        class _Embedder:
+            model = "fake-v1"
+            _axes = ("employees", "revenue")
+            async def embed(self, texts):
+                return [[float(t.lower().count(a)) for a in self._axes] for t in texts]
+
+        async with sessions()() as session:
+            for m in (MessageCitation, Message, Conversation,
+                      ChunkEmbedding, DocPrincipal, Chunk, DocumentVersion, Document, Folder):
+                await session.execute(delete(m))
+            await session.commit()
+
+            await seed_demo(session, password="TestPassword_123456789")
+            owner = await session.scalar(select(User).where(func.lower(User.email) == "intern@demo.e2eai"))
+            andi = await session.scalar(select(User).where(func.lower(User.email) == "andi@demo.e2eai"))
+
+            doc = await create_seeded_document(
+                session, owner=owner, title="Employees doc",
+                text="There are 10 employees.", page=1,
+            )
+            await share_document(session, _Authz(), actor=owner,
+                                 document_id=doc.id, principal=f"user:{andi.id}")
+            await index_document_chunks(session, embedder=_Embedder(), document_id=doc.id)
+
+            conv = await create_conversation(session, user=andi, title="Backward compat")
+            result = await send_message(
+                session, user=andi, conversation_id=conv.id,
+                question="How many employees?",
+                embedder=_Embedder(),
+                # No descriptors or executor — existing usage
+            )
+
+            assert result.get("tool_calls", []) == []
+
+            msgs = (await session.execute(
+                select(Message).where(Message.conversation_id == conv.id)
+            )).scalars().all()
+            assert len(msgs) == 2
+
+    subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True)
+    asyncio.run(run())

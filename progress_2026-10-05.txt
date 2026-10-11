@@ -1225,3 +1225,33 @@ HOW TO RESUME
     `cd apps/api && uv run pytest -q tests/test_us_mcp_tool_call.py tests/test_us_mcp_gen_p1.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 33 passed; app ok.
   - `PRD_CRON_BACKLOG.md` item 14 split: this deterministic/offline planner and no-vectorize guard marked done; remaining FR-X2 work is chat-pipeline integration with persisted/audited offline executor boundary, then real MCP client execution after FR-X3 delegated identity.
   - Full heavy verification intentionally deferred; focused FR-X2 + adjacent FR-B4 MCP descriptor gates passed.
+
+- MCP planner → chat pipeline wiring with persisted/audited offline executor (FR-X2, sub-slice 2) (2026-10-11):
+  - Claude Code implemented this slice with strict TDD.
+  - Added `McpToolCall` ORM model to `db.py`: stores safe metadata only (system_id, operation_id,
+    method, path, read_only, needs_confirmation, status, safe_result JSONB). Never stores raw
+    question text, auth secrets, server URLs, bearer tokens, API keys, or request/response payloads.
+  - Added Alembic migration `0017_mcp_tool_calls` (revises 0016_finops_budget_alerts): creates the
+    `mcp_tool_calls` table with a `message_id` FK and message_id index. Reversible.
+  - Added `Executor` protocol, `OfflineExecutor`, and `execute_and_persist_tool_calls` to
+    `mcp_tool_call.py`:
+    - `Executor` protocol: `execute(record) -> dict` safe summary.
+    - `OfflineExecutor`: deterministic, never makes real MCP network calls. Accepts optional
+      per-operation-id result overrides for tests.
+    - `execute_and_persist_tool_calls`: plans records from descriptors, skips mutating tools
+      (needs_confirmation=True) with a `mcp.tool_call.skipped` audit, executes read-only tools
+      through the executor, persists `McpToolCall` rows, and audits each with `mcp.tool_call.executed`.
+  - Updated `chat.send_message` with optional `descriptors: list | None = None, executor=None`:
+    when descriptors are provided the planner runs, the offline executor executes read-only calls,
+    and safe records are persisted+audited linked to the assistant message. Returns `tool_calls`
+    list in the result dict. Existing callers without descriptors/executor are unaffected (result
+    has empty `tool_calls`).
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_us_mcp_tool_call.py::test_send_message_with_descriptors_persists_tool_call_records`
+    -> failed with `ImportError: cannot import name 'McpToolCall' from 'e2eai.db'`.
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_us_mcp_tool_call.py tests/test_us_chat_conversations.py && uv run alembic upgrade head && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 21 passed; head migration present; app ok.
+    `cd apps/api && uv run pytest -q tests/test_us_mcp_tool_call.py tests/test_us_mcp_gen_p1.py tests/test_us_chat_conversations.py && uv run alembic downgrade 0016_finops_budget_alerts && uv run alembic upgrade head` -> 43 passed; migration downgrade 0017 -> 0016 and upgrade 0016 -> 0017 succeeded.
+  - `PRD_CRON_BACKLOG.md` item 14 second sub-slice marked done. Remaining FR-X2: real MCP client
+    execution behind delegated identity (FR-X3).
+  - Full heavy verification intentionally deferred; focused FR-X2 + adjacent chat gates passed.

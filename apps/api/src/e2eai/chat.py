@@ -77,10 +77,20 @@ async def send_message(
     scope: str = "all",
     document_id: uuid.UUID | None = None,
     include_explainability: bool = False,
+    descriptors: list | None = None,
+    executor=None,
 ) -> dict:
     """Add a user message, generate a permission-filtered answer, store the assistant message
     with citations, and return the answer dict. The existing `answer_question` does the retrieval,
-    guardrail filtering, language detection (FR-C13), and audit (FR-C8, FR-C12)."""
+    guardrail filtering, language detection (FR-C13), and audit (FR-C8, FR-C12).
+
+    When ``descriptors`` (list of MCPServerDescriptor) are provided, the MCP planner selects
+    relevant tools, the offline executor runs them, and safe tool-call records are persisted
+    and audited linked to the assistant message (FR-X2). The ``executor`` defaults to
+    ``OfflineExecutor`` when not supplied — no real MCP network calls are made.
+    """
+    from .mcp_tool_call import OfflineExecutor, execute_and_persist_tool_calls, plan_mcp_tool_calls
+
     conv = await _own_conversation(session, user, conversation_id)
 
     # Store user message
@@ -106,7 +116,22 @@ async def send_message(
             section=cite.get("section"),
         ))
 
+    # FR-X2: plan + execute + persist MCP tool calls when descriptors are provided
+    tool_calls: list[dict] = []
+    if descriptors:
+        records = plan_mcp_tool_calls(descriptors=descriptors, question=question)
+        if records:
+            _executor = executor if executor is not None else OfflineExecutor()
+            tool_calls = await execute_and_persist_tool_calls(
+                session,
+                records=records,
+                executor=_executor,
+                message_id=asst_msg.id,
+                actor=f"user:{user.id}",
+            )
+
     await session.commit()
+    result["tool_calls"] = tool_calls
     return result
 
 

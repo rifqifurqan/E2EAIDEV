@@ -37,7 +37,7 @@ Rules for every cron tick:
    - [x] OpenAPI-to-MCP descriptor generator slice: validate minimal OpenAPI 3.x spec, build safe MCPServerDescriptor/MCPToolDescriptor with allowed operations, read_only defaults (GET=True, mutating=False), explicit overrides, no auth secrets or server URLs in output. POST /api/v1/systems/{system_id}/mcp-descriptor. See progress_2026-10-05.txt.
 14. [FR-X2] Live system tools are called at question time through MCP; data is not copied into vectors.
    - [x] Deterministic/offline question-time MCP tool-call planner and no-vectorize guard: selects safe tool-call records from generated descriptors, flags mutating tools for confirmation, exposes a safe plan API, and rejects live MCP results before embedding/indexing. See progress_2026-10-05.txt.
-   - [ ] Wire the planner into the chat answer pipeline with persisted/audited tool-call records and an offline executor boundary (no real MCP network calls in tests).
+   - [x] Wire the planner into the chat answer pipeline with persisted/audited tool-call records and an offline executor boundary (no real MCP network calls in tests). See progress_2026-10-05.txt.
    - [ ] Add real MCP client execution behind delegated identity once FR-X3 is in progress.
 15. [FR-X3] AI acts as the real user using delegated identity/token exchange.
 16. [FR-X4] Admin flow to register a system, upload OpenAPI spec, choose endpoints, configure auth, test, and grant roles.

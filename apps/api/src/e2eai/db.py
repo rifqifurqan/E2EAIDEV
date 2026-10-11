@@ -444,6 +444,26 @@ class FinopsBudgetAlert(Base):
     created_by: Mapped[str | None] = mapped_column(String(80))
 
 
+class McpToolCall(Base):
+    """FR-X2: persisted safe record of a planned+executed MCP tool call at question time.
+
+    Stores only safe metadata: system/operation IDs, method, path, flags, and a safe result summary.
+    Never stores auth secrets, server URLs, raw user question, bearer tokens, API keys, or payloads.
+    """
+    __tablename__ = "mcp_tool_calls"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    message_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"))
+    system_id: Mapped[str] = mapped_column(String(80))
+    operation_id: Mapped[str] = mapped_column(String(200))
+    method: Mapped[str] = mapped_column(String(16))
+    path: Mapped[str] = mapped_column(String(500))
+    read_only: Mapped[bool] = mapped_column(Boolean)
+    needs_confirmation: Mapped[bool] = mapped_column(Boolean)
+    status: Mapped[str] = mapped_column(String(32), default="planned")
+    safe_result: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 ROLE_NAMES = ("admin", "ai_engineer", "evaluator", "compliance", "business_user")  # FR-F3
 
 
