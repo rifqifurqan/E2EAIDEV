@@ -75,6 +75,7 @@ services:
       STORE_MODEL_IN_DB: "True"
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
       TEI_API_KEY: ${TEI_API_KEY}
+      VLLM_API_KEY: ${VLLM_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
@@ -90,6 +91,15 @@ services:
     image: ${E2EAI_IMAGE_OLLAMA:-}
     volumes: [ollamadata:/root/.ollama]
     ports: ["${BIND_ADDRESS}:${OLLAMA_PORT}:11434"]
+    restart: unless-stopped
+
+  vllm:
+    profiles: [vllm]
+    image: ${E2EAI_IMAGE_VLLM:-}
+    command: ["--model", "${VLLM_MODEL:-}", "--host", "0.0.0.0", "--port", "8000", "--api-key", "${VLLM_API_KEY:-}"]
+    volumes: [vllmcache:/root/.cache/huggingface]
+    ports: ["${BIND_ADDRESS}:${VLLM_PORT:-18083}:8000"]
+    ipc: host
     restart: unless-stopped
 
   tei-embed:
@@ -134,4 +144,5 @@ volumes:
   valkeydata:
   swdata:
   ollamadata:
+  vllmcache:
   teidata:

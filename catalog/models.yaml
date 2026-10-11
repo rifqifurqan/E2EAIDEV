@@ -14,6 +14,7 @@ models:
   - {id: "gemma3:4b", role: chat, served_by: ollama, source: "gemma3:4b", size_gb: 3.11, mem_gb: 4.2, license: gemma, license_class: restrictive, languages: "multilingual incl. Indonesian"}
   - {id: "qwen3.5:4b", role: chat, served_by: ollama, source: "qwen3.5:4b", size_gb: 3.10, mem_gb: 4.2, license: apache-2.0, license_class: permissive, languages: "multilingual incl. Indonesian"}
   - {id: "qwen3:8b", role: chat, served_by: ollama, source: "qwen3:8b", size_gb: 4.87, mem_gb: 6.3, license: apache-2.0, license_class: permissive, languages: "multilingual incl. Indonesian"}
+  - {id: "qwen3-8b-vllm", role: chat, served_by: vllm, source: "Qwen/Qwen3-8B", size_gb: 16.0, mem_gb: 16.0, license: apache-2.0, license_class: permissive, languages: "multilingual incl. Indonesian"}
   - {id: "qwen3:14b", role: chat, served_by: ollama, source: "qwen3:14b", size_gb: 8.64, mem_gb: 10.9, license: apache-2.0, license_class: permissive, languages: "multilingual incl. Indonesian"}
 
   # --- embedding --------------------------------------------------------------------------------

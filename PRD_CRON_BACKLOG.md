@@ -52,7 +52,7 @@ Rules for every cron tick:
 21. [x] [FR-R2] Reranker selectable per bot, including `none`. Completed: TEI reranker protocol/client + safe selector, bot bundle `reranker` resolution (`none` skips), and reranked answer path after permission/guardrail filtering. See progress_2026-10-05.txt.
 22. [x] [FR-M3] Model routing: simple queries to small model, complex to large model, rules/classifier, fallback. Completed: deterministic/offline query complexity classifier + small/large routing with large-model fallback. See progress_2026-10-05.txt.
 23. [x] [FR-M4] Semantic/prompt caching keyed on permission set. Completed: safe `semantic_cache.py` permission-set hash/key helpers, in-memory semantic/prompt cache boundary, optional answer-path cache hit/miss wiring, and safe audit metadata; cache entries never cross permission principal sets. See progress_2026-10-05.txt.
-24. [FR-M2] vLLM serving engine selectable for GPU profile, behind the serving interface.
+24. [x] [FR-M2] vLLM serving engine selectable for GPU profile, behind the serving interface. Completed: vLLM catalog `served_by`, GPU-only fit gate, wizard/env/config support, pinned compose vLLM service, GPU compose reservation, and LiteLLM OpenAI-compatible routing. See progress_2026-10-05.txt.
 
 ### E. Data/document P1
 25. [x] [FR-D7] Data quality checks: duplicate/near-duplicate detection, stale documents, unparseable files. Completed: pure/offline title duplicate + near-duplicate checks, stale document freshness check, and unparseable status/error detection. See progress_2026-10-05.txt.

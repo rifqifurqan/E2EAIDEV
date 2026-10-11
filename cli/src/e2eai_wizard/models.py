@@ -47,10 +47,12 @@ def load_catalog(root: Path) -> dict[str, Model]:
 
 
 def fit(m: Model, machine: Machine, tei_used_gb: float = 0.0) -> str:
-    """'gpu', 'cpu', or 'too_big'. TEI runs inside Docker, so it must fit Docker's memory limit."""
+    """'gpu', 'cpu', or 'too_big'. TEI runs inside Docker; vLLM requires GPU VRAM."""
     docker_free = machine.docker_mem_gb - STACK_GB - (OLLAMA_DOCKER_GB if machine.ollama_in_docker else 0.0)
     if m.served_by == "tei":
         return "cpu" if m.mem_gb + tei_used_gb <= docker_free else "too_big"
+    if m.served_by == "vllm":
+        return "gpu" if m.mem_gb <= machine.gpu_vram_gb else "too_big"
     if m.mem_gb <= machine.gpu_vram_gb:
         return "gpu"
     if machine.ollama_in_docker:  # CPU inference inside the Ollama container uses Docker's memory
@@ -98,9 +100,12 @@ def apply_selection(a: dict, selection: dict, catalog: dict[str, Model]) -> None
     chosen = [catalog[i] for r in ROLES for i in a["models"][r]]
     tei_emb = next((m for m in chosen if m.role == "embedding" and m.served_by == "tei"), None)
     rerank = next((m for m in chosen if m.role == "reranker"), None)
+    vllm = next((m for m in chosen if m.served_by == "vllm"), None)
     a["tei_models"] = {"tei-embed": tei_emb.source if tei_emb else "", "tei-rerank": rerank.source if rerank else ""}
+    a["vllm_model"] = vllm.source if vllm else ""
     a["optional"]["tei-embed"] = bool(tei_emb)
     a["optional"]["tei-rerank"] = bool(rerank)
+    a["optional"]["vllm"] = bool(vllm)
     if not a["host_ollama"] and any(m.served_by == "ollama" for m in chosen):
         a["optional"]["ollama"] = True
     a["egress_external"] = bool(a["models"]["external"])

@@ -16,7 +16,7 @@ def test_catalog_entries_are_valid_and_unique():
     ids = [m.id for m in CATALOG.values()]
     assert len(ids) == len(set(ids))
     for m in CATALOG.values():
-        assert m.role in models.ROLES and m.served_by in ("ollama", "tei")
+        assert m.role in models.ROLES and m.served_by in ("ollama", "tei", "vllm")
         assert m.license_class in ("permissive", "restrictive", "non-commercial")
         assert m.mem_gb > 0
 
@@ -27,6 +27,13 @@ def test_fit_uses_gpu_then_cpu_then_rejects():
     assert models.fit(CATALOG["qwen3:8b"], PC_HOST_OLLAMA) == "cpu"  # 6.3 GB > 6 GB VRAM, fits host RAM
     assert models.fit(CATALOG["qwen3:8b"], PC) == "too_big"  # in the container it must fit Docker's 4.8 GB
     assert models.fit(big, models.Machine(ram_gb=16, gpu_vram_gb=0, docker_mem_gb=4.8)) == "too_big"
+
+
+def test_vllm_models_require_gpu_vram_and_do_not_fall_back_to_cpu():
+    vllm = CATALOG["qwen3-8b-vllm"]
+    assert models.fit(vllm, models.Machine(ram_gb=128, gpu_vram_gb=24, docker_mem_gb=16)) == "gpu"
+    assert models.fit(vllm, models.Machine(ram_gb=128, gpu_vram_gb=0, docker_mem_gb=16)) == "too_big"
+    assert models.fit(vllm, models.Machine(ram_gb=128, gpu_vram_gb=8, docker_mem_gb=16)) == "too_big"
 
 
 def test_tei_models_must_fit_docker_memory_together():
@@ -59,7 +66,7 @@ def test_recommendations_for_the_owners_laptop():
 
 def test_litellm_config_routes_each_model_and_holds_no_secrets():
     a = generate.default_answers(tier="lite", ports={}, host_ollama=True, gpu=False)
-    a["api_keys"] = {"OPENAI_API_KEY": "sk-secret-value-123"}
+    a["api_keys"] = {"OPENAI_API_KEY": "«redacted:sk-…»"}
     models.apply_selection(a, {"chat": ["qwen3:4b"], "embedding": ["bge-m3-tei"], "reranker": [],
                                "vision": [], "safety": [],
                                "external": [{"provider": "openai", "model": "gpt-5-mini"}]}, CATALOG)
@@ -70,8 +77,28 @@ def test_litellm_config_routes_each_model_and_holds_no_secrets():
     assert by_name["bge-m3-tei"]["model"] == "openai/BAAI/bge-m3"
     assert by_name["bge-m3-tei"]["api_base"] == "http://tei-embed:80/v1"
     assert by_name["openai/gpt-5-mini"]["api_key"] == "os.environ/OPENAI_API_KEY"
-    assert "sk-secret-value-123" not in text
+    assert "«redacted:sk-…»" not in text
     assert a["optional"]["tei-embed"] and a["tei_models"]["tei-embed"] == "BAAI/bge-m3"
+
+
+def test_vllm_selection_enables_gpu_profile_and_litellm_openai_route():
+    a = generate.default_answers(tier="standard", ports={}, host_ollama=True, gpu=True)
+    models.apply_selection(a, {"chat": ["qwen3-8b-vllm"], "embedding": [], "reranker": [],
+                               "vision": [], "safety": [], "external": []}, CATALOG)
+
+    env = generate.render_env(a, images={"vllm": "vllm/vllm-openai:v0.11.0@sha256:test"})
+    assert "COMPOSE_PROFILES=vllm" in env
+    assert "compose.gpu.yaml" in env
+    assert "VLLM_MODEL=Qwen/Qwen3-8B" in env
+
+    cfg = yaml.safe_load(generate.render_litellm_config(a, CATALOG))
+    by_name = {m["model_name"]: m["litellm_params"] for m in cfg["model_list"]}
+    assert by_name["qwen3-8b-vllm"] == {
+        "model": "openai/Qwen/Qwen3-8B",
+        "api_base": "http://vllm:8000/v1",
+        "api_key": "os.environ/VLLM_API_KEY",
+    }
+    assert a["optional"]["vllm"] is True and a["vllm_model"] == "Qwen/Qwen3-8B"
 
 
 def _repo(tmp_path):

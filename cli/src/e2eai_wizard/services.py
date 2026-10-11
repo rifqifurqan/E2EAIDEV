@@ -20,6 +20,7 @@ SERVICES = (
     Service("seaweedfs", "SeaweedFS (S3 file storage)", 18333, "S3_PORT"),
     Service("litellm", "LiteLLM (model gateway)", 14000, "LITELLM_PORT"),
     Service("ollama", "Ollama (local models)", 21434, "OLLAMA_PORT", profile="ollama"),
+    Service("vllm", "vLLM (GPU OpenAI-compatible serving)", 18083, "VLLM_PORT", profile="vllm"),
     Service("tei-embed", "TEI embeddings", 18081, "TEI_EMBED_PORT", profile="tei-embed"),
     Service("tei-rerank", "TEI reranker", 18082, "TEI_RERANK_PORT", profile="tei-rerank"),
     Service("keycloak", "Keycloak (SSO)", 18180, "KEYCLOAK_PORT", profile="keycloak"),
@@ -36,6 +37,7 @@ SECRETS = {
     "S3_SECRET_KEY": ("seaweedfs", "S3 secret key", ""),
     "LITELLM_MASTER_KEY": ("litellm", "LiteLLM master key", "sk-"),
     "TEI_API_KEY": ("tei", "TEI API key", ""),
+    "VLLM_API_KEY": ("vllm", "vLLM API key", "sk-"),
     "KEYCLOAK_DB_PASSWORD": ("keycloak", "Keycloak database password", ""),
     "KEYCLOAK_ADMIN_PASSWORD": ("keycloak", "Keycloak admin password", ""),
 }

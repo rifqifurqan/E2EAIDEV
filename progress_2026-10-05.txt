@@ -1472,3 +1472,20 @@ HOW TO RESUME
     `cd apps/api && uv run pytest tests/test_us_semantic_prompt_cache_p1.py tests/test_us_query_rewrite_p1.py tests/test_us_model_routing_p1.py tests/test_us_reranker_p0.py tests/test_us02_cited_answer.py -q` -> 28 passed in 15.05s.
   - `PRD_CRON_BACKLOG.md` item 23 marked done.
   - Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- vLLM GPU serving engine selectable behind the gateway (FR-M2) (2026-10-11):
+  - Claude Code remained rate-limited from the FR-M4 attempt; Hermes implemented manually. Codex unused.
+  - Added vLLM as a first-class `served_by: vllm` catalog/server option with GPU-only fit validation: vLLM models require enough GPU VRAM and never fall back to CPU.
+  - Added `qwen3-8b-vllm` catalog entry (`Qwen/Qwen3-8B`) for Standard/GPU-class installs; Lite recommendations remain unchanged on the owner's 6 GB GPU.
+  - Added wizard/rendering support: `vllm` optional service/profile, `VLLM_MODEL`, `VLLM_PORT`, `VLLM_API_KEY`, backwards-compatible `load_answers`, and LiteLLM OpenAI-compatible route (`openai/<HF model>`, `http://vllm:8000/v1`, API key from env).
+  - Added pinned compose service `vllm` using `vllm/vllm-openai:v0.11.0@sha256:014a95f21c9edf6abe0aea6b07353f96baa4ec291c427bb1176dc7c93a85845c`, plus GPU reservation in `compose.gpu.yaml`.
+  - Digest verification: `docker buildx imagetools inspect vllm/vllm-openai:v0.11.0` -> manifest-list digest `sha256:014a95f21c9edf6abe0aea6b07353f96baa4ec291c427bb1176dc7c93a85845c`.
+  - TDD / RED evidence:
+    `cd cli && uv run pytest tests/test_models.py -q` -> 2 failed (`KeyError: 'qwen3-8b-vllm'`) before catalog/serving implementation.
+  - GREEN verified:
+    `cd cli && uv run pytest tests/test_models.py -q` -> 10 passed in 4.06s.
+    Adjacent regression:
+    `cd cli && uv run pytest -q` -> 29 passed, 1 skipped in 6.71s.
+    Compose validation: `cd deploy/compose && docker compose config --quiet` -> passed with no warnings after optional vLLM defaults were added.
+  - `PRD_CRON_BACKLOG.md` item 24 marked done.
+  - Live vLLM smoke intentionally skipped: this machine's 6 GB GPU cannot run the Standard/GPU vLLM catalog slice; compose/config routing was verified offline.

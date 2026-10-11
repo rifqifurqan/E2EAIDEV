@@ -1,6 +1,15 @@
-# Added to COMPOSE_FILE by the wizard when an NVIDIA GPU is chosen for the Ollama container.
+# Added to COMPOSE_FILE by the wizard when an NVIDIA GPU is chosen for local model serving.
 services:
   ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  vllm:
     deploy:
       resources:
         reservations:
