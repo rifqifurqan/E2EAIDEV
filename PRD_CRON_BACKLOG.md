@@ -51,7 +51,7 @@ Rules for every cron tick:
 20. [x] [FR-R6] Query rewriting and conversation-aware follow-up questions. Completed: deterministic/offline `query_rewrite.py` (EN/ID follow-up detection, topic expansion from the user's own prior questions) wired into `chat.send_message` (default on, `rewrite_query` opt-out in API); see progress_2026-10-05.txt.
 21. [x] [FR-R2] Reranker selectable per bot, including `none`. Completed: TEI reranker protocol/client + safe selector, bot bundle `reranker` resolution (`none` skips), and reranked answer path after permission/guardrail filtering. See progress_2026-10-05.txt.
 22. [x] [FR-M3] Model routing: simple queries to small model, complex to large model, rules/classifier, fallback. Completed: deterministic/offline query complexity classifier + small/large routing with large-model fallback. See progress_2026-10-05.txt.
-23. [FR-M4] Semantic/prompt caching keyed on permission set.
+23. [x] [FR-M4] Semantic/prompt caching keyed on permission set. Completed: safe `semantic_cache.py` permission-set hash/key helpers, in-memory semantic/prompt cache boundary, optional answer-path cache hit/miss wiring, and safe audit metadata; cache entries never cross permission principal sets. See progress_2026-10-05.txt.
 24. [FR-M2] vLLM serving engine selectable for GPU profile, behind the serving interface.
 
 ### E. Data/document P1

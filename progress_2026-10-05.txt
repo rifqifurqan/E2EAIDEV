@@ -1458,3 +1458,17 @@ HOW TO RESUME
   - FR-D7 TDD/verification: RED `No module named 'e2eai.data_quality'`; GREEN `cd apps/api && uv run pytest -q tests/test_us_data_quality_p1.py` -> 6 passed. Adjacent docs/ingest regression after copying ignored local env/config into the worktree for test prerequisites -> 18 passed.
   - Merged the three verified branches into main locally with merge commits, then marked PRD backlog items 21, 22, and 25 done.
   - Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Semantic/prompt caching keyed on permission set (FR-M4) (2026-10-11):
+  - Claude Code was tried first and returned `You've hit your limit · resets Oct 13, 11am (Asia/Jakarta)`; Hermes continued manually per allowed fallback. Codex unused.
+  - Added `semantic_cache.py`: stable opaque `permission_set_hash`, `CacheContext`, safe `build_prompt_cache_key`, and deterministic `SemanticPromptCache` boundary. Keys/metadata hash normalized prompts, sorted principals, document IDs, and safe version/model dimensions; they never include raw prompts, answers, document text, tokens, secrets, or principal identifiers.
+  - Wired optional `answer_question(..., semantic_cache=..., cache_context=...)`: cache lookup happens after resolving the user's current principal set and before embedding/retrieval; hits audit `chat.answer.cache_hit` with safe metadata and skip embedding/retrieval; misses populate the cache and return `cache.hit=false`. Different permission sets miss even for identical question/model.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest tests/test_us_semantic_prompt_cache_p1.py -q` -> collection error `No module named 'e2eai.semantic_cache'`.
+    Additional RED: `tests/test_us_semantic_prompt_cache_p1.py::test_answer_question_uses_permission_scoped_cache_without_cross_user_reuse` -> `TypeError: answer_question() got an unexpected keyword argument 'semantic_cache'`.
+  - GREEN verified:
+    `cd apps/api && uv run pytest tests/test_us_semantic_prompt_cache_p1.py -q` -> 4 passed in 2.74s.
+    Adjacent regression:
+    `cd apps/api && uv run pytest tests/test_us_semantic_prompt_cache_p1.py tests/test_us_query_rewrite_p1.py tests/test_us_model_routing_p1.py tests/test_us_reranker_p0.py tests/test_us02_cited_answer.py -q` -> 28 passed in 15.05s.
+  - `PRD_CRON_BACKLOG.md` item 23 marked done.
+  - Heavy full-stack gates intentionally skipped (speed-biased run).

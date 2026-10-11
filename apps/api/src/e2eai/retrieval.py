@@ -30,6 +30,7 @@ from .core.errors import AppError
 from .db import Chunk, ChunkEmbedding, DocPrincipal, Document, FolderPrincipal, User, get_session
 from .guardrails import PromptGuardPolicy, PromptInjectionDetector, select_prompt_detector
 from .language import detect_language
+from .semantic_cache import CacheContext, SemanticPromptCache
 
 
 # ---------------------------------------------------------------------------
@@ -434,6 +435,8 @@ async def answer_question(
     include_explainability: bool = False,
     retrieval_mode: str = "dense",
     retrieval_query: str | None = None,
+    semantic_cache: SemanticPromptCache | None = None,
+    cache_context: CacheContext | None = None,
 ) -> dict:
     """Answer from permission-filtered chunks, treating retrieved context as untrusted (FR-C8).
 
@@ -452,10 +455,39 @@ async def answer_question(
     # FR-R6: retrieval (and generation) may use a conversation-aware rewritten query; the language
     # is still detected from the user's original question only.
     effective_query = retrieval_query or question
+    principal_set = await principals(session, user)
+    cache_lookup_question = f"{question}\n{effective_query}" if retrieval_query else question
+    active_cache_context = cache_context
+    if semantic_cache is not None and active_cache_context is None:
+        answer_model = getattr(answer_generator, "model", None) if answer_generator is not None else None
+        active_cache_context = CacheContext(
+            principals=principal_set,
+            model=str(answer_model or embedder.model),
+            index_version=str(embedder.model),
+            retrieval_mode=retrieval_mode,
+            scope=scope,
+            document_id=str(document_id) if document_id else None,
+        )
+    if semantic_cache is not None and active_cache_context is not None:
+        cached = semantic_cache.get(cache_lookup_question, active_cache_context)
+        if cached is not None:
+            await audit.record(
+                session,
+                f"user:{user.id}",
+                "chat.answer.cache_hit",
+                "semantic_prompt_cache:entry",
+                semantic_cache.safe_metadata(cache_lookup_question, active_cache_context),
+            )
+            await session.commit()
+            cached["cache"] = {
+                "hit": True,
+                "metadata": semantic_cache.safe_metadata(cache_lookup_question, active_cache_context),
+            }
+            return cached
     chunks = await retrieve_relevant_chunks(
         session,
         embedder=embedder,
-        user_principals=await principals(session, user),
+        user_principals=principal_set,
         question=effective_query,
         limit=4,
         user=user,
@@ -523,6 +555,12 @@ async def answer_question(
             blocked_count=blocked_count,
             blocked_reasons=blocked_reasons,
         )
+    if semantic_cache is not None and active_cache_context is not None:
+        semantic_cache.put(cache_lookup_question, active_cache_context, result)
+        result["cache"] = {
+            "hit": False,
+            "metadata": semantic_cache.safe_metadata(cache_lookup_question, active_cache_context),
+        }
     await session.commit()
     return result
 
