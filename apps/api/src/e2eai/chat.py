@@ -79,6 +79,7 @@ async def send_message(
     include_explainability: bool = False,
     descriptors: list | None = None,
     executor=None,
+    rewrite: bool = True,
 ) -> dict:
     """Add a user message, generate a permission-filtered answer, store the assistant message
     with citations, and return the answer dict. The existing `answer_question` does the retrieval,
@@ -93,6 +94,19 @@ async def send_message(
 
     conv = await _own_conversation(session, user, conversation_id)
 
+    # FR-R6: conversation-aware query rewriting from this user's own earlier questions only.
+    from .query_rewrite import rewrite_query
+
+    rewrite_result = None
+    if rewrite:
+        prior_rows = (await session.execute(
+            select(Message.content)
+            .where(Message.conversation_id == conv.id, Message.role == "user")
+            .order_by(Message.created_at.desc())
+            .limit(6)
+        )).scalars().all()
+        rewrite_result = rewrite_query(question, list(reversed(prior_rows)))
+
     # Store user message
     user_msg = Message(conversation_id=conv.id, role="user", content=question)
     session.add(user_msg)
@@ -101,7 +115,10 @@ async def send_message(
     # Generate answer through existing permission-filtered path
     result = await answer_question(session, embedder=embedder, user=user, question=question,
                                    answer_generator=answer_generator, scope=scope, document_id=document_id,
-                                   include_explainability=include_explainability)
+                                   include_explainability=include_explainability,
+                                   retrieval_query=rewrite_result.rewritten if rewrite_result and rewrite_result.applied else None)
+    result["query_rewrite"] = (rewrite_result.as_dict() if rewrite_result
+                               else {"applied": False, "reason": "disabled"})
 
     # Store assistant message
     asst_msg = Message(conversation_id=conv.id, role="assistant", content=result["answer"])
@@ -241,6 +258,7 @@ class MessageIn(BaseModel):
     scope: str = "all"
     document_id: uuid.UUID | None = None
     include_explainability: bool = False
+    rewrite_query: bool = True  # FR-R6: conversation-aware query rewriting (opt-out)
 
 
 class FeedbackIn(BaseModel):
@@ -330,6 +348,7 @@ async def send_message_api(
         question=body.question, embedder=LiteLLMEmbedder.from_settings(),
         scope=body.scope, document_id=body.document_id,
         include_explainability=body.include_explainability,
+        rewrite=body.rewrite_query,
     )
 
     # Record token usage (best-effort)

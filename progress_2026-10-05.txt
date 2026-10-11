@@ -1437,3 +1437,13 @@ HOW TO RESUME
   - Tests: `cd apps/api && uv run pytest -q tests/test_us_hybrid_search_p1.py` -> 9 passed (incl. exact-keyword rescue where dense ranks it last, permission filter holds, non-shared user gets []).
   - Adjacent regression: `cd apps/api && uv run pytest -q` over the 14 test files referencing retrieve_relevant_chunks/answer_question//ask (answer language, chat conversations, lifecycle, explainability, malware, PII, injection, share expiry/policy/views, upload ingest, cited answer, offboarding) -> 93 passed.
   - Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Query rewriting + conversation-aware follow-ups (FR-R6) (2026-10-11):
+  - New `e2eai/query_rewrite.py`: deterministic/offline `is_follow_up` (EN + ID pronoun/continuation markers) and `rewrite_query` (expands a follow-up with topic keywords from the most recent standalone prior USER question; capped at 500 chars; uses only the caller's own user messages, never assistant/retrieved text). `RewriteResult.as_dict()` exposes only applied/reason.
+  - `answer_question(retrieval_query=...)` retrieves with the rewritten query while answer language is still detected from the original question; permission filters unchanged (SQL-level).
+  - `chat.send_message(rewrite=True)` loads up to 6 prior user messages of the conversation, rewrites, stores the ORIGINAL question, returns `query_rewrite` {applied, reason}; `MessageIn.rewrite_query` (default true) opt-out on the API.
+  - Claude Code not used this tick; Hermes implemented manually (no Codex).
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_us_query_rewrite_p1.py` -> collection error `No module named 'e2eai.query_rewrite'`.
+  - GREEN: same command -> 7 passed.
+  - Adjacent regression: `cd apps/api && uv run pytest -q tests/test_us_query_rewrite_p1.py tests/test_us_chat_conversations.py tests/test_us_combined_citations_p1.py tests/test_us_mcp_tool_call.py tests/test_us_hybrid_search_p1.py` + answer-language/explainability/injection test files -> 62 passed. App wiring smoke -> app ok.
+  - Heavy full-stack gates intentionally skipped (speed-biased run).

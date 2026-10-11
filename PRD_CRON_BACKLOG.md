@@ -48,7 +48,7 @@ Rules for every cron tick:
 
 ### D. Retrieval/model quality P1
 19. [x] [FR-R4] Hybrid search: dense + sparse/BM25 fused with reciprocal rank fusion. Completed: `hybrid_search.py` (tokenize, Okapi BM25, RRF k=60) + `mode="hybrid"` in `retrieve_relevant_chunks` (dense pool + Postgres full-text pool under the same SQL permission filters, fused by RRF) + `retrieval_mode` on `answer_question`/`AskIn`. See progress_2026-10-05.txt.
-20. [FR-R6] Query rewriting and conversation-aware follow-up questions.
+20. [x] [FR-R6] Query rewriting and conversation-aware follow-up questions. Completed: deterministic/offline `query_rewrite.py` (EN/ID follow-up detection, topic expansion from the user's own prior questions) wired into `chat.send_message` (default on, `rewrite_query` opt-out in API); see progress_2026-10-05.txt.
 21. [FR-R2] Reranker selectable per bot, including `none`.
 22. [FR-M3] Model routing: simple queries to small model, complex to large model, rules/classifier, fallback.
 23. [FR-M4] Semantic/prompt caching keyed on permission set.

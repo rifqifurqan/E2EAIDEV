@@ -339,6 +339,7 @@ async def answer_question(
     scoped_folder_ids: Sequence[uuid.UUID] | None = None,
     include_explainability: bool = False,
     retrieval_mode: str = "dense",
+    retrieval_query: str | None = None,
 ) -> dict:
     """Answer from permission-filtered chunks, treating retrieved context as untrusted (FR-C8).
 
@@ -354,11 +355,14 @@ async def answer_question(
     """
     prompt_policy = prompt_policy or PromptGuardPolicy.from_settings()
     prompt_detector = prompt_detector or select_prompt_detector(prompt_policy)
+    # FR-R6: retrieval (and generation) may use a conversation-aware rewritten query; the language
+    # is still detected from the user's original question only.
+    effective_query = retrieval_query or question
     chunks = await retrieve_relevant_chunks(
         session,
         embedder=embedder,
         user_principals=await principals(session, user),
-        question=question,
+        question=effective_query,
         limit=4,
         user=user,
         scope=scope,
@@ -397,7 +401,7 @@ async def answer_question(
         citations: list[dict] = []
     else:
         if answer_generator is not None:
-            answer_text = await answer_generator.generate(question, safe_chunks, answer_lang)
+            answer_text = await answer_generator.generate(effective_query, safe_chunks, answer_lang)
         else:
             answer_text = safe_chunks[0]["text"]
         top = safe_chunks[0]
