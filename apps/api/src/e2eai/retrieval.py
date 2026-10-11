@@ -179,12 +179,18 @@ async def retrieve_relevant_chunks(
     document_id: uuid.UUID | None = None,
     scoped_document_ids: Sequence[uuid.UUID] | None = None,
     scoped_folder_ids: Sequence[uuid.UUID] | None = None,
+    mode: str = "dense",
 ) -> list[dict]:
     """Rank indexed chunks by vector distance after SQL-level permission and scope filtering (FR-C2/FR-C3).
+
+    `mode="hybrid"` (FR-R4) adds a sparse full-text candidate pool from the same permission-filtered
+    SQL predicate and fuses dense + BM25 rankings with reciprocal rank fusion.
 
     Direct document shares and inherited folder shares are part of the SQL predicate before ordering/limit.
     Scopes only narrow this already-permission-filtered set; they never grant access.
     """
+    if mode not in ("dense", "hybrid"):
+        raise AppError(400, "Invalid retrieval mode")
     principal_list = sorted(set(user_principals))
     if not principal_list:
         return []
@@ -237,6 +243,8 @@ async def retrieve_relevant_chunks(
             scope_filters.append(Document.folder_id.in_(folder_ids))
         filters.append(or_(*scope_filters))
     distance_col = ChunkEmbedding.vector.cosine_distance(qvec).label("distance")
+    if mode == "hybrid":
+        return await _hybrid_candidates(session, filters, distance_col, question=question, limit=limit)
     rows = await session.execute(
         select(Document.id, Document.title, Chunk.text, Chunk.page, Chunk.section_path, distance_col)
         .join(Chunk, Chunk.document_id == Document.id)
@@ -256,6 +264,44 @@ async def retrieve_relevant_chunks(
         }
         for doc_id, title, text, page, section_path, distance in rows.all()
     ]
+
+
+async def _hybrid_candidates(session: AsyncSession, filters: list, distance_col, *, question: str, limit: int) -> list[dict]:
+    """Dense pool + sparse (full-text) pool under the same permission filters, fused with RRF (FR-R4)."""
+    from .hybrid_search import fuse_dense_sparse, tokenize
+
+    pool = max(limit * 5, 20)
+    cols = (Chunk.id, Document.id, Document.title, Chunk.text, Chunk.page, Chunk.section_path, distance_col)
+
+    def base():
+        return select(*cols).join(Chunk, Chunk.document_id == Document.id).join(
+            ChunkEmbedding, ChunkEmbedding.chunk_id == Chunk.id
+        )
+
+    dense_rows = (await session.execute(base().where(*filters).order_by(distance_col).limit(pool))).all()
+    terms = list(dict.fromkeys(tokenize(question)))
+    sparse_rows = []
+    if terms:
+        # tokens are [a-z0-9]+ only, so the tsquery string is injection-safe
+        tsvector = func.to_tsvector("simple", Chunk.text)
+        tsquery = func.to_tsquery("simple", " | ".join(terms))
+        sparse_rows = (
+            await session.execute(
+                base().where(*filters, tsvector.op("@@")(tsquery)).order_by(func.ts_rank_cd(tsvector, tsquery).desc()).limit(pool)
+            )
+        ).all()
+    merged: dict = {}
+    for chunk_id, doc_id, title, text, page, section_path, distance in [*dense_rows, *sparse_rows]:
+        merged.setdefault(chunk_id, {
+            "document_id": str(doc_id),
+            "document": title,
+            "text": text,
+            "page": page,
+            "section": section_path,
+            "score": round(1.0 - float(distance), 4),
+        })
+    candidates = sorted(merged.values(), key=lambda c: -c["score"])
+    return fuse_dense_sparse(candidates, query=question, limit=limit)
 
 
 def _non_expired(expires_at_col):
@@ -292,6 +338,7 @@ async def answer_question(
     scoped_document_ids: Sequence[uuid.UUID] | None = None,
     scoped_folder_ids: Sequence[uuid.UUID] | None = None,
     include_explainability: bool = False,
+    retrieval_mode: str = "dense",
 ) -> dict:
     """Answer from permission-filtered chunks, treating retrieved context as untrusted (FR-C8).
 
@@ -318,6 +365,7 @@ async def answer_question(
         document_id=document_id,
         scoped_document_ids=scoped_document_ids,
         scoped_folder_ids=scoped_folder_ids,
+        mode=retrieval_mode,
     )
     safe_chunks: list[dict] = []
     blocked_count = 0
@@ -440,6 +488,7 @@ class AskIn(BaseModel):
     scope: str = "all"
     document_id: uuid.UUID | None = None
     include_explainability: bool = False
+    retrieval_mode: str = "dense"
 
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
@@ -468,6 +517,7 @@ async def ask(body: AskIn, sess: dict = Depends(current_session), db: AsyncSessi
         scope=body.scope,
         document_id=body.document_id,
         include_explainability=body.include_explainability,
+        retrieval_mode=body.retrieval_mode,
     )
 
     # Record token usage (best-effort)

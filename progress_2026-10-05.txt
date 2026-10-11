@@ -1428,3 +1428,12 @@ HOW TO RESUME
     `cd apps/api && uv run pytest -q tests/test_us_mcp_tool_call.py::test_mcp_client_executor_runs_behind_delegated_identity_boundary` -> 1 passed.
   - `PRD_CRON_BACKLOG.md` FR-X2 marked done. External OAuth provider setup remains deferred under FR-X3 because it needs IdP/admin configuration.
 
+
+- Hybrid search: dense + sparse/BM25 with reciprocal rank fusion (FR-R4) (2026-10-11):
+  - Resumed interrupted WIP (retrieval.py, hybrid_search.py, test_us_hybrid_search_p1.py) without overwriting; finished and verified.
+  - New `e2eai/hybrid_search.py`: `tokenize`, Okapi BM25 (`bm25_scores`), `reciprocal_rank_fusion` (k=60, deterministic ties), `fuse_dense_sparse`.
+  - `retrieve_relevant_chunks(..., mode="dense"|"hybrid")`: hybrid builds a dense pool and a Postgres full-text pool (`to_tsvector('simple')` + OR tsquery from [a-z0-9] tokens, injection-safe), both under the same SQL-level permission/scope filters, then fuses with RRF; invalid mode -> AppError 400. Default stays `dense` (no behavior change).
+  - `answer_question(retrieval_mode=...)` and `AskIn.retrieval_mode` expose it; results carry `rrf_score`.
+  - Tests: `cd apps/api && uv run pytest -q tests/test_us_hybrid_search_p1.py` -> 9 passed (incl. exact-keyword rescue where dense ranks it last, permission filter holds, non-shared user gets []).
+  - Adjacent regression: `cd apps/api && uv run pytest -q` over the 14 test files referencing retrieve_relevant_chunks/answer_question//ask (answer language, chat conversations, lifecycle, explainability, malware, PII, injection, share expiry/policy/views, upload ingest, cited answer, offboarding) -> 93 passed.
+  - Heavy full-stack gates intentionally skipped (speed-biased run).

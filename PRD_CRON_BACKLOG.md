@@ -47,7 +47,7 @@ Rules for every cron tick:
 18. [x] [FR-X6] Answers combine documents and live data with citations for document pages and system record IDs. Completed as deterministic combined-citation builder merging doc citations (source=document, page, section) and executed live MCP tool-call citations (source=live_system, system_id, operation_id, record_id when present). See progress_2026-10-05.txt.
 
 ### D. Retrieval/model quality P1
-19. [FR-R4] Hybrid search: dense + sparse/BM25 fused with reciprocal rank fusion.
+19. [x] [FR-R4] Hybrid search: dense + sparse/BM25 fused with reciprocal rank fusion. Completed: `hybrid_search.py` (tokenize, Okapi BM25, RRF k=60) + `mode="hybrid"` in `retrieve_relevant_chunks` (dense pool + Postgres full-text pool under the same SQL permission filters, fused by RRF) + `retrieval_mode` on `answer_question`/`AskIn`. See progress_2026-10-05.txt.
 20. [FR-R6] Query rewriting and conversation-aware follow-up questions.
 21. [FR-R2] Reranker selectable per bot, including `none`.
 22. [FR-M3] Model routing: simple queries to small model, complex to large model, rules/classifier, fallback.
