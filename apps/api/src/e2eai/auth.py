@@ -7,6 +7,7 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from functools import lru_cache
+from urllib.parse import urlencode
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
@@ -25,6 +26,57 @@ COOKIE = "e2eai_session"
 CSRF_HEADER = "X-CSRF-Token"
 LOGIN_MAX_ATTEMPTS = 10  # ponytail: fixed-window placeholder (NFR-18, FR-F13); sliding window in P1
 LOGIN_WINDOW_SECONDS = 300
+
+
+@dataclass(frozen=True)
+class OIDCProvider:
+    """Secret-free OIDC authorization endpoint settings (FR-F1)."""
+
+    authorization_endpoint: str
+    client_id: str
+    scopes: tuple[str, ...] = ("openid", "email", "profile")
+
+
+def build_oidc_authorization_url(
+    provider: OIDCProvider,
+    *,
+    redirect_uri: str,
+    state: str,
+    nonce: str,
+    code_challenge: str | None = None,
+) -> str:
+    """Build a browser redirect URL for OIDC code flow without client secrets.
+
+    Token exchange is intentionally outside this helper so secrets never enter logs, tests, or URLs.
+    """
+    if not provider.authorization_endpoint or not provider.client_id:
+        raise AppError(503, "OIDC provider is not configured")
+    params = {
+        "response_type": "code",
+        "client_id": provider.client_id,
+        "redirect_uri": redirect_uri,
+        "scope": " ".join(provider.scopes),
+        "state": state,
+        "nonce": nonce,
+    }
+    if code_challenge:
+        params |= {"code_challenge": code_challenge, "code_challenge_method": "S256"}
+    return f"{provider.authorization_endpoint}?{urlencode(params)}"
+
+
+def local_login_allowed(auth_provider: str, *, oidc_available: bool, is_break_glass_user: bool) -> bool:
+    """Decide whether password login may be used under the configured auth mode.
+
+    Local-only installs allow local passwords. OIDC installs keep local password login restricted to
+    break-glass accounts, including when the identity provider is down; normal users must use SSO.
+    ``oidc_available`` is kept explicit for audit/reasoning, but availability never widens access.
+    """
+    if auth_provider == "local":
+        return True
+    if auth_provider == "oidc":
+        return is_break_glass_user
+    raise AppError(500, "Unknown auth provider")
+
 
 _hasher = PasswordHasher()  # argon2id defaults (PRD T9)
 
@@ -164,8 +216,14 @@ async def login(body: LoginIn, response: Response, db: AsyncSession = Depends(ge
         await audit.record(db, body.email.lower(), "auth.login.failed", f"email:{body.email.lower()}")
         await db.commit()
         raise AppError(401, "Invalid email or password")
+    settings = get_settings()
+    is_break_glass = user.email.lower() in settings.oidc_local_fallback_emails
+    if not local_login_allowed(settings.auth_provider, oidc_available=False, is_break_glass_user=is_break_glass):
+        await audit.record(db, f"user:{user.id}", "auth.login.local_blocked", f"user:{user.id}", {"auth_provider": settings.auth_provider})
+        await db.commit()
+        raise AppError(403, "Use single sign-on", "Password login is only available for break-glass fallback accounts.")
     sid, csrf = await _sessions().create(str(user.id))
-    idle = get_settings().session_idle_hours * 3600
+    idle = settings.session_idle_hours * 3600
     response.set_cookie(COOKIE, sid, max_age=idle, httponly=True, secure=True, samesite="lax")
     await audit.record(db, f"user:{user.id}", "auth.login", f"user:{user.id}")
     await db.commit()

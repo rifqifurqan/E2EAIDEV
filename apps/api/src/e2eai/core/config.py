@@ -42,6 +42,10 @@ class Settings:
     s3_secret_key: str
     default_language: str
     time_zone: str
+    auth_provider: str = "local"
+    oidc_authorization_endpoint: str = ""
+    oidc_client_id: str = ""
+    oidc_local_fallback_emails: tuple[str, ...] = ()
     tei_api_key: str = ""
     tei_rerank_port: int = 18082
     session_idle_hours: int = 8  # NFR-18
@@ -52,6 +56,8 @@ def get_settings() -> Settings:
     root = repo_root()
     e = _env(root)
     cfg = yaml.safe_load((root / "e2eai.yaml").read_text(encoding="utf-8"))
+    auth_cfg = cfg.get("auth", {})
+    oidc_cfg = auth_cfg.get("oidc", {})
     host = "127.0.0.1"
     db = e.get("E2EAI_DB_NAME", "e2eai")
     return Settings(
@@ -70,4 +76,8 @@ def get_settings() -> Settings:
         tei_rerank_port=int(e.get("TEI_RERANK_PORT", "18082")),
         default_language=cfg.get("locale", {}).get("default_language", "id"),
         time_zone=cfg.get("locale", {}).get("time_zone", "Asia/Jakarta"),
+        auth_provider=cfg.get("components", {}).get("auth", "local"),
+        oidc_authorization_endpoint=oidc_cfg.get("authorization_endpoint", ""),
+        oidc_client_id=oidc_cfg.get("client_id", ""),
+        oidc_local_fallback_emails=tuple(email.lower() for email in auth_cfg.get("local_fallback_emails", [])),
     )

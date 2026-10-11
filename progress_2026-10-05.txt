@@ -1589,3 +1589,17 @@ HOW TO RESUME
     Adjacent regression: `cd cli && uv run pytest -q` -> 41 passed, 1 skipped.
   - `PRD_CRON_BACKLOG.md` item 34 marked done.
   - Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- OIDC SSO option + IdP-down local fallback boundary (FR-F1 partial) (2026-10-11, cron):
+  - Claude Code was already confirmed rate-limited (`usage_limit_reached`, reset Oct 13 11am Asia/Jakarta); Hermes continued manually. Codex unused.
+  - Added secret-free OIDC authorization URL support (`OIDCProvider`, `build_oidc_authorization_url`) for code-flow redirects with state/nonce/PKCE challenge and no client secret in URLs/loggable data.
+  - Added OIDC-mode local password fallback policy: local installs still allow local login; OIDC installs allow password login only for configured break-glass fallback emails, including when the identity provider is down. Normal users must use SSO. The existing `/auth/login` endpoint now enforces that policy and audits blocked local-password attempts.
+  - Added config fields for `components.auth`, OIDC authorization endpoint/client id, and local fallback emails from `e2eai.yaml` without storing OIDC secrets.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_auth.py` -> collection failed with `ImportError: cannot import name 'OIDCProvider'`.
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_auth.py` -> 6 passed.
+    Adjacent regression/app import: `cd apps/api && uv run pytest -q tests/test_auth.py tests/test_phase0_core.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 9 passed, 1 warning; app ok.
+  - Service-dependent adjacent offboarding regression was attempted but Docker Desktop/Postgres was down (`docker compose ps` failed: Docker Desktop pipe not found; alembic/asyncpg connection refused), so it was not counted as a code failure.
+  - `PRD_CRON_BACKLOG.md` item 35 split: this boundary sub-slice marked done; OIDC callback/token validation remains next.
+  - Heavy full-stack gates intentionally skipped (speed-biased run).

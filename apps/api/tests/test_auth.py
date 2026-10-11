@@ -2,9 +2,12 @@ import asyncio
 
 from e2eai.auth import (
     LOGIN_MAX_ATTEMPTS,
+    OIDCProvider,
     Sessions,
+    build_oidc_authorization_url,
     csrf_ok,
     hash_password,
+    local_login_allowed,
     login_allowed,
     new_token,
     verify_password,
@@ -83,3 +86,33 @@ def test_session_create_get_delete_with_sliding_ttl():
         return await store.get(sid)
 
     assert asyncio.run(run()) is None
+
+
+def test_oidc_authorization_url_is_secret_free_and_state_bound():
+    provider = OIDCProvider(
+        authorization_endpoint="https://idp.example/realms/e2eai/protocol/openid-connect/auth",
+        client_id="e2eai-web",
+    )
+
+    url = build_oidc_authorization_url(
+        provider,
+        redirect_uri="https://app.example/api/v1/auth/oidc/callback",
+        state="state-token",
+        nonce="nonce-token",
+        code_challenge="pkce-challenge",
+    )
+
+    assert url.startswith("https://idp.example/realms/e2eai/protocol/openid-connect/auth?")
+    assert "response_type=code" in url
+    assert "client_id=e2eai-web" in url
+    assert "state=state-token" in url
+    assert "nonce=nonce-token" in url
+    assert "code_challenge=pkce-challenge" in url
+    assert "client_secret" not in url.lower()
+
+
+def test_oidc_mode_local_password_login_is_break_glass_only():
+    assert local_login_allowed("local", oidc_available=False, is_break_glass_user=False) is True
+    assert local_login_allowed("oidc", oidc_available=True, is_break_glass_user=False) is False
+    assert local_login_allowed("oidc", oidc_available=False, is_break_glass_user=False) is False
+    assert local_login_allowed("oidc", oidc_available=False, is_break_glass_user=True) is True
