@@ -42,6 +42,8 @@ class Settings:
     s3_secret_key: str
     default_language: str
     time_zone: str
+    tei_api_key: str = ""
+    tei_rerank_port: int = 18082
     session_idle_hours: int = 8  # NFR-18
 
 
@@ -64,6 +66,8 @@ def get_settings() -> Settings:
         s3_url=f"http://{host}:{e['S3_PORT']}",
         s3_access_key=e["S3_ACCESS_KEY"],
         s3_secret_key=e["S3_SECRET_KEY"],
+        tei_api_key=e.get("TEI_API_KEY", ""),
+        tei_rerank_port=int(e.get("TEI_RERANK_PORT", "18082")),
         default_language=cfg.get("locale", {}).get("default_language", "id"),
         time_zone=cfg.get("locale", {}).get("time_zone", "Asia/Jakarta"),
     )

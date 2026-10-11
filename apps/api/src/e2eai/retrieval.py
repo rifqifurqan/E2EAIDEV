@@ -31,6 +31,99 @@ from .db import Chunk, ChunkEmbedding, DocPrincipal, Document, FolderPrincipal, 
 from .guardrails import PromptGuardPolicy, PromptInjectionDetector, select_prompt_detector
 from .language import detect_language
 
+
+# ---------------------------------------------------------------------------
+# FR-R2: Reranker selectable per bot, including "none"
+# ---------------------------------------------------------------------------
+
+
+class Reranker(Protocol):
+    """Rerank retrieved chunks by relevance. Pure protocol — implementations are injectable."""
+
+    @property
+    def model(self) -> str: ...
+
+    async def rerank(self, query: str, chunks: list[dict], top_k: int) -> list[dict]:
+        """Return chunks re-ordered by relevance, best-first, truncated to ``top_k``.
+
+        Each returned dict is a copy of the input chunk (which already passed SQL-level
+        permission filtering) with an added ``rerank_score`` key. Must not widen the set
+        beyond the already-permission-filtered candidates.
+        """
+        ...
+
+
+@dataclass(frozen=True)
+class TeiReranker:
+    """TEI reranker client for text-embeddings-inference /rerank endpoint (FR-R2).
+
+    TEI serves rerankers (Ollama does not). The model name is the HF identifier
+    configured in ``e2eai.yaml`` under ``models.reranker``.
+    """
+
+    base_url: str
+    api_key: str
+    model: str
+    timeout: float = 60.0
+    client_factory: Callable[..., Any] = httpx.AsyncClient
+
+    @classmethod
+    def from_settings(cls, settings: Settings | None = None) -> "TeiReranker":
+        settings = settings or get_settings()
+        cfg = yaml.safe_load((repo_root() / "e2eai.yaml").read_text(encoding="utf-8"))
+        models = cfg.get("models", {}).get("reranker") or []
+        if not models:
+            raise AppError(503, "No reranker model configured")
+        tei_base = cfg.get("services", {}).get("tei-rerank", {}).get("url",
+            f"http://127.0.0.1:{settings.tei_rerank_port if hasattr(settings, 'tei_rerank_port') else 18082}")
+        return cls(base_url=tei_base, api_key=settings.tei_api_key, model=models[0])
+
+    async def rerank(self, query: str, chunks: list[dict], top_k: int) -> list[dict]:
+        if not chunks:
+            return []
+        async with self.client_factory(base_url=self.base_url, timeout=self.timeout) as client:
+            response = await client.post(
+                "/rerank",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json={
+                    "model": self.model,
+                    "query": query,
+                    "documents": [c.get("text", "") for c in chunks],
+                    "top_k": min(top_k, len(chunks)),
+                },
+            )
+        response.raise_for_status()
+        data = response.json().get("results") or []
+        # TEI /rerank returns {results: [{index, score}]} sorted by score desc
+        reranked: list[dict] = []
+        for item in data:
+            idx = item.get("index")
+            score = item.get("score", 0.0)
+            if idx is not None and 0 <= idx < len(chunks):
+                reranked.append({**chunks[idx], "rerank_score": float(score)})
+        return reranked[:top_k]
+
+
+def select_reranker(name: str | None, settings: Settings | None = None) -> Reranker | None:
+    """Resolve a reranker from its configured name.
+
+    ``"none"``, empty, or ``None`` means no reranker (Lite default). An unknown
+    name returns ``None`` rather than raising, so the answer path degrades to
+    dense/hybrid ranking without a reranker.
+    """
+    if name is None or name.strip() == "" or name.strip().lower() == "none":
+        return None
+    normalized = name.strip()
+    cfg = yaml.safe_load((repo_root() / "e2eai.yaml").read_text(encoding="utf-8"))
+    configured_models = set(cfg.get("models", {}).get("reranker") or [])
+    # Currently only TEI serves rerankers; future rerankers (e.g. API-based) plug in here.
+    if normalized.lower() == "tei" or normalized in configured_models:
+        try:
+            return TeiReranker.from_settings(settings)
+        except AppError:
+            return None
+    return None
+
 class Embedder(Protocol):
     @property
     def model(self) -> str: ...
@@ -333,6 +426,7 @@ async def answer_question(
     prompt_detector: PromptInjectionDetector | None = None,
     prompt_policy: PromptGuardPolicy | None = None,
     answer_generator: AnswerGenerator | None = None,
+    reranker: Reranker | None = None,
     scope: str = "all",
     document_id: uuid.UUID | None = None,
     scoped_document_ids: Sequence[uuid.UUID] | None = None,
@@ -390,6 +484,12 @@ async def answer_question(
                 )
                 continue
         safe_chunks.append(chunk)
+    # FR-R2: optional reranker re-orders the already-permission-filtered + guardrail-filtered
+    # candidates. It never widens the set beyond what SQL retrieval returned.
+    reranker_model = None
+    if reranker is not None and safe_chunks:
+        reranker_model = reranker.model
+        safe_chunks = await reranker.rerank(effective_query, safe_chunks, top_k=len(safe_chunks))
     answer_lang = detect_language(question)
     if not safe_chunks:
         answer_text = (
@@ -418,6 +518,7 @@ async def answer_question(
             safe_chunks=safe_chunks,
             embedder_model=embedder.model,
             has_answer_generator=answer_generator is not None,
+            reranker_model=reranker_model,
             prompt_guard_active=prompt_guard_active,
             blocked_count=blocked_count,
             blocked_reasons=blocked_reasons,
@@ -435,6 +536,7 @@ def _build_explainability(
     prompt_guard_active: bool,
     blocked_count: int,
     blocked_reasons: set[str],
+    reranker_model: str | None = None,
 ) -> dict:
     """Build FR-O11 'Why this answer?' metadata from permission-filtered results.
 
@@ -456,6 +558,7 @@ def _build_explainability(
                 "section": c["section"],
                 "snippet": c["text"][:200],
                 "score": c.get("score"),
+                "rerank_score": c.get("rerank_score"),
             }
             for c in safe_chunks
         ],
@@ -469,7 +572,7 @@ def _build_explainability(
         "tool_calls": {
             "embedder": embedder_model,
             "vector_search": True,
-            "reranker": None,
+            "reranker": reranker_model,
             "answer_generator": has_answer_generator,
         },
         "guardrail_status": {
