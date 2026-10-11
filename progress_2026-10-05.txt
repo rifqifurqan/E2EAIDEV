@@ -1577,3 +1577,15 @@ HOW TO RESUME
   - Verified: `cd apps/api && uv run pytest -q tests/test_us_job_engine_p0.py` -> 16 passed.
     Full suite regression: `cd apps/api && uv run pytest -q` -> 478 passed, 1 skipped.
   - `PRD_CRON_BACKLOG.md` item 32 marked done.
+
+- Install profiles for Compose/Helm variants (FR-F4) (2026-10-11, cron):
+  - Claude Code was tried first and returned `usage_limit_reached` / weekly limit reset Oct 13, 11am Asia/Jakarta; Hermes continued manually. Codex unused.
+  - Added `e2eai_wizard.profiles`: deterministic profile contracts for `core`, `lab-stage`, `lab-all`, `cpu`, and `gpu`; `lab-stage` requires one explicit stage, `lab-all` expands every Lab stage, GPU adds `compose.gpu.yaml`, and model-serving Compose profiles remain explicit from wizard/model choices.
+  - Added a Helm values boundary (`InstallSelection.helm_values`) for future chart support without adding a Helm chart before its phase.
+  - TDD / RED evidence:
+    `cd cli && uv run pytest -q tests/test_profiles.py` -> 7 failed with `AttributeError: module 'e2eai_wizard.profiles' has no attribute 'resolve_install_selection'`.
+  - GREEN verified:
+    `cd cli && uv run pytest -q tests/test_profiles.py` -> 12 passed.
+    Adjacent regression: `cd cli && uv run pytest -q` -> 41 passed, 1 skipped.
+  - `PRD_CRON_BACKLOG.md` item 34 marked done.
+  - Heavy full-stack gates intentionally skipped (speed-biased run).

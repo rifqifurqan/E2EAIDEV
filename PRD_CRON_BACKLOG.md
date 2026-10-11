@@ -72,7 +72,7 @@ Rules for every cron tick:
     - [x] `job_engine.py`: `JobEngine` protocol, `NullJobEngine`, `check_job_engine_contract`,
       `make_celery_engine`/`make_temporal_engine` with NullJobEngine fallback. Tests: `test_us_job_engine_p0.py` (16 passed).
     - Verified: `cd apps/api && uv run pytest -q tests/test_us_job_engine_p0.py` -> 16 passed.
-34. [FR-F4] Install profiles: core, lab-stage, lab-all, GPU/CPU variants for compose/Helm.
+34. [x] [FR-F4] Install profiles: core, lab-stage, lab-all, GPU/CPU variants for compose/Helm. Completed as deterministic CLI profile contract helpers: core/lab-stage/lab-all, CPU/GPU Compose file selection, explicit model service profiles, and a Helm values boundary; see progress_2026-10-05.txt.
 35. [FR-F1] OIDC SSO option and identity-provider-down fallback path integration.
 36. [FR-F2] Complete Org -> Division -> Team -> User and roles/project scoping gaps; leave SCIM sync for P2.
 37. [FR-F7] Harden LiteLLM gateway virtual keys/budgets/fallbacks beyond current baseline.
