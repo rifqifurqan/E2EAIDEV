@@ -27,6 +27,16 @@ def _env(root: Path) -> dict[str, str]:
     return values | {k: v for k, v in os.environ.items() if k in values or k.startswith("E2EAI_")}
 
 
+def _resolve_secret_ref(value: str, env_values: dict[str, str]) -> str:
+    """Resolve optional secret references without storing secret values in e2eai.yaml."""
+    if not value:
+        return ""
+    if value.startswith("env:"):
+        name = value.split(":", 1)[1]
+        return env_values.get(name, os.environ.get(name, ""))
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
     tier: str
@@ -44,7 +54,11 @@ class Settings:
     time_zone: str
     auth_provider: str = "local"
     oidc_authorization_endpoint: str = ""
+    oidc_token_endpoint: str = ""
+    oidc_userinfo_endpoint: str = ""
     oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_redirect_uri: str = ""
     oidc_local_fallback_emails: tuple[str, ...] = ()
     tei_api_key: str = ""
     tei_rerank_port: int = 18082
@@ -78,6 +92,10 @@ def get_settings() -> Settings:
         time_zone=cfg.get("locale", {}).get("time_zone", "Asia/Jakarta"),
         auth_provider=cfg.get("components", {}).get("auth", "local"),
         oidc_authorization_endpoint=oidc_cfg.get("authorization_endpoint", ""),
+        oidc_token_endpoint=oidc_cfg.get("token_endpoint", ""),
+        oidc_userinfo_endpoint=oidc_cfg.get("userinfo_endpoint", ""),
         oidc_client_id=oidc_cfg.get("client_id", ""),
+        oidc_client_secret=_resolve_secret_ref(oidc_cfg.get("client_secret", ""), e),
+        oidc_redirect_uri=oidc_cfg.get("redirect_uri", ""),
         oidc_local_fallback_emails=tuple(email.lower() for email in auth_cfg.get("local_fallback_emails", [])),
     )

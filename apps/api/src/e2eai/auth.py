@@ -2,13 +2,16 @@
 NFR-18). Pure helpers (hashing, CSRF, rate limit, session store) are testable without secrets; the
 router wires them to the live DB and Valkey."""
 
+from __future__ import annotations
+
 import json
 import secrets
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from urllib.parse import urlencode
 
+import httpx
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from fastapi import APIRouter, Depends, Request, Response
@@ -20,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from . import audit
 from .core.config import get_settings
 from .core.errors import AppError
-from .db import LocalCredential, User, get_session
+from .db import LocalCredential, Organization, User, get_session
 
 COOKIE = "e2eai_session"
 CSRF_HEADER = "X-CSRF-Token"
@@ -30,11 +33,23 @@ LOGIN_WINDOW_SECONDS = 300
 
 @dataclass(frozen=True)
 class OIDCProvider:
-    """Secret-free OIDC authorization endpoint settings (FR-F1)."""
+    """Secret-aware OIDC endpoint settings (FR-F1); repr never exposes the client secret."""
 
     authorization_endpoint: str
     client_id: str
+    token_endpoint: str = ""
+    userinfo_endpoint: str = ""
+    client_secret: str = field(default="", repr=False)
     scopes: tuple[str, ...] = ("openid", "email", "profile")
+
+
+@dataclass(frozen=True)
+class OIDCIdentity:
+    """Validated identity returned by Keycloak's userinfo endpoint. Contains no tokens."""
+
+    sub: str
+    email: str
+    display_name: str
 
 
 def build_oidc_authorization_url(
@@ -62,6 +77,124 @@ def build_oidc_authorization_url(
     if code_challenge:
         params |= {"code_challenge": code_challenge, "code_challenge_method": "S256"}
     return f"{provider.authorization_endpoint}?{urlencode(params)}"
+
+
+def oidc_provider_from_settings() -> OIDCProvider:
+    """Build OIDC endpoint config from e2eai.yaml/env without logging or returning secrets."""
+    settings = get_settings()
+    return OIDCProvider(
+        authorization_endpoint=settings.oidc_authorization_endpoint,
+        token_endpoint=settings.oidc_token_endpoint,
+        userinfo_endpoint=settings.oidc_userinfo_endpoint,
+        client_id=settings.oidc_client_id,
+        client_secret=settings.oidc_client_secret,
+    )
+
+
+async def exchange_oidc_code_for_identity(
+    http_client,
+    provider: OIDCProvider,
+    *,
+    code: str,
+    redirect_uri: str,
+    code_verifier: str | None = None,
+) -> OIDCIdentity:
+    """Exchange an authorization code with Keycloak and validate it via userinfo.
+
+    Keycloak validates the code, client, redirect URI, PKCE verifier, and access token. The API then
+    trusts only the token-authenticated userinfo response and never stores or returns raw tokens.
+    """
+    if not provider.token_endpoint or not provider.userinfo_endpoint or not provider.client_id:
+        raise AppError(503, "OIDC provider is not configured")
+    form = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "client_id": provider.client_id,
+    }
+    if provider.client_secret:
+        form["client_secret"] = provider.client_secret
+    if code_verifier:
+        form["code_verifier"] = code_verifier
+    token_response = await http_client.post(
+        provider.token_endpoint,
+        data=form,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    if token_response.status_code >= 400:
+        raise AppError(401, "OIDC token exchange failed")
+    token_payload = token_response.json()
+    access_token = token_payload.get("access_token")
+    token_type = token_payload.get("token_type", "Bearer")
+    if not access_token or token_type.lower() != "bearer":
+        raise AppError(401, "OIDC token response is invalid")
+    userinfo_response = await http_client.get(
+        provider.userinfo_endpoint,
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    if userinfo_response.status_code >= 400:
+        raise AppError(401, "OIDC userinfo validation failed")
+    userinfo = userinfo_response.json()
+    sub = str(userinfo.get("sub") or "").strip()
+    email = str(userinfo.get("email") or "").strip().lower()
+    display_name = str(userinfo.get("name") or userinfo.get("preferred_username") or email).strip()
+    if not sub or not email:
+        raise AppError(401, "OIDC userinfo is missing required claims")
+    return OIDCIdentity(sub=sub, email=email, display_name=display_name or email)
+
+
+async def ensure_oidc_user(
+    session: AsyncSession,
+    identity: OIDCIdentity,
+    *,
+    default_org_id: uuid.UUID | None = None,
+) -> User:
+    """Find or create an active user for a validated OIDC identity; no local password is created."""
+    user = await session.scalar(
+        select(User).where(func.lower(User.email) == identity.email.lower(), User.status == "active")
+    )
+    if user is not None:
+        return user
+    org_id = default_org_id
+    if org_id is None:
+        org_id = await session.scalar(select(Organization.id).order_by(Organization.created_at, Organization.id).limit(1))
+    if org_id is None:
+        raise AppError(503, "No organization is available for OIDC user creation")
+    user = User(
+        org_id=org_id,
+        email=identity.email.lower(),
+        display_name=identity.display_name,
+        status="active",
+        created_by=f"oidc:{identity.sub}",
+        updated_by=f"oidc:{identity.sub}",
+    )
+    session.add(user)
+    await session.flush()
+    return user
+
+
+async def complete_oidc_login(
+    session: AsyncSession,
+    session_store: Sessions,
+    http_client,
+    provider: OIDCProvider,
+    *,
+    code: str,
+    redirect_uri: str,
+    default_org_id: uuid.UUID | None = None,
+    code_verifier: str | None = None,
+) -> tuple[User, str, str]:
+    """Validate the OIDC callback, create/reuse the user, then create a local web session."""
+    identity = await exchange_oidc_code_for_identity(
+        http_client,
+        provider,
+        code=code,
+        redirect_uri=redirect_uri,
+        code_verifier=code_verifier,
+    )
+    user = await ensure_oidc_user(session, identity, default_org_id=default_org_id)
+    sid, csrf = await session_store.create(str(user.id))
+    return user, sid, csrf
 
 
 def local_login_allowed(auth_provider: str, *, oidc_available: bool, is_break_glass_user: bool) -> bool:
@@ -204,6 +337,36 @@ class LoginIn(BaseModel):
 
 
 router = APIRouter(prefix="/api/v1", tags=["auth"])
+
+
+@router.get("/auth/oidc/callback")
+async def oidc_callback(
+    request: Request,
+    response: Response,
+    code: str,
+    state: str | None = None,
+    code_verifier: str | None = None,
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Complete an OIDC code-flow login against Keycloak and create the app session."""
+    settings = get_settings()
+    provider = oidc_provider_from_settings()
+    redirect_uri = settings.oidc_redirect_uri or f"{request.url.scheme}://{request.url.netloc}{request.url.path}"
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        user, sid, csrf = await complete_oidc_login(
+            db,
+            _sessions(),
+            client,
+            provider,
+            code=code,
+            redirect_uri=redirect_uri,
+            code_verifier=code_verifier,
+        )
+    idle = settings.session_idle_hours * 3600
+    response.set_cookie(COOKIE, sid, max_age=idle, httponly=True, secure=True, samesite="lax")
+    await audit.record(db, f"user:{user.id}", "auth.login.oidc", f"user:{user.id}", {"state_present": bool(state)})
+    await db.commit()
+    return {"user_id": str(user.id), "csrf_token": csrf}
 
 
 @router.post("/auth/login")
