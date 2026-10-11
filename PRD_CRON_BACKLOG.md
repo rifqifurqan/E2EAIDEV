@@ -49,13 +49,13 @@ Rules for every cron tick:
 ### D. Retrieval/model quality P1
 19. [x] [FR-R4] Hybrid search: dense + sparse/BM25 fused with reciprocal rank fusion. Completed: `hybrid_search.py` (tokenize, Okapi BM25, RRF k=60) + `mode="hybrid"` in `retrieve_relevant_chunks` (dense pool + Postgres full-text pool under the same SQL permission filters, fused by RRF) + `retrieval_mode` on `answer_question`/`AskIn`. See progress_2026-10-05.txt.
 20. [x] [FR-R6] Query rewriting and conversation-aware follow-up questions. Completed: deterministic/offline `query_rewrite.py` (EN/ID follow-up detection, topic expansion from the user's own prior questions) wired into `chat.send_message` (default on, `rewrite_query` opt-out in API); see progress_2026-10-05.txt.
-21. [FR-R2] Reranker selectable per bot, including `none`.
-22. [FR-M3] Model routing: simple queries to small model, complex to large model, rules/classifier, fallback.
+21. [x] [FR-R2] Reranker selectable per bot, including `none`. Completed: TEI reranker protocol/client + safe selector, bot bundle `reranker` resolution (`none` skips), and reranked answer path after permission/guardrail filtering. See progress_2026-10-05.txt.
+22. [x] [FR-M3] Model routing: simple queries to small model, complex to large model, rules/classifier, fallback. Completed: deterministic/offline query complexity classifier + small/large routing with large-model fallback. See progress_2026-10-05.txt.
 23. [FR-M4] Semantic/prompt caching keyed on permission set.
 24. [FR-M2] vLLM serving engine selectable for GPU profile, behind the serving interface.
 
 ### E. Data/document P1
-25. [FR-D7] Data quality checks: duplicate/near-duplicate detection, stale documents, unparseable files.
+25. [x] [FR-D7] Data quality checks: duplicate/near-duplicate detection, stale documents, unparseable files. Completed: pure/offline title duplicate + near-duplicate checks, stale document freshness check, and unparseable status/error detection. See progress_2026-10-05.txt.
 26. [FR-D11] Labeling and annotation for gold sets and fine-tuning data.
 27. [FR-D15] Optional VLM add-on: routing for figure-heavy/flagged pages, derived output labels, permissions, async enrichment.
 28. [FR-D16] Technical/maintenance manuals: procedure-step/figure links, parts/torque/spec tables, verbatim safety warnings.

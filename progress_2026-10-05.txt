@@ -1447,3 +1447,14 @@ HOW TO RESUME
   - GREEN: same command -> 7 passed.
   - Adjacent regression: `cd apps/api && uv run pytest -q tests/test_us_query_rewrite_p1.py tests/test_us_chat_conversations.py tests/test_us_combined_citations_p1.py tests/test_us_mcp_tool_call.py tests/test_us_hybrid_search_p1.py` + answer-language/explainability/injection test files -> 62 passed. App wiring smoke -> app ok.
   - Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Parallel development batch: reranker, model routing, data quality (FR-R2, FR-M3, FR-D7) (2026-10-11):
+  - Cron batch mode hit Hermes/Nous fair-share HTTP 429; automatic cron was paused to avoid repeated failing ticks. Work continued manually in separate branches/worktrees, with Codex unused.
+  - FR-R2 branch `pr/fr-r2-reranker` commit `bad6e9c`: added `Reranker` protocol, `TeiReranker`, safe `select_reranker`, optional `answer_question(..., reranker=...)`, explainability reranker metadata, TEI settings, and bot bundle `reranker` resolution (`none` skips rerank). Reranking occurs only after SQL permission filtering and prompt-guard filtering, so it cannot widen access.
+  - FR-R2 TDD/verification: focused `cd apps/api && uv run pytest -q tests/test_us_reranker_p0.py` -> initially failed during collection / behavior while salvaging rate-limited WIP, then GREEN -> 9 passed. Adjacent regression `tests/test_us_reranker_p0.py tests/test_us_explainability_p1.py tests/test_us_hybrid_search_p1.py tests/test_us_bot_environments_p1.py` -> 29 passed.
+  - FR-M3 branch `pr/fr-m3-routing` commit `ab818db`: added deterministic/offline `model_routing.py` with `ModelRoutingConfig`, `classify_query_complexity`, and `route_model` for simple->small, complex/empty/fallback->large routing. No LLM calls in classifier.
+  - FR-M3 TDD/verification: RED `No module named 'e2eai.model_routing'`; GREEN `cd apps/api && uv run pytest -q tests/test_us_model_routing_p1.py` -> 6 passed; app import smoke -> app ok.
+  - FR-D7 branch `pr/fr-d7-dataval` commit `223d9d1`: added `data_quality.py` pure helpers for duplicate/near-duplicate title grouping, stale document detection, and unparseable status/error detection.
+  - FR-D7 TDD/verification: RED `No module named 'e2eai.data_quality'`; GREEN `cd apps/api && uv run pytest -q tests/test_us_data_quality_p1.py` -> 6 passed. Adjacent docs/ingest regression after copying ignored local env/config into the worktree for test prerequisites -> 18 passed.
+  - Merged the three verified branches into main locally with merge commits, then marked PRD backlog items 21, 22, and 25 done.
+  - Heavy full-stack gates intentionally skipped (speed-biased run).
