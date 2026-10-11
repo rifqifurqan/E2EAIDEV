@@ -1357,3 +1357,34 @@ HOW TO RESUME
     (8) route wiring.
   - `PRD_CRON_BACKLOG.md` item 16 marked done.
   - Full heavy verification intentionally deferred; focused FR-X4 + adjacent MCP/identity/chat gates passed.
+
+- Write-action confirmation flow (FR-X5) (2026-10-11):
+  - Claude Code implemented this slice with strict TDD.
+  - Added `write_confirmation.py`: explicit user confirmation flow for mutating MCP tool calls:
+    - `confirm_tool_call`: takes a pending (skipped_confirmation) McpToolCall ID, user, and
+      decision ("confirm" or "deny"). On confirm: executes the tool call via the offline executor,
+      sanitizes the result, updates status to `confirmed_executed`, and audits with safe metadata
+      (confirmed_by, operation_id, system_id, method). On deny: marks as `denied` and audits.
+    - Non-pending tool calls return 409; missing tool calls return 404.
+    - `POST /api/v1/chat/tool-calls/{tool_call_id}/confirm`: API route protected by `chat` scope.
+  - Existing FR-X2 planner already flags mutating tools with `needs_confirmation=True` and
+    the executor already skips them with `skipped_confirmation` status. FR-X5 completes the
+    flow by allowing users to confirm or deny those pending actions.
+  - No migration needed: McpToolCall.status column already accommodates the new statuses.
+  - Registered `write_confirmation.router` in `main.py`.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_us_write_confirmation_p1.py` -> 4 failed, 1 passed
+    with `ModuleNotFoundError: No module named 'e2eai.write_confirmation'`.
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_us_write_confirmation_p1.py` -> 5 passed in 6.03s.
+    Adjacent regression:
+    `cd apps/api && uv run pytest -q tests/test_us_write_confirmation_p1.py tests/test_us_mcp_tool_call.py tests/test_us_delegated_identity_p1.py tests/test_us_system_registration_p1.py tests/test_us_chat_conversations.py` -> 48 passed in 35.42s.
+    App wiring smoke: `cd apps/api && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> app ok.
+  - Tests cover:
+    (1) pending write tool call can be confirmed — executes and updates status;
+    (2) pending write tool call can be denied — marks as denied;
+    (3) confirmation audit record includes user_id, system_id, operation — no tokens;
+    (4) read-only tools execute without confirmation;
+    (5) route wiring.
+  - `PRD_CRON_BACKLOG.md` item 17 marked done.
+  - Full heavy verification intentionally deferred; focused FR-X5 + adjacent MCP/identity/system/chat gates passed.
