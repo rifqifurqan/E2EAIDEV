@@ -59,9 +59,9 @@ Rules for every cron tick:
 26. [x] [FR-D11] Labeling and annotation for gold sets and fine-tuning data. Completed as deterministic/offline dataset annotation slice: versioned eval datasets with gold/fine-tuning labels, safe annotation export, and API route; see progress_2026-10-05.txt.
 27. [x] [FR-D15] Optional VLM add-on: routing for figure-heavy/flagged pages, derived output labels, permissions, async enrichment. Completed as deterministic/offline VLM enrichment boundary (routing, async plan, derived chunk labels + document permission inheritance); see progress_2026-10-05.txt.
 28. [x] [FR-D16] Technical/maintenance manuals: procedure-step/figure links, parts/torque/spec tables, verbatim safety warnings. Completed as deterministic/offline manual-understanding helpers; see progress_2026-10-05.txt.
-29. [FR-D4] Complete selectable chunking modes beyond structure-aware: recursive, semantic, parent-child.
-30. [FR-C6] Derived content inherits strictest permissions of sources.
-31. [FR-C7] Chat history after access revocation hides revoked citations with source-no-longer-accessible notice.
+29. [x] [FR-D4] Complete selectable chunking modes beyond structure-aware: recursive, semantic, parent-child. Completed as deterministic chunking.py with recursive/semantic/parent-child modes and a select_chunker; safe chunking tests; see progress_2026-10-05.txt.
+30. [x] [FR-C6] Derived content inherits strictest permissions of sources. Completed as deterministic derived-permissions helpers (strictest-level inheritance, no per-user principal expansion, secret-safe output); see progress_2026-10-05.txt.
+31. [x] [FR-C7] Chat history after access revocation hides revoked citations with source-no-longer-accessible notice. Completed as deterministic/revoked-citations helpers; see progress_2026-10-05.txt.
 
 ### F. Platform foundation gaps / hardening P0-P1
 32. [FR-F8] Tool adapter framework with standard interface and contract tests for every Lab tool.

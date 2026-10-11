@@ -1528,3 +1528,31 @@ HOW TO RESUME
     `cd apps/api && uv run pytest tests/test_us_manual_understanding_p1.py tests/test_us_doc_understanding_p1.py tests/test_us_vlm_enrichment_p1.py -q && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 18 passed in 1.52s; app ok.
   - `PRD_CRON_BACKLOG.md` item 28 marked done.
   - Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Selectable chunking modes beyond structure-aware (FR-D4) (2026-10-11):
+  - Added `chunking.py`: deterministic recursive/semantic/parent-child chunking over structure-aware chunks. `select_chunker(mode)` returns a parser callable for structure-aware/recursive/semantic/parent-child; unknown modes raise ValueError.
+  - Added TDD tests covering recursive fixed-size+overlap step, semantic same-section merge with max_chars splitting, parent/child pair emission, and bytes input for each mode via select_chunker.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest tests/test_us_chunking_p1.py -q` -> collection failed with `ModuleNotFoundError: No module named 'e2eai.chunking'`.
+  - GREEN verified:
+    `cd apps/api && uv run pytest tests/test_us_chunking_p1.py tests/test_us_upload_ingest.py tests/test_us_hybrid_search_p1.py -q && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 25 passed in 7.72s; app ok.
+  - `PRD_CRON_BACKLOG.md` item 29 marked done.
+  - Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Derived-content permission inheritance (FR-C6) (2026-10-11):
+  - Added `derived_permissions.py`: pure deterministic helpers `inherit_strictest()` (strictest/lowest level across sources; rejects unknown levels to fail closed) and `compute_derived_permissions()` (strictest effective level across sources, with per-user principal expansion disabled by default so derived artifacts can never widen access).
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest tests/test_us_derived_permissions_p1.py -q` -> collection failed with `ModuleNotFoundError: No module named 'e2eai.derived_permissions'`.
+  - GREEN verified:
+    `cd apps/api && uv run pytest tests/test_us_derived_permissions_p1.py tests/test_us_hybrid_search_p1.py -q && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 13 passed in 4.31s; app ok.
+  - `PRD_CRON_BACKLOG.md` item 30 marked done.
+  - Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Revoked-citation hiding after access revocation (FR-C7) (2026-10-11):
+  - Added `revoked_citations.py`: `classify_removed_citations`, `sanitize_citations_for_history` (preserves citation order; replaces revoked entries with a safe notice, never revealing restricted titles), and `build_revoked_citation_audit`.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest tests/test_us_revoked_citations_p1.py -q` -> collection failed with `ModuleNotFoundError: No module named 'e2eai.revoked_citations'`; first implementation reordered kept notices to the end instead of in-position.
+  - GREEN verified:
+    `cd apps/api && uv run pytest tests/test_us_revoked_citations_p1.py tests/test_us_combined_citations_p1.py tests/test_us_chat_conversations.py -q && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 17 passed in 14.16s; app ok.
+  - `PRD_CRON_BACKLOG.md` item 31 marked done.
+  - Heavy full-stack gates intentionally skipped (speed-biased run).
