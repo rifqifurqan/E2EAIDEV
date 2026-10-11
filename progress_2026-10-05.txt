@@ -1388,3 +1388,32 @@ HOW TO RESUME
     (5) route wiring.
   - `PRD_CRON_BACKLOG.md` item 17 marked done.
   - Full heavy verification intentionally deferred; focused FR-X5 + adjacent MCP/identity/system/chat gates passed.
+
+- Combined document + live system citations (FR-X6) (2026-10-11):
+  - Claude Code implemented this slice with strict TDD.
+  - Added `combined_citations.py`: `build_combined_citations()` merges document citations
+    (source=document, document title, page, section) and executed live MCP tool-call results
+    (source=live_system, system_id, operation_id, record_id when present) into a unified
+    citation list. Only executed
+    and confirmed_executed tool calls appear; skipped/rejected/denied are excluded. No raw
+    tokens, server URLs, credentials, or payloads in output.
+  - Updated `chat.send_message` to return `combined_citations` in the result dict when
+    descriptors are provided, alongside existing `citations` and `tool_calls`.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_us_combined_citations_p1.py` -> 7 failed
+    with `ModuleNotFoundError: No module named 'e2eai.combined_citations'`.
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_us_combined_citations_p1.py` -> 7 passed.
+    Adjacent regression:
+    `cd apps/api && uv run pytest -q tests/test_us_combined_citations_p1.py tests/test_us_mcp_tool_call.py tests/test_us_write_confirmation_p1.py tests/test_us_chat_conversations.py` -> 33 passed.
+    App wiring smoke: `cd apps/api && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> app ok.
+  - Tests cover:
+    (1) combined citations merge document and live system citations;
+    (2) doc-only when no tool calls;
+    (3) live-only when no doc citations;
+    (4) skipped/rejected tool calls excluded;
+    (5) no secrets in combined output;
+    (6) empty inputs yield empty list;
+    (7) send_message returns combined_citations with both sources.
+  - `PRD_CRON_BACKLOG.md` item 18 marked done.
+  - Full heavy verification intentionally deferred; focused FR-X6 + adjacent MCP/chat gates passed.

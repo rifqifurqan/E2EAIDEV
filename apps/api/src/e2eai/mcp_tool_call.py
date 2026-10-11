@@ -318,7 +318,11 @@ async def execute_and_persist_tool_calls(
                 f"system:{r.system_id}:{r.operation_id}",
                 {"read_only": r.read_only, "needs_confirmation": True, **identity_audit},
             )
-            summaries.append({"operation_id": r.operation_id, "status": "skipped_confirmation"})
+            summaries.append({
+                "system_id": r.system_id,
+                "operation_id": r.operation_id,
+                "status": "skipped_confirmation",
+            })
         else:
             try:
                 safe = sanitize_mcp_safe_result(await executor.execute(r))
@@ -340,7 +344,12 @@ async def execute_and_persist_tool_calls(
                     f"system:{r.system_id}:{r.operation_id}",
                     {"read_only": r.read_only, "status": "executed", **identity_audit},
                 )
-                summaries.append({"operation_id": r.operation_id, "status": "executed"})
+                summaries.append({
+                    "system_id": r.system_id,
+                    "operation_id": r.operation_id,
+                    "status": "executed",
+                    "safe_result": safe,
+                })
             except ValueError:
                 # FR-X3: SERVICE_ACCOUNT or missing user_id — record rejection, don't abort
                 session.add(McpToolCall(
@@ -361,7 +370,11 @@ async def execute_and_persist_tool_calls(
                     f"system:{r.system_id}:{r.operation_id}",
                     {"read_only": r.read_only, "status": "rejected_service_account", **identity_audit},
                 )
-                summaries.append({"operation_id": r.operation_id, "status": "rejected_service_account"})
+                summaries.append({
+                    "system_id": r.system_id,
+                    "operation_id": r.operation_id,
+                    "status": "rejected_service_account",
+                })
     return summaries
 
 

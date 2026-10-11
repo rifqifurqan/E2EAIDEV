@@ -118,6 +118,7 @@ async def send_message(
 
     # FR-X2: plan + execute + persist MCP tool calls when descriptors are provided
     tool_calls: list[dict] = []
+    records: list = []
     if descriptors:
         records = plan_mcp_tool_calls(descriptors=descriptors, question=question)
         if records:
@@ -132,6 +133,16 @@ async def send_message(
 
     await session.commit()
     result["tool_calls"] = tool_calls
+
+    # FR-X6: build combined citations from document citations + live tool-call results.
+    # execute_and_persist_tool_calls returns only sanitized summaries, so this never exposes raw
+    # tokens, server URLs, credentials, request payloads, or response payloads.
+    from .combined_citations import build_combined_citations
+    result["combined_citations"] = build_combined_citations(
+        doc_citations=result.get("citations", []),
+        tool_call_results=tool_calls,
+    )
+
     return result
 
 

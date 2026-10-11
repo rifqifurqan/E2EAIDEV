@@ -44,7 +44,7 @@ Rules for every cron tick:
    - [ ] Real external OAuth provider / token exchange integration (deferred: requires external IdP setup).
 16. [x] [FR-X4] Admin flow to register a system, upload OpenAPI spec, choose endpoints, configure auth, test, and grant roles. Completed as deterministic/offline admin flow boundary with SystemRegistration/SystemGrant DB models, migration 0019, 6 admin API routes, and safe output contracts. See progress_2026-10-05.txt.
 17. [x] [FR-X5] Read-only by default; write actions require explicit confirmation and audit. Completed as deterministic/offline write-confirmation flow: confirm/deny pending tool calls, safe audit, API route. See progress_2026-10-05.txt.
-18. [FR-X6] Answers combine documents and live data with citations for document pages and system record IDs.
+18. [x] [FR-X6] Answers combine documents and live data with citations for document pages and system record IDs. Completed as deterministic combined-citation builder merging doc citations (source=document, page, section) and executed live MCP tool-call citations (source=live_system, system_id, operation_id, record_id when present). See progress_2026-10-05.txt.
 
 ### D. Retrieval/model quality P1
 19. [FR-R4] Hybrid search: dense + sparse/BM25 fused with reciprocal rank fusion.
