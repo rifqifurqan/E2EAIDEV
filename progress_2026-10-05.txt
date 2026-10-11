@@ -1182,6 +1182,17 @@ OWNER DECISIONS IN FORCE
     `cd apps/api && uv run pytest -q tests/test_top_unanswered_p1.py tests/test_usage_roi_p1.py tests/test_finops_p1.py tests/test_us_slo_metrics_p1.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 99 passed; app ok.
   - `PRD_CRON_BACKLOG.md` item 10 marked done. Also marked item 8 top-level done because all FR-O6 sub-slices were already completed and verified. Full heavy verification intentionally deferred; focused FR-I2 + adjacent operate analytics gates passed.
 
+- Structured-output tests: JSON/schema validity rate per model (FR-B3) (2026-10-11):
+  - Resumed existing FR-B3 WIP in the worktree, used Claude Code first to inspect it, then verified the implementation with Hermes.
+  - Added deterministic/offline `evaluate_structured_output_validity()` in `eval_lab.py` with a safe dependency-free JSON Schema subset validator for type, required properties, nested arrays/objects, enum, and `additionalProperties=false`.
+  - Added `POST /api/v1/evals/structured-output`, protected by the existing `evals` scope, returning per-model attempts/valid/invalid_json/schema_invalid/validity_rate plus safe item-level error codes. Reports intentionally exclude raw model outputs, prompts, schemas, document text, secrets, credentials, and tokens.
+  - Tests cover per-model validity rates, invalid JSON, schema type mismatch, enum mismatch, missing required fields, extra fields, and raw-output leakage guards.
+  - Verified:
+    `cd apps/api && uv run pytest tests/test_us_structured_output_p1.py -q` -> 2 passed.
+    `cd apps/api && uv run pytest tests/test_us_structured_output_p1.py tests/test_us_eval_lab_p0.py tests/test_us_evaluator_transparency_p1.py -q` -> 8 passed.
+    `cd apps/api && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> app ok.
+  - `PRD_CRON_BACKLOG.md` item 11 marked done. Full heavy verification intentionally deferred; focused FR-B3 + adjacent eval gates passed.
+
 HOW TO RESUME
 - Read: E2EAIDEV_PRD.md -> AGENTS.md -> this progress file.
 - Stack status:  cd deploy/compose && docker compose ps

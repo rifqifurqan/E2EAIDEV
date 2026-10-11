@@ -7,6 +7,7 @@ implement the same `EvalAdapter` protocol later; the database schema and normali
 import csv
 import hashlib
 import io
+import json
 import math
 import uuid
 from collections import defaultdict
@@ -16,7 +17,7 @@ from statistics import variance
 from typing import Protocol
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -275,6 +276,130 @@ def judge_items(
         "accepted": accepted,
         "human_queue": human_queue,
         "counts": {"accepted": len(accepted), "human": len(human_queue), "items": len(items)},
+    }
+
+
+def _schema_type_matches(value: object, expected_type: str) -> bool:
+    if expected_type == "object":
+        return isinstance(value, dict)
+    if expected_type == "array":
+        return isinstance(value, list)
+    if expected_type == "string":
+        return isinstance(value, str)
+    if expected_type == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if expected_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected_type == "boolean":
+        return isinstance(value, bool)
+    if expected_type == "null":
+        return value is None
+    return True
+
+
+def _validate_json_schema(value: object, schema: dict, *, path: str = "$.") -> tuple[bool, str | None, str | None]:
+    """Validate a safe, dependency-free JSON Schema subset for FR-B3 tests.
+
+    The platform will later delegate provider-specific guided decoding to adapters; this local
+    validator is intentionally conservative and offline so model/schema validity reports are
+    reproducible without leaking generated outputs.
+    """
+    expected_type = schema.get("type")
+    if isinstance(expected_type, str) and not _schema_type_matches(value, expected_type):
+        return False, "schema_type_mismatch", path.rstrip(".")
+
+    if "enum" in schema and value not in schema["enum"]:
+        return False, "schema_enum_mismatch", path.rstrip(".")
+
+    if expected_type == "object" or (expected_type is None and isinstance(value, dict)):
+        if not isinstance(value, dict):
+            return False, "schema_type_mismatch", path.rstrip(".")
+        required = schema.get("required") or []
+        for key in required:
+            if key not in value:
+                return False, "schema_required_missing", f"{path}{key}".rstrip(".")
+        properties = schema.get("properties") or {}
+        if schema.get("additionalProperties") is False:
+            for key in value:
+                if key not in properties:
+                    return False, "schema_additional_property", f"{path}{key}".rstrip(".")
+        for key, child_schema in properties.items():
+            if key not in value:
+                continue
+            ok, code, error_path = _validate_json_schema(value[key], child_schema, path=f"{path}{key}.")
+            if not ok:
+                return ok, code, error_path
+
+    if expected_type == "array" or (expected_type is None and isinstance(value, list)):
+        if not isinstance(value, list):
+            return False, "schema_type_mismatch", path.rstrip(".")
+        item_schema = schema.get("items")
+        if isinstance(item_schema, dict):
+            for index, item in enumerate(value):
+                ok, code, error_path = _validate_json_schema(item, item_schema, path=f"{path}[{index}].")
+                if not ok:
+                    return ok, code, error_path
+
+    return True, None, None
+
+
+def evaluate_structured_output_validity(attempts: Sequence[dict], *, schema: dict) -> dict:
+    """Report JSON/schema validity rate per model for structured-output tests (FR-B3).
+
+    Inputs may contain raw model output strings, but returned item results deliberately exclude raw
+    output, prompts, and schemas. The report stores only safe identifiers, model names, booleans,
+    error codes, and aggregate rates.
+    """
+    item_results: list[dict] = []
+    by_model: dict[str, dict] = {}
+
+    for index, attempt in enumerate(attempts):
+        model = str(attempt.get("model") or "unknown")
+        item_id = str(attempt.get("item_id") or index)
+        stats = by_model.setdefault(
+            model,
+            {"model": model, "attempts": 0, "valid": 0, "invalid_json": 0, "schema_invalid": 0},
+        )
+        stats["attempts"] += 1
+
+        try:
+            parsed = json.loads(str(attempt.get("output") or ""))
+        except json.JSONDecodeError:
+            stats["invalid_json"] += 1
+            item_results.append({"item_id": item_id, "model": model, "valid": False, "error_code": "invalid_json"})
+            continue
+
+        valid, error_code, error_path = _validate_json_schema(parsed, schema)
+        if valid:
+            stats["valid"] += 1
+            item_results.append({"item_id": item_id, "model": model, "valid": True, "error_code": None})
+        else:
+            stats["schema_invalid"] += 1
+            item_results.append({
+                "item_id": item_id,
+                "model": model,
+                "valid": False,
+                "error_code": error_code,
+                "error_path": error_path,
+            })
+
+    models = []
+    for model, stats in sorted(by_model.items()):
+        attempts_count = stats["attempts"]
+        models.append({
+            "model": model,
+            "attempts": attempts_count,
+            "valid": stats["valid"],
+            "invalid_json": stats["invalid_json"],
+            "schema_invalid": stats["schema_invalid"],
+            "validity_rate": round(stats["valid"] / attempts_count, 4) if attempts_count else 0.0,
+        })
+
+    return {
+        "kind": "structured_output_validity",
+        "models": models,
+        "item_results": item_results,
+        "schema_features": sorted(k for k in ("type", "required", "properties", "items", "enum", "additionalProperties") if k in str(schema)),
     }
 
 
@@ -649,6 +774,17 @@ class CostEstimateIn(BaseModel):
     budget_threshold_usd: float | None = None
 
 
+class StructuredOutputAttemptIn(BaseModel):
+    item_id: str
+    model: str
+    output: str
+
+
+class StructuredOutputValidityIn(BaseModel):
+    schema_: dict = Field(alias="schema")
+    attempts: list[StructuredOutputAttemptIn]
+
+
 class CompareIn(BaseModel):
     baseline_run_id: uuid.UUID
     candidate_run_id: uuid.UUID
@@ -706,6 +842,19 @@ async def cost_estimate_api(
         gpu_price_per_minute_usd=body.gpu_price_per_minute_usd,
         expected_gpu_minutes=body.expected_gpu_minutes,
         budget_threshold_usd=body.budget_threshold_usd,
+    )
+
+
+@router.post("/structured-output")
+async def structured_output_validity_api(
+    body: StructuredOutputValidityIn,
+    sess: dict = Depends(current_session),
+) -> dict:
+    """FR-B3: report JSON/schema validity rate per model without model calls."""
+    require_scope(sess, "evals")
+    return evaluate_structured_output_validity(
+        [attempt.model_dump() for attempt in body.attempts],
+        schema=body.schema_,
     )
 
 
