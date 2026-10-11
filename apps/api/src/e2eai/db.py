@@ -74,10 +74,21 @@ class Role(Base):
     name: Mapped[str] = mapped_column(String(64), unique=True)
 
 
+class Project(Audited, Base):
+    """FR-F2/FR-F3 project container for scoped Lab roles."""
+    __tablename__ = "projects"
+    __table_args__ = (UniqueConstraint("org_id", "name", name="projects_org_name_unique"),)
+    org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(200))
+    owner_team_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("teams.id"))
+    owner_division_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("divisions.id"))
+
+
 class UserRole(Base):
     __tablename__ = "user_roles"
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("roles.id"), primary_key=True)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
 
 
 class LocalCredential(Base):

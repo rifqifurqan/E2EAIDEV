@@ -1617,3 +1617,14 @@ HOW TO RESUME
     Adjacent regression/app import: `cd apps/api && uv run pytest -q tests/test_auth.py tests/test_phase0_core.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 12 passed, 1 warning; app ok.
   - Live bundled-Keycloak smoke not run because Docker Desktop is not running (`dockerDesktopLinuxEngine` pipe missing); deterministic callback boundary tests used a fake Keycloak token/userinfo client.
   - `PRD_CRON_BACKLOG.md` item 35 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Project-scoped org role boundary (FR-F2 partial) (2026-10-11, cron):
+  - Added `Project` ORM model for org-owned project containers with optional owner team/division and unique `(org_id, name)`.
+  - Added migration `0020_project_role_scope` to create `projects`, add nullable `user_roles.project_id`, and index project-scoped role grants; downgrade drops the index/column/table.
+  - Added `org.py` role-scope helpers: org-wide role grants apply everywhere, project grants apply only to the matching project, and project-scoped grants do not widen into org-wide roles.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_org_scope.py` -> collection failed with `ImportError: cannot import name 'Project'`.
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_org_scope.py` -> 2 passed.
+    Adjacent regression/app import: `cd apps/api && uv run pytest -q tests/test_org_scope.py tests/test_authz_model.py tests/test_migration_static.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 9 passed, 1 skipped; app ok.
+  - `PRD_CRON_BACKLOG.md` item 36 split: project-scoped role boundary marked done; admin/service CRUD remains next. Heavy full-stack gates intentionally skipped (speed-biased run).
