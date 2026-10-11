@@ -1489,3 +1489,16 @@ HOW TO RESUME
     Compose validation: `cd deploy/compose && docker compose config --quiet` -> passed with no warnings after optional vLLM defaults were added.
   - `PRD_CRON_BACKLOG.md` item 24 marked done.
   - Live vLLM smoke intentionally skipped: this machine's 6 GB GPU cannot run the Standard/GPU vLLM catalog slice; compose/config routing was verified offline.
+
+- Dataset labeling and annotation for gold sets/fine-tuning data (FR-D11) (2026-10-11):
+  - Claude Code was tried first and returned `You've hit your limit · resets Oct 13, 11am (Asia/Jakarta)`; Hermes continued manually. Codex unused.
+  - Added FR-D11 support in `eval_lab.py`: `annotate_dataset_items()` versions an existing eval dataset with per-item annotation metadata, normalized labels, gold/fine_tuning splits, quality status, and reviewer id; invalid labels/items fail before writing a new dataset version.
+  - Added `build_annotation_export()` and `POST /api/v1/evals/datasets/{dataset_id}/annotations`; returned reports expose only dataset id/name/version, item ids/indexes, labels, splits, quality, and counts — no raw questions, answers, confidential text, tokens, or secrets.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest tests/test_us_labeling_annotation_p1.py -q` -> collection failed with `ImportError: cannot import name 'annotate_dataset_items'`.
+  - GREEN verified:
+    `cd apps/api && uv run pytest tests/test_us_labeling_annotation_p1.py -q` -> 2 passed in 3.86s.
+    Adjacent regression:
+    `cd apps/api && uv run pytest tests/test_us_labeling_annotation_p1.py tests/test_us_eval_lab_p0.py tests/test_us_structured_output_p1.py -q && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 7 passed in 8.00s; app ok.
+  - `PRD_CRON_BACKLOG.md` item 26 marked done.
+  - Heavy full-stack gates intentionally skipped (speed-biased run).

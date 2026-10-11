@@ -9,8 +9,9 @@ import hashlib
 import io
 import json
 import math
+import re
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from statistics import variance
@@ -454,6 +455,128 @@ async def create_dataset(
     return ds
 
 
+_LABEL_RE = re.compile(r"^[a-z0-9][a-z0-9._:-]{0,63}$")
+_ALLOWED_SPLITS = {"gold", "fine_tuning"}
+_ALLOWED_QUALITIES = {"accepted", "needs_fix", "rejected"}
+
+
+def _normalize_label(label: object) -> str:
+    normalized = str(label or "").strip().lower()
+    if not _LABEL_RE.fullmatch(normalized):
+        raise AppError(400, "Invalid annotation label", "Use 1-64 lowercase letters, numbers, dot, underscore, colon, or hyphen.")
+    return normalized
+
+
+def _normalize_split(split: object) -> str:
+    normalized = str(split or "").strip().lower().replace("-", "_")
+    if normalized not in _ALLOWED_SPLITS:
+        raise AppError(400, "Invalid annotation split", "Allowed splits: gold, fine_tuning")
+    return normalized
+
+
+def _normalize_quality(quality: object) -> str:
+    normalized = str(quality or "").strip().lower().replace("-", "_")
+    if normalized not in _ALLOWED_QUALITIES:
+        raise AppError(400, "Invalid annotation quality", "Allowed quality values: accepted, needs_fix, rejected")
+    return normalized
+
+
+def _item_identifier(item: dict, index: int) -> str:
+    return str(item.get("item_id") or item.get("id") or index)
+
+
+def _prepare_annotations(items: Sequence[dict], annotations: Sequence[dict], reviewer_id: str | None) -> dict[int, dict]:
+    by_item_id = {_item_identifier(item, index): index for index, item in enumerate(items)}
+    prepared: dict[int, dict] = {}
+    for annotation in annotations:
+        if "index" in annotation and annotation["index"] is not None:
+            try:
+                index = int(annotation["index"])
+            except (TypeError, ValueError) as exc:
+                raise AppError(400, "Invalid annotation index") from exc
+            if index < 0 or index >= len(items):
+                raise AppError(404, "Dataset item not found")
+        else:
+            item_id = str(annotation.get("item_id") or "")
+            if item_id not in by_item_id:
+                raise AppError(404, "Dataset item not found")
+            index = by_item_id[item_id]
+        if index in prepared:
+            raise AppError(400, "Duplicate annotation for dataset item")
+        labels = sorted({_normalize_label(label) for label in annotation.get("labels") or []})
+        if not labels:
+            raise AppError(400, "At least one annotation label is required")
+        splits = sorted({_normalize_split(split) for split in annotation.get("splits") or []})
+        if not splits:
+            raise AppError(400, "At least one annotation split is required")
+        prepared[index] = {
+            "labels": labels,
+            "splits": splits,
+            "quality": _normalize_quality(annotation.get("quality")),
+            "reviewer_id": reviewer_id,
+        }
+    return prepared
+
+
+async def annotate_dataset_items(
+    session: AsyncSession,
+    *,
+    dataset_id: uuid.UUID,
+    annotations: Sequence[dict],
+    created_by: str,
+    reviewer_id: str | None = None,
+) -> EvalDataset:
+    """Version an eval dataset with safe gold/fine-tuning labels (FR-D11).
+
+    The dataset items keep their original content because eval datasets already own that data, but the
+    returned/exported annotation summary exposes only item ids, labels, splits, and review metadata.
+    """
+    ds = await session.get(EvalDataset, dataset_id)
+    if ds is None:
+        raise AppError(404, "Dataset not found")
+    items = [dict(item) for item in (ds.items or [])]
+    prepared = _prepare_annotations(items, annotations, reviewer_id)
+    for index, annotation in prepared.items():
+        items[index] = {**items[index], "annotation": annotation}
+    return await create_dataset(session, name=ds.name, items=items, source="annotation", created_by=created_by)
+
+
+def build_annotation_export(dataset: EvalDataset) -> dict:
+    """Return safe annotation metadata for gold-set/fine-tuning workflows without raw Q&A content."""
+    label_counts: Counter[str] = Counter()
+    split_counts: Counter[str] = Counter()
+    rows: list[dict] = []
+    annotated = 0
+    for index, item in enumerate(dataset.items or []):
+        annotation = item.get("annotation") or {}
+        labels = list(annotation.get("labels") or [])
+        splits = list(annotation.get("splits") or [])
+        if labels or splits:
+            annotated += 1
+        label_counts.update(labels)
+        split_counts.update(splits)
+        rows.append({
+            "index": index,
+            "item_id": _item_identifier(item, index),
+            "labels": labels,
+            "splits": splits,
+            "quality": annotation.get("quality"),
+            "reviewer_id": annotation.get("reviewer_id"),
+        })
+    return {
+        "kind": "dataset_annotation_export",
+        "dataset": {"id": str(dataset.id), "name": dataset.name, "version": dataset.version},
+        "counts": {
+            "items": len(dataset.items or []),
+            "annotated": annotated,
+            "gold": split_counts.get("gold", 0),
+            "fine_tuning": split_counts.get("fine_tuning", 0),
+        },
+        "label_counts": dict(sorted(label_counts.items())),
+        "items": rows,
+    }
+
+
 async def run_evaluation(
     session: AsyncSession,
     *,
@@ -760,6 +883,18 @@ class DatasetIn(BaseModel):
     items: list[dict]
 
 
+class DatasetAnnotationIn(BaseModel):
+    item_id: str | None = None
+    index: int | None = None
+    labels: list[str]
+    splits: list[str]
+    quality: str
+
+
+class DatasetAnnotationsIn(BaseModel):
+    annotations: list[DatasetAnnotationIn]
+
+
 class RunIn(BaseModel):
     dataset_id: uuid.UUID
     adapter: str = "ragas.local"
@@ -818,6 +953,26 @@ async def create_dataset_api(body: DatasetIn, sess: dict = Depends(current_sessi
     user = await _current_user(db, sess)
     ds = await create_dataset(db, name=body.name, items=body.items, source=body.source, created_by=f"user:{user.id}")
     return {"id": str(ds.id), "name": ds.name, "version": ds.version, "items": len(ds.items)}
+
+
+@router.post("/datasets/{dataset_id}/annotations")
+async def annotate_dataset_api(
+    dataset_id: uuid.UUID,
+    body: DatasetAnnotationsIn,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """FR-D11: version eval datasets with gold/fine-tuning labels and return safe metadata only."""
+    require_scope(sess, "evals")
+    user = await _current_user(db, sess)
+    ds = await annotate_dataset_items(
+        db,
+        dataset_id=dataset_id,
+        annotations=[annotation.model_dump() for annotation in body.annotations],
+        created_by=f"user:{user.id}",
+        reviewer_id=str(user.id),
+    )
+    return build_annotation_export(ds)
 
 
 @router.post("/cost-estimate")
