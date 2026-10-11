@@ -1502,3 +1502,16 @@ HOW TO RESUME
     `cd apps/api && uv run pytest tests/test_us_labeling_annotation_p1.py tests/test_us_eval_lab_p0.py tests/test_us_structured_output_p1.py -q && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 7 passed in 8.00s; app ok.
   - `PRD_CRON_BACKLOG.md` item 26 marked done.
   - Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Optional VLM add-on routing/enrichment boundary (FR-D15) (2026-10-11):
+  - Claude Code already confirmed rate-limited this run; Hermes continued manually. Codex unused.
+  - Added `vlm_enrichment.py`: deterministic/offline helpers for selecting only low-confidence, figure-heavy, or policy-forced pages for VLM routing; building an async `vlm_enrich` job plan; and normalizing VLM-derived chunks.
+  - Derived outputs are labeled `AI-described from figure`, linked to source document/version/page/figure object key, and carry document permission inheritance metadata. The helpers do not expand principals and do not copy provider credentials, tokens, API keys, or raw request metadata.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest tests/test_us_vlm_enrichment_p1.py -q` -> collection failed with `ModuleNotFoundError: No module named 'e2eai.vlm_enrichment'`.
+  - GREEN verified:
+    `cd apps/api && uv run pytest tests/test_us_vlm_enrichment_p1.py -q` -> 3 passed in 0.03s.
+    Adjacent regression:
+    `cd apps/api && uv run pytest tests/test_us_vlm_enrichment_p1.py tests/test_us_doc_understanding_p1.py tests/test_us_upload_ingest.py -q && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 23 passed in 4.96s; app ok.
+  - `PRD_CRON_BACKLOG.md` item 27 marked done.
+  - Heavy full-stack gates intentionally skipped (speed-biased run).

@@ -57,7 +57,7 @@ Rules for every cron tick:
 ### E. Data/document P1
 25. [x] [FR-D7] Data quality checks: duplicate/near-duplicate detection, stale documents, unparseable files. Completed: pure/offline title duplicate + near-duplicate checks, stale document freshness check, and unparseable status/error detection. See progress_2026-10-05.txt.
 26. [x] [FR-D11] Labeling and annotation for gold sets and fine-tuning data. Completed as deterministic/offline dataset annotation slice: versioned eval datasets with gold/fine-tuning labels, safe annotation export, and API route; see progress_2026-10-05.txt.
-27. [FR-D15] Optional VLM add-on: routing for figure-heavy/flagged pages, derived output labels, permissions, async enrichment.
+27. [x] [FR-D15] Optional VLM add-on: routing for figure-heavy/flagged pages, derived output labels, permissions, async enrichment. Completed as deterministic/offline VLM enrichment boundary (routing, async plan, derived chunk labels + document permission inheritance); see progress_2026-10-05.txt.
 28. [FR-D16] Technical/maintenance manuals: procedure-step/figure links, parts/torque/spec tables, verbatim safety warnings.
 29. [FR-D4] Complete selectable chunking modes beyond structure-aware: recursive, semantic, parent-child.
 30. [FR-C6] Derived content inherits strictest permissions of sources.
