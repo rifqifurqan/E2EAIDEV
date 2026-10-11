@@ -21,6 +21,7 @@ from .usage_roi import router as usage_roi_router
 from .mcp_gen import router as mcp_gen_router
 from .mcp_tool_call import router as mcp_tool_call_router
 from .delegated_identity import router as delegated_identity_router
+from .system_registration import router as system_registration_router
 from .core.errors import install
 from .db import sessions
 
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
     app.include_router(mcp_gen_router)
     app.include_router(mcp_tool_call_router)
     app.include_router(delegated_identity_router)
+    app.include_router(system_registration_router)
 
     from .api_keys import make_router as api_keys_router
     app.include_router(api_keys_router())

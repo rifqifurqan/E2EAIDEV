@@ -466,6 +466,31 @@ class McpToolCall(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class SystemRegistration(Audited, Base):
+    """FR-X4: admin-registered external system (ERP, HR, CRM).
+
+    Stores safe configuration metadata only: name, description, spec hash, allowed
+    operations, auth mode hint. Never stores raw credentials, bearer tokens, API keys,
+    passwords, server URLs, or the raw OpenAPI spec text.
+    """
+    __tablename__ = "system_registrations"
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(32), default="registered")
+    spec_hash: Mapped[str | None] = mapped_column(String(64))
+    discovered_operations: Mapped[list] = mapped_column(JSONB, default=list)
+    allowed_operations: Mapped[list] = mapped_column(JSONB, default=list)
+    auth_config: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+
+class SystemGrant(Base):
+    """FR-X4: principals (role/division) granted access to a registered system."""
+    __tablename__ = "system_grants"
+    system_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("system_registrations.id", ondelete="CASCADE"), primary_key=True)
+    principal: Mapped[str] = mapped_column(String(80), primary_key=True)
+
+
 ROLE_NAMES = ("admin", "ai_engineer", "evaluator", "compliance", "business_user")  # FR-F3
 
 

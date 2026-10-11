@@ -1312,3 +1312,48 @@ HOW TO RESUME
     Remaining FR-X3: real external OAuth provider / token exchange integration is deferred
     (requires external IdP setup, not implementable offline).
   - Full heavy verification intentionally deferred; focused FR-X3 + adjacent MCP/chat gates passed.
+
+- Admin system registration flow (FR-X4) (2026-10-11):
+  - Claude Code implemented this slice with strict TDD.
+  - Added `system_registration.py`: admin flow for registering external systems (ERP, HR, CRM):
+    - `SystemRegistration` ORM model: name, description, owner_id, status, spec_hash,
+      discovered_operations, allowed_operations, auth_config (JSONB). Never stores raw credentials,
+      bearer tokens, API keys, passwords, server URLs, or raw OpenAPI spec text.
+    - `SystemGrant` ORM model: system_id + principal composite key for role/division grants.
+    - `register_system`: creates a named system record with safe metadata.
+    - `upload_openapi_spec`: validates OpenAPI 3.x spec via existing FR-B4 `build_mcp_server_descriptor`,
+      stores spec hash (sha256) and discovered operation IDs. Raw spec not stored.
+    - `set_allowed_operations`: admin selects which operations are allowed for MCP tool calls.
+    - `configure_auth`: stores auth mode metadata only (token_exchange, delegated, oauth2_cc) and
+      optional token endpoint hint. Never stores raw credentials.
+    - `test_system`: offline validation that spec is uploaded, endpoints selected, auth configured,
+      and descriptor can be rebuilt. No real network calls.
+    - `grant_system`: assigns principals (role:xxx, division:xxx) to the system.
+    - `safe_system_summary`: builds API-safe summary dict with no raw credentials.
+  - Added Alembic migration `0019_system_registrations` (revises 0018_delegated_identity): creates
+    `system_registrations` and `system_grants` tables. Reversible.
+  - Added 6 admin API routes under `/api/v1/admin/systems`:
+    POST /systems, POST /systems/{id}/spec, PATCH /systems/{id}/endpoints,
+    PATCH /systems/{id}/auth, POST /systems/{id}/test, POST /systems/{id}/grants.
+    All protected with `require_scope(sess, "bots")`.
+  - Registered `system_registration.router` in `main.py`.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_us_system_registration_p1.py` -> 8 failed
+    with `ModuleNotFoundError: No module named 'e2eai.system_registration'`.
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_us_system_registration_p1.py` -> 8 passed in 10.27s.
+    Adjacent regression:
+    `cd apps/api && uv run pytest -q tests/test_us_delegated_identity_p1.py tests/test_us_mcp_tool_call.py tests/test_us_mcp_gen_p1.py tests/test_us_chat_conversations.py` -> 57 passed in 21.71s.
+    Migration gate: `cd apps/api && uv run alembic downgrade 0018_delegated_identity && uv run alembic upgrade head` -> downgrade 0019 -> 0018 and upgrade 0018 -> 0019 succeeded.
+    App wiring smoke: `cd apps/api && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> app ok.
+  - Tests cover:
+    (1) register creates record with safe metadata;
+    (2) upload spec generates descriptor and stores hash;
+    (3) choose endpoints stores allowed operation IDs;
+    (4) configure auth stores mode only, never raw credentials;
+    (5) test validates offline with checklist;
+    (6) grant assigns principals;
+    (7) safe output never contains secrets;
+    (8) route wiring.
+  - `PRD_CRON_BACKLOG.md` item 16 marked done.
+  - Full heavy verification intentionally deferred; focused FR-X4 + adjacent MCP/identity/chat gates passed.
