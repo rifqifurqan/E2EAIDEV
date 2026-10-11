@@ -1515,3 +1515,16 @@ HOW TO RESUME
     `cd apps/api && uv run pytest tests/test_us_vlm_enrichment_p1.py tests/test_us_doc_understanding_p1.py tests/test_us_upload_ingest.py -q && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 23 passed in 4.96s; app ok.
   - `PRD_CRON_BACKLOG.md` item 27 marked done.
   - Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Technical/maintenance manual helpers (FR-D16) (2026-10-11):
+  - Claude Code already confirmed rate-limited this run; Hermes continued manually. Codex unused.
+  - Added `manual_understanding.py`: deterministic/offline extraction for maintenance procedures that preserves procedure steps, figure references, figure metadata, parts/spec tables, and safety warnings.
+  - Added answer-context helper that requires safety warnings verbatim, carries citation targets for figures/tables, and flags figure-only numeric values (e.g. torque) for user confirmation with the figure crop/source.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest tests/test_us_manual_understanding_p1.py -q` -> collection failed with `ModuleNotFoundError: No module named 'e2eai.manual_understanding'`; first implementation then failed because step-extracted part/spec duplicates incorrectly outranked the structured table source.
+  - GREEN verified:
+    `cd apps/api && uv run pytest tests/test_us_manual_understanding_p1.py -q` -> 2 passed in 0.03s.
+    Adjacent regression:
+    `cd apps/api && uv run pytest tests/test_us_manual_understanding_p1.py tests/test_us_doc_understanding_p1.py tests/test_us_vlm_enrichment_p1.py -q && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 18 passed in 1.52s; app ok.
+  - `PRD_CRON_BACKLOG.md` item 28 marked done.
+  - Heavy full-stack gates intentionally skipped (speed-biased run).
