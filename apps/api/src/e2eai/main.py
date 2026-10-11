@@ -19,6 +19,7 @@ from .slo_metrics import router as slo_metrics_router
 from .top_unanswered import router as top_unanswered_router
 from .usage_roi import router as usage_roi_router
 from .mcp_gen import router as mcp_gen_router
+from .mcp_tool_call import router as mcp_tool_call_router
 from .core.errors import install
 from .db import sessions
 
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
     app.include_router(usage_roi_router)
     app.include_router(top_unanswered_router)
     app.include_router(mcp_gen_router)
+    app.include_router(mcp_tool_call_router)
 
     from .api_keys import make_router as api_keys_router
     app.include_router(api_keys_router())

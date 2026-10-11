@@ -1212,3 +1212,16 @@ HOW TO RESUME
   - GREEN verified:
     `cd apps/api && uv run pytest -q tests/test_us_mcp_gen_p1.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 22 passed; app ok.
   - `PRD_CRON_BACKLOG.md` item 13 marked done. Full heavy verification intentionally deferred; focused FR-B4 descriptor + app import smoke passed.
+
+- Question-time MCP tool-call planner/no-vectorize guard (FR-X2 sub-slice) (2026-10-11):
+  - Claude Code was used first and hit `error_max_turns` after leaving WIP files; the known broken SessionEnd hook noise was non-blocking. Hermes inspected, tightened, and verified the slice manually.
+  - Added `mcp_tool_call.py`: deterministic/offline `plan_mcp_tool_calls()` selects relevant MCP tools from existing safe descriptors at question time, returns safe tool-call records only, and flags non-read-only/mutating tools with `needs_confirmation=True` for the future FR-X5 flow.
+  - Added `LiveToolResult` plus `reject_vectorize_live_result()` to enforce the FR-X2 invariant that live MCP data is fetched at question time and must not be embedded, indexed, vectorized, or copied into document chunks.
+  - Added `POST /api/v1/chat/mcp-tool-plan`, protected with the existing `bots` scope, returning only safe metadata: system_id, operation_id, method, path, read_only, needs_confirmation, tool_description, match_score, and total. The raw user question is used only in-memory for matching and is not echoed in responses.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_us_mcp_tool_call.py::test_plan_response_does_not_echo_raw_question_or_payload` -> failed during collection because `build_mcp_tool_plan_response` was not implemented.
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_us_mcp_tool_call.py::test_plan_response_does_not_echo_raw_question_or_payload` -> 1 passed.
+    `cd apps/api && uv run pytest -q tests/test_us_mcp_tool_call.py tests/test_us_mcp_gen_p1.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 33 passed; app ok.
+  - `PRD_CRON_BACKLOG.md` item 14 split: this deterministic/offline planner and no-vectorize guard marked done; remaining FR-X2 work is chat-pipeline integration with persisted/audited offline executor boundary, then real MCP client execution after FR-X3 delegated identity.
+  - Full heavy verification intentionally deferred; focused FR-X2 + adjacent FR-B4 MCP descriptor gates passed.
