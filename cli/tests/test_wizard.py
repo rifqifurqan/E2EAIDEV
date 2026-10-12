@@ -81,6 +81,50 @@ def test_config_references_secrets_never_inlines_them():
     assert cfg["tier"] == "lite" and cfg["components"]["job_engine"] == "celery"
 
 
+def test_litellm_config_hardens_virtual_keys_with_budget_caps():
+    catalog = generate.load_catalog(Path(__file__).resolve().parents[2])
+    a = _answers()
+    a["models"] = {r: [] for r in generate.ROLES} | {"external": []}
+    a["models"]["chat"] = ["qwen3:1.7b"]
+    a["models"]["embedding"] = ["bge-m3"]
+
+    cfg = yaml.safe_load(generate.render_litellm_config(a, catalog))
+
+    assert cfg["general_settings"]["database_url"] == "os.environ/DATABASE_URL"
+    settings = cfg["litellm_settings"]
+    assert settings["key_alias_pattern"] == "^[a-z0-9]+(-[a-z0-9]+)*$"
+    assert settings["upperbound_key_generate_params"] == {
+        "max_budget": 10.0,
+        "budget_duration": "30d",
+        "duration": "30d",
+        "max_parallel_requests": 8,
+        "tpm_limit": 120000,
+        "rpm_limit": 120,
+    }
+    assert settings["default_key_generate_params"] == {
+        "max_budget": 1.0,
+        "budget_duration": "30d",
+        "duration": "30d",
+        "models": ["qwen3:1.7b", "bge-m3"],
+    }
+
+
+def test_litellm_config_adds_budget_checked_chat_fallbacks():
+    catalog = generate.load_catalog(Path(__file__).resolve().parents[2])
+    a = _answers()
+    a["models"] = {r: [] for r in generate.ROLES} | {"external": []}
+    a["models"]["chat"] = ["qwen3:1.7b", "qwen3:4b", "gemma3:4b"]
+
+    cfg = yaml.safe_load(generate.render_litellm_config(a, catalog))
+
+    assert cfg["litellm_settings"]["enforce_fallback_model_access"] is True
+    assert cfg["litellm_settings"]["enforce_fallback_budget"] is True
+    assert cfg["router_settings"]["fallbacks"] == [
+        {"qwen3:1.7b": ["qwen3:4b"]},
+        {"qwen3:4b": ["gemma3:4b"]},
+    ]
+
+
 # --- writing files ---------------------------------------------------------
 
 def _repo(tmp_path):

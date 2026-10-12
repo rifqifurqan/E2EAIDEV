@@ -1639,3 +1639,15 @@ HOW TO RESUME
     `cd apps/api && uv run pytest -q tests/test_org_admin_fr_f2.py tests/test_org_scope.py tests/test_phase0_core.py` -> 6 passed, 1 skipped, 1 warning.
   - The skipped test is the DB-backed service smoke because Docker Desktop/Postgres is unavailable in this cron environment (`dockerDesktopLinuxEngine` pipe missing); deterministic route/model/adjacent tests passed.
   - `PRD_CRON_BACKLOG.md` item 36 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- LiteLLM gateway hardening (FR-F7) (2026-10-12, cron):
+  - Claude Code remained rate-limited from the earlier check; Hermes continued manually. Codex unused.
+  - Hardened generated LiteLLM config with DB-backed key management (`general_settings.database_url`), safe upper bounds for virtual-key generation (budget, duration, RPM/TPM, parallel requests), default lower-budget virtual-key params scoped to selected models, a safe key-alias pattern, and fallback access/budget enforcement.
+  - Added deterministic chat fallback-chain generation when multiple chat models are selected, without hardcoding a default model.
+  - Updated the local LiteLLM config artifact for the current local qwen3.5:4b + bge-m3 selection; no secrets are stored in the YAML.
+  - TDD / RED evidence:
+    `cd cli && uv run pytest -q tests/test_wizard.py::test_litellm_config_hardens_virtual_keys_with_budget_caps tests/test_wizard.py::test_litellm_config_adds_budget_checked_chat_fallbacks` -> 2 failed (`database_url` and fallback/budget settings missing).
+  - GREEN verified:
+    `cd cli && uv run pytest -q tests/test_wizard.py::test_litellm_config_hardens_virtual_keys_with_budget_caps tests/test_wizard.py::test_litellm_config_adds_budget_checked_chat_fallbacks` -> 2 passed.
+    Adjacent regression/config validation: `cd cli && uv run pytest -q tests/test_wizard.py tests/test_models.py tests/test_profiles.py && cd ../deploy/compose && docker compose config --quiet` -> 43 passed, 1 skipped; compose config OK.
+  - `PRD_CRON_BACKLOG.md` item 37 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).

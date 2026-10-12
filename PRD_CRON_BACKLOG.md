@@ -79,7 +79,7 @@ Rules for every cron tick:
 36. [x] [FR-F2] Complete Org -> Division -> Team -> User and roles/project scoping gaps; leave SCIM sync for P2.
    - [x] Project containers and project-scoped role grant boundary: `Project` ORM/migration, nullable `UserRole.project_id`, and safe role-scope helpers. See progress_2026-10-05.txt.
    - [x] Admin/service CRUD for divisions, teams, users, memberships, role grants, and project ownership. See progress_2026-10-05.txt.
-37. [FR-F7] Harden LiteLLM gateway virtual keys/budgets/fallbacks beyond current baseline.
+37. [x] [FR-F7] Harden LiteLLM gateway virtual keys/budgets/fallbacks beyond current baseline. Completed as deterministic wizard/config hardening: DB-backed key management, upper/default virtual-key budgets, key alias pattern, fallback model access/budget enforcement, and generated chat fallback chains. See progress_2026-10-05.txt.
 38. [FR-F11] Finish remaining in-app notification types: review assigned, release approved, incident raised; email stays P2.
 39. [FR-F16] Upgrade procedure P2 prep: pre-upgrade backup, health check, rollback notes/tests.
 40. [FR-F22] P1 docs: generated OpenAPI/API reference and Lab adapter developer guide.
