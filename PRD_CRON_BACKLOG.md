@@ -31,6 +31,7 @@ Rules for every cron tick:
    - [x] DB-backed usage/ROI aggregation from persisted chat/feedback/trace metadata, with safe rolling-window dashboard/report integration. See progress_2026-10-05.txt.
 10. [x] [FR-I2] Top unanswered questions report for knowledge owners. Completed as deterministic/offline safe knowledge-gap report + API route (`POST /api/v1/improve/top-unanswered`) with topic/count/division breadth ranking; see progress_2026-10-05.txt.
 11. [x] [FR-B3] Structured-output tests: JSON/schema validity rate per model. Completed as deterministic/offline structured-output validity slice with per-model JSON/schema rates, safe item-level error codes, and API route; see progress_2026-10-05.txt.
+12. [x] [FR-D2] S3-compatible object storage. Completed as SeaweedFS/S3 adapter behind the document storage interface with content-addressed keys and local test fallback; see progress_2026-10-05.txt.
 
 ### C. Live tools / MCP / systems integration P1
 13. [x] [FR-B4] Live tools through MCP: one MCP server per system generated from OpenAPI.

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from . import audit
 from .core.errors import AppError
 from .db import Chunk, Document, DocumentVersion
-from .documents import LocalObjectStorage, get_storage
+from .documents import ObjectStorage, get_storage
 from .index_lineage import record_lineage
 from .pii import PiiDetector, PiiPolicy, mask_text, pii_counts, select_detector
 from .retrieval import Embedder, index_document_chunks
@@ -116,7 +116,7 @@ async def ingest_version(
     *,
     embedder: Embedder,
     version_id: uuid.UUID,
-    storage: LocalObjectStorage | None = None,
+    storage: ObjectStorage | None = None,
     scanner: Scanner | None = None,
     policy: ScanPolicy | None = None,
     pii_detector: PiiDetector | None = None,

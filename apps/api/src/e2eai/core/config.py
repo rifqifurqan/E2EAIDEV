@@ -52,6 +52,7 @@ class Settings:
     s3_secret_key: str
     default_language: str
     time_zone: str
+    s3_bucket: str = "e2eai"
     auth_provider: str = "local"
     oidc_authorization_endpoint: str = ""
     oidc_token_endpoint: str = ""
@@ -86,6 +87,7 @@ def get_settings() -> Settings:
         s3_url=f"http://{host}:{e['S3_PORT']}",
         s3_access_key=e["S3_ACCESS_KEY"],
         s3_secret_key=e["S3_SECRET_KEY"],
+        s3_bucket=e.get("S3_BUCKET", "e2eai"),
         tei_api_key=e.get("TEI_API_KEY", ""),
         tei_rerank_port=int(e.get("TEI_RERANK_PORT", "18082")),
         default_language=cfg.get("locale", {}).get("default_language", "id"),

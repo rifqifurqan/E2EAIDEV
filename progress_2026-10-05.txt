@@ -2004,3 +2004,11 @@ HOW TO RESUME
   - Moved the remaining FR-X3 external OAuth/token-exchange provider integration out of the active queue and into the deferred section because it requires external IdP/OAuth setup and credentials.
   - Remaining deferred items are FR-X3 real external OAuth provider integration and FR-RL3 CI integration; both need external setup/permissions before implementation can resume.
   - Verification: `python` backlog scan -> zero `- [ ]` active backlog entries; no code tests were run because this was backlog/progress metadata only.
+
+- S3-compatible object storage (FR-D2) (2026-10-13, cron):
+  - Claude Code was tried first and hit `error_max_turns` without leaving a code diff; the known broken SessionEnd hook noise was non-blocking. Hermes completed the slice manually. Codex unused.
+  - Added `S3ObjectStorage` behind the same document storage interface as `LocalObjectStorage`, using content-addressed `sha256/<digest>` object keys for SeaweedFS/external S3 and reading endpoint/access key/secret/bucket from settings (`S3_BUCKET` defaults to `e2eai`). Secrets are passed only to the client constructor and are not logged or stored in document metadata.
+  - Added `aioboto3` to the API package and generalized ingest/purge/upload type hints to the storage protocol while keeping `LocalObjectStorage` for deterministic offline tests.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_us_upload_ingest.py::test_s3_storage_uses_seaweedfs_compatible_bucket_and_content_addressed_keys` -> failed during import because `S3ObjectStorage` was missing.
+  - GREEN: same command -> 1 passed. Adjacent: `cd apps/api && uv run pytest -q tests/test_us_upload_ingest.py tests/test_us_document_lifecycle.py` -> 12 passed.
+  - `PRD_CRON_BACKLOG.md` item 12 marked done. Heavy full-stack/live SeaweedFS smoke intentionally skipped in this speed-biased cron run.

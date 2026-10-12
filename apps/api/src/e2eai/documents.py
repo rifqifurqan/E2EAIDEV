@@ -7,9 +7,10 @@ principals, and revoke by deleting the read-index first (tighten first) before O
 
 import hashlib
 import uuid
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any, Protocol
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel
@@ -19,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from . import audit
 from .auth import current_session, require_scope
 from .authz import principals
-from .core.config import repo_root
+from .core.config import get_settings, repo_root
 from .core.errors import AppError
 from .db import AccessRequest, Chunk, DocPrincipal, Document, DocumentVersion, Folder, FolderPrincipal, Notification, User
 from .db import get_session
@@ -34,19 +35,29 @@ def _relation(level: str) -> str:
     return level if level in ("owner", "editor") else "viewer"
 
 
-class LocalObjectStorage:
-    """Small P0 storage adapter used until the S3 client is wired.
+class ObjectStorage(Protocol):
+    async def put_bytes(self, data: bytes) -> tuple[str, str]: ...
+    async def get_bytes(self, key: str) -> bytes: ...
+    async def delete(self, key: str) -> None: ...
 
-    Files are content-addressed, matching the final S3 key shape (`sha256/<hash>`). The adapter boundary
-    keeps the upload path testable and lets us swap in SeaweedFS/aioboto3 without changing routes.
+
+def _content_key(data: bytes) -> tuple[str, str]:
+    digest = hashlib.sha256(data).hexdigest()
+    return f"sha256/{digest}", digest
+
+
+class LocalObjectStorage:
+    """Offline object storage for deterministic tests and local fallback.
+
+    Files are content-addressed, matching the S3 key shape (`sha256/<hash>`), so switching between the
+    local test adapter and SeaweedFS/S3 does not change document metadata.
     """
 
     def __init__(self, root: Path | None = None):
         self.root = root or repo_root() / ".data" / "objects"
 
     async def put_bytes(self, data: bytes) -> tuple[str, str]:
-        digest = hashlib.sha256(data).hexdigest()
-        key = f"sha256/{digest}"
+        key, digest = _content_key(data)
         path = self.root / key
         path.parent.mkdir(parents=True, exist_ok=True)
         if not path.exists():
@@ -60,8 +71,73 @@ class LocalObjectStorage:
         (self.root / key).unlink(missing_ok=True)
 
 
-def get_storage() -> LocalObjectStorage:
-    return LocalObjectStorage()
+class S3ObjectStorage:
+    """S3-compatible object storage adapter for SeaweedFS or external S3 (FR-D2).
+
+    The adapter is intentionally small: document uploads remain content-addressed and all credentials are
+    passed only to the S3 client constructor, never logged or stored in metadata.
+    """
+
+    def __init__(
+        self,
+        *,
+        endpoint_url: str,
+        bucket: str,
+        access_key: str,
+        secret_key: str,
+        region_name: str = "us-east-1",
+        session_factory: Callable[[], Any] | None = None,
+    ):
+        self.endpoint_url = endpoint_url
+        self.bucket = bucket
+        self.access_key = access_key
+        self.secret_key = secret_key
+        self.region_name = region_name
+        self._session_factory = session_factory
+
+    def _session(self) -> Any:
+        if self._session_factory is not None:
+            return self._session_factory()
+        try:
+            import aioboto3
+        except ImportError as exc:  # pragma: no cover - dependency packaging guard
+            raise AppError(503, "S3 client dependency is missing") from exc
+        return aioboto3.Session()
+
+    def _client(self):
+        return self._session().client(
+            "s3",
+            endpoint_url=self.endpoint_url,
+            aws_access_key_id=self.access_key,
+            aws_secret_access_key=self.secret_key,
+            region_name=self.region_name,
+        )
+
+    async def put_bytes(self, data: bytes) -> tuple[str, str]:
+        key, digest = _content_key(data)
+        async with self._client() as client:
+            await client.put_object(Bucket=self.bucket, Key=key, Body=data)
+        return key, digest
+
+    async def get_bytes(self, key: str) -> bytes:
+        async with self._client() as client:
+            response = await client.get_object(Bucket=self.bucket, Key=key)
+            body = response["Body"]
+            return await body.read()
+
+    async def delete(self, key: str) -> None:
+        async with self._client() as client:
+            await client.delete_object(Bucket=self.bucket, Key=key)
+
+
+def get_storage() -> ObjectStorage:
+    settings = get_settings()
+    return S3ObjectStorage(
+        endpoint_url=settings.s3_url,
+        bucket=settings.s3_bucket,
+        access_key=settings.s3_access_key,
+        secret_key=settings.s3_secret_key,
+    )
 
 
 async def create_seeded_document(
@@ -109,7 +185,7 @@ async def create_uploaded_document(
     title: str,
     data: bytes,
     mime: str,
-    storage: LocalObjectStorage,
+    storage: ObjectStorage,
 ) -> Document:
     """Store the uploaded object and version metadata (PRD F1.2). Parsing/chunking is a separate
     ingest step (`e2eai.ingest.ingest_version`), so the version is created `pending`."""
@@ -312,7 +388,7 @@ async def restore_document(
 
 
 async def purge_document(
-    session: AsyncSession, authz, *, actor: User, document_id: uuid.UUID, storage: LocalObjectStorage | None = None
+    session: AsyncSession, authz, *, actor: User, document_id: uuid.UUID, storage: ObjectStorage | None = None
 ) -> None:
     """Permanently delete derived content and the stored object (FR-D9). Legal hold blocks it (FR-D13).
 
@@ -696,7 +772,7 @@ async def upload_document(
     file: UploadFile = File(...),
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
-    storage: LocalObjectStorage = Depends(get_storage),
+    storage: ObjectStorage = Depends(get_storage),
 ) -> dict:
     from .auth import redis_client
     from .ingest import ingest_version
@@ -774,7 +850,7 @@ async def delete_document_api(
     permanent: bool = False,
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
-    storage: LocalObjectStorage = Depends(get_storage),
+    storage: ObjectStorage = Depends(get_storage),
 ) -> dict:
     """Trash by default; `?permanent=true` purges (FR-D9). Both require document ownership."""
     from .authz import connect

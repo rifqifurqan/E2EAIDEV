@@ -14,7 +14,7 @@ from sqlalchemy import delete, func, select
 from e2eai.authz import principals
 from e2eai.core.errors import AppError
 from e2eai.db import Chunk, ChunkEmbedding, DocPrincipal, Document, DocumentVersion, Folder, User, sessions
-from e2eai.documents import LocalObjectStorage, create_uploaded_document, share_document
+from e2eai.documents import LocalObjectStorage, S3ObjectStorage, create_uploaded_document, share_document
 from e2eai.ingest import DoclingParser, TextMarkdownParser, ingest_version, select_parser
 from e2eai.retrieval import answer_question
 from e2eai.seed import seed_demo
@@ -37,6 +37,80 @@ class FakeEmbedder:
 
     async def embed(self, texts):
         return [[float(t.lower().count(a)) for a in self._axes] for t in texts]
+
+
+class FakeS3Body:
+    def __init__(self, data: bytes):
+        self.data = data
+
+    async def read(self) -> bytes:
+        return self.data
+
+
+class FakeS3Client:
+    def __init__(self):
+        self.objects = {}
+        self.put_calls = []
+        self.delete_calls = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def put_object(self, **kwargs):
+        self.put_calls.append(kwargs)
+        self.objects[(kwargs["Bucket"], kwargs["Key"])] = kwargs["Body"]
+
+    async def get_object(self, **kwargs):
+        return {"Body": FakeS3Body(self.objects[(kwargs["Bucket"], kwargs["Key"])])}
+
+    async def delete_object(self, **kwargs):
+        self.delete_calls.append(kwargs)
+        self.objects.pop((kwargs["Bucket"], kwargs["Key"]), None)
+
+
+class FakeS3Session:
+    def __init__(self, client: FakeS3Client):
+        self.client_instance = client
+        self.client_calls = []
+
+    def client(self, *args, **kwargs):
+        self.client_calls.append((args, kwargs))
+        return self.client_instance
+
+
+def test_s3_storage_uses_seaweedfs_compatible_bucket_and_content_addressed_keys():
+    async def run():
+        client = FakeS3Client()
+        session = FakeS3Session(client)
+        storage = S3ObjectStorage(
+            endpoint_url="http://127.0.0.1:18333",
+            bucket="e2eai",
+            access_key="access-id",
+            secret_key="secret-value",
+            session_factory=lambda: session,
+        )
+        key, digest = await storage.put_bytes(b"hello")
+
+        assert key == f"sha256/{digest}"
+        assert client.objects[("e2eai", key)] == b"hello"
+        assert session.client_calls[0] == (
+            ("s3",),
+            {
+                "endpoint_url": "http://127.0.0.1:18333",
+                "aws_access_key_id": "access-id",
+                "aws_secret_access_key": "secret-value",
+                "region_name": "us-east-1",
+            },
+        )
+        assert await storage.get_bytes(key) == b"hello"
+        await storage.delete(key)
+        assert client.delete_calls == [{"Bucket": "e2eai", "Key": key}]
+        assert ("e2eai", key) not in client.objects
+
+    asyncio.run(run())
 
 
 def test_text_markdown_parser_splits_by_heading_into_section_paths():
