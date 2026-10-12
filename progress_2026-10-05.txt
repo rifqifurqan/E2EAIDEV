@@ -1943,3 +1943,9 @@ HOW TO RESUME
   - TDD note (deviation): the module was written before the RED run, so the RED run only failed on the route-wiring test (3 other tests passed immediately). The tests were written first and assert the behavior; this slice did not get a clean module-missing RED.
   - GREEN: `cd apps/api && uv run pytest -q tests/test_learning_paths_fr_e4.py tests/test_guided_scenarios_fr_e3.py tests/test_migration_static.py` -> 11 passed; `create_app()` ok.
   - Not done: web UI for paths, per-learner persisted progress, links into real doc pages. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- FR-F22 docs fix [fix, 2026-10-12]:
+  - Regenerated `docs/openapi.json`, `docs/en/api-reference.md`, `docs/id/referensi-api.md` via `scripts/generate_api_reference.py`. The artifact had 130 paths; the live FastAPI schema has 138 paths. The stale artifact caused `test_openapi_json_artifact_matches_live_schema` to fail (extra/missing paths).
+  - Fixed `test_docs_fr_f22.py`: the `"sk-"` substring secret check caused false positives on the route path `/api/v1/bots/{bot_id}/risk-classification` ("risk" + "-" = "sk-"). Replaced substring checks with regex patterns requiring actual credential formats (`sk-[a-z0-9_-]{16,}` for OpenAI keys, `gho_[a-z0-9]+` for GitHub tokens).
+  - Verified: `cd apps/api && uv run pytest -q tests/test_docs_fr_f22.py` -> 3 passed.
+  - Commit: fed0c1b fix(docs): regenerate openapi.json and fix false-positive secret pattern in FR-F22 test — pushed to origin/main.
