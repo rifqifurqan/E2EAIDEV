@@ -1973,3 +1973,11 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_quantization_lab_fr_m5.py` -> 6 failed (module missing).
   - GREEN: same command -> 6 passed. Docs regenerated via `scripts/generate_api_reference.py`.
   - Not done: running real AWQ/GPTQ/GGUF quantization jobs, live quality/speed measurement through the benchmark runner (FR-T11), persisting comparisons. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Fine-tuning and distillation planning (FR-M6) (2026-10-13, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `e2eai.finetune_plan` (no DB, no migration): `build_plan` (methods lora/qlora/full/dpo/distillation; DPO requires a `preference` dataset, distillation requires a teacher model; bounded hyperparameters; GPU memory estimate qlora < lora < full; steps per epoch/total; warnings `dataset_small`, `exceeds_gpu_memory`; trainer-neutral config with Unsloth/Axolotl/TRL as adapters), `check_training_examples` (approved label sources only, empty fields, PII via the existing detector; issues list index + code only, never text), `results_to_benchmark` (base vs tuned samples -> FR-T11 combinations + quality delta, feeding `summarize_combination`).
+  - Routes (scope `evals`): `POST /api/v1/models/finetune/plan`, `/check-data`, `/results`.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_finetune_plan_fr_m6.py` -> 8 failed (module missing).
+  - GREEN: same command -> 8 passed. Docs regenerated via `scripts/generate_api_reference.py`.
+  - Not done: launching real training jobs (needs GPU + trainer adapters through FR-F20 job engine), registering the tuned model in the FR-M7 registry automatically, persisting plans. Heavy full-stack gates intentionally skipped (speed-biased run).

@@ -528,6 +528,24 @@
         "title": "CertificateStatusIn",
         "type": "object"
       },
+      "CheckDataIn": {
+        "properties": {
+          "examples": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 5000,
+            "title": "Examples",
+            "type": "array"
+          }
+        },
+        "required": [
+          "examples"
+        ],
+        "title": "CheckDataIn",
+        "type": "object"
+      },
       "CheckIn": {
         "properties": {
           "submission": {
@@ -746,33 +764,6 @@
           "annotations"
         ],
         "title": "DatasetAnnotationsIn",
-        "type": "object"
-      },
-      "DatasetIn": {
-        "properties": {
-          "items": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "source": {
-            "default": "manual",
-            "title": "Source",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "items"
-        ],
-        "title": "DatasetIn",
         "type": "object"
       },
       "DeactivateIn": {
@@ -1106,6 +1097,65 @@
           "op"
         ],
         "title": "FilterIn",
+        "type": "object"
+      },
+      "FinetunePlanIn": {
+        "properties": {
+          "base_model": {
+            "maxLength": 200,
+            "title": "Base Model",
+            "type": "string"
+          },
+          "dataset": {
+            "$ref": "#/components/schemas/e2eai__finetune_plan__DatasetIn"
+          },
+          "gpu_memory_gb": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Memory Gb"
+          },
+          "hyperparameters": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Hyperparameters",
+            "type": "object"
+          },
+          "method": {
+            "maxLength": 20,
+            "title": "Method",
+            "type": "string"
+          },
+          "params_b": {
+            "title": "Params B",
+            "type": "number"
+          },
+          "teacher_model": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Teacher Model"
+          }
+        },
+        "required": [
+          "method",
+          "base_model",
+          "params_b",
+          "dataset"
+        ],
+        "title": "FinetunePlanIn",
         "type": "object"
       },
       "FinopsSpendIn": {
@@ -2265,6 +2315,58 @@
         "title": "ReportIn",
         "type": "object"
       },
+      "ResultsIn": {
+        "properties": {
+          "base_model": {
+            "maxLength": 200,
+            "title": "Base Model",
+            "type": "string"
+          },
+          "base_samples": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "title": "Base Samples",
+            "type": "array"
+          },
+          "dataset": {
+            "maxLength": 200,
+            "title": "Dataset",
+            "type": "string"
+          },
+          "prompt": {
+            "maxLength": 200,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "tuned_model": {
+            "maxLength": 200,
+            "title": "Tuned Model",
+            "type": "string"
+          },
+          "tuned_samples": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 10000,
+            "title": "Tuned Samples",
+            "type": "array"
+          }
+        },
+        "required": [
+          "base_model",
+          "tuned_model",
+          "base_samples",
+          "tuned_samples",
+          "prompt",
+          "dataset"
+        ],
+        "title": "ResultsIn",
+        "type": "object"
+      },
       "RetrievalMetricsIn": {
         "properties": {
           "dataset_id": {
@@ -3374,6 +3476,70 @@
           "principal"
         ],
         "title": "GrantIn",
+        "type": "object"
+      },
+      "e2eai__eval_lab__DatasetIn": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "default": "manual",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "items"
+        ],
+        "title": "DatasetIn",
+        "type": "object"
+      },
+      "e2eai__finetune_plan__DatasetIn": {
+        "properties": {
+          "examples": {
+            "title": "Examples",
+            "type": "integer"
+          },
+          "id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "maxLength": 30,
+            "title": "Kind",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "examples"
+        ],
+        "title": "DatasetIn",
         "type": "object"
       },
       "e2eai__model_registry__RegisterIn": {
@@ -6487,7 +6653,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DatasetIn"
+                "$ref": "#/components/schemas/e2eai__eval_lab__DatasetIn"
               }
             }
           },
@@ -8825,6 +8991,138 @@
         "summary": "Scan Pickle Api",
         "tags": [
           "model-security"
+        ]
+      }
+    },
+    "/api/v1/models/finetune/check-data": {
+      "post": {
+        "description": "FR-M6: check training examples (indexes and codes only are returned).",
+        "operationId": "check_data_api_api_v1_models_finetune_check_data_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckDataIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Check Data Api Api V1 Models Finetune Check Data Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check Data Api",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/api/v1/models/finetune/plan": {
+      "post": {
+        "description": "FR-M6: validate a fine-tuning/distillation job spec and return a trainer-neutral plan.",
+        "operationId": "plan_api_api_v1_models_finetune_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinetunePlanIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Plan Api Api V1 Models Finetune Plan Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Plan Api",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/api/v1/models/finetune/results": {
+      "post": {
+        "description": "FR-M6: turn a finished run's samples into benchmark combinations for before/after comparison.",
+        "operationId": "results_api_api_v1_models_finetune_results_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResultsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Results Api Api V1 Models Finetune Results Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Results Api",
+        "tags": [
+          "models"
         ]
       }
     },
