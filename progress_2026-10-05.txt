@@ -1895,3 +1895,11 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_data_flywheel_fr_i1.py` -> collection/import failures (module and model missing).
   - GREEN: same command -> 5 passed. Adjacent: `uv run pytest -q tests/test_data_flywheel_fr_i1.py tests/test_incident_management_fr_o8.py tests/test_migration_static.py tests/test_us_chat_conversations.py tests/test_us_eval_lab_p0.py` -> 19 passed; `create_app()` ok.
   - Not done: auto-enqueue from FR-O3 low online scores and FR-O8 incidents, actually running the re-eval/fine-tune job from the item, auto-creating the release bundle. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Guided scenarios (FR-E3) (2026-10-12, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `e2eai.scenarios` (no DB, no migration): catalog of 3 PRD scenarios (`hr-policy-bot`, `why-does-my-bot-hallucinate`, `find-the-permission-leak`) with stage, EN/ID title/summary/steps/expected outcomes, and synthetic sample data; `check_scenario` grades a learner submission into per-outcome checks with hints. The answer key is not in the returned scenario; the permission-leak expected set is computed from the sample ACLs and asker principals; malformed submissions fail safely.
+  - Routes (any authenticated session): GET `/api/v1/learn/scenarios`, GET `/{scenario_id}`, POST `/{scenario_id}/check`.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_guided_scenarios_fr_e3.py` -> import failures (module missing).
+  - GREEN: same command -> 6 passed. Adjacent: `uv run pytest -q tests/test_guided_scenarios_fr_e3.py tests/test_migration_static.py tests/test_us_tool_catalog_p1.py` -> passed; `create_app()` ok.
+  - Not done: web UI for the scenarios, seeding the sample data into a sandbox workspace so the learner runs it live, progress tracking per learner. Heavy full-stack gates intentionally skipped (speed-biased run).
