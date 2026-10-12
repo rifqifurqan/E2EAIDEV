@@ -6,8 +6,8 @@ Requirement: FR-F22 (referensi API P1).
 
 Judul API: E2EAIDEV API
 Versi API: 0.1.0
-Total path: 150
-Total operasi: 160
+Total path: 153
+Total operasi: 165
 
 ## Cara generate ulang
 
@@ -722,6 +722,38 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 - Ringkasan: Lineage Summary Api
 - Operation ID: `lineage_summary_api_api_v1_lineage_summary_get`
 - Kode status respons: 200
+
+### memory
+
+#### GET /api/v1/memory
+
+- Ringkasan: List Api
+- Operation ID: `list_api_api_v1_memory_get`
+- Kode status respons: 200
+
+#### POST /api/v1/memory
+
+- Ringkasan: Add Api
+- Operation ID: `add_api_api_v1_memory_post`
+- Kode status respons: 200, 422
+
+#### DELETE /api/v1/memory
+
+- Ringkasan: Clear Api
+- Operation ID: `clear_api_api_v1_memory_delete`
+- Kode status respons: 200
+
+#### PUT /api/v1/memory/settings
+
+- Ringkasan: Settings Api
+- Operation ID: `settings_api_api_v1_memory_settings_put`
+- Kode status respons: 200, 422
+
+#### DELETE /api/v1/memory/{memory_id}
+
+- Ringkasan: Delete Api
+- Operation ID: `delete_api_api_v1_memory__memory_id__delete`
+- Kode status respons: 200, 422
 
 ### model-registry
 

@@ -148,3 +148,13 @@ Jika organisasi Anda telah menerbitkan bot (misalnya, bot kebijakan HR):
 
 - Hubungi administrator platform untuk masalah akun, permintaan akses, atau masalah teknis.
 - Lihat **Panduan Admin & Operator** untuk detail operasional.
+
+## Memori Jangka Panjang (opsional)
+
+Memori jangka panjang **nonaktif secara default**. Setelah Anda mengaktifkannya
+(`PUT /api/v1/memory/settings`), Anda dapat menyimpan catatan singkat yang boleh diingat asisten
+pada chat berikutnya (`POST /api/v1/memory`). Catatan disamarkan dari PII dan rahasia sebelum
+disimpan. Anda dapat melihat semua catatan (`GET /api/v1/memory`), menghapus satu catatan
+(`DELETE /api/v1/memory/{id}`), atau menghapus semuanya (`DELETE /api/v1/memory`). Hanya Anda yang
+dapat melihat atau menghapus catatan Anda, dan menonaktifkan pengaturan menghentikan pemanggilan
+memori seketika.

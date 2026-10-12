@@ -148,3 +148,12 @@ If your organization has published bots (e.g., an HR-policy bot):
 
 - Contact your platform administrator for account issues, access requests, or technical problems.
 - Check the **Admin & Operator Guide** for operational details.
+
+## Long-term Memory (optional)
+
+Long-term memory is **off by default**. When you turn it on (`PUT /api/v1/memory/settings`),
+you can save short notes the assistant may recall in later chats (`POST /api/v1/memory`).
+Notes are PII-masked and secret-redacted before they are stored. You can list everything
+that is stored (`GET /api/v1/memory`), delete one note (`DELETE /api/v1/memory/{id}`), or clear
+all of them (`DELETE /api/v1/memory`). Only you can see or delete your notes, and turning the
+setting off stops recall immediately.

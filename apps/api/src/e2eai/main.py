@@ -46,6 +46,7 @@ from .offboarding import router as offboarding_router
 from .notifications import router as notifications_router
 from .org import router as org_router
 from .plan_intake import router as plan_intake_router
+from .user_memory import router as user_memory_router
 from .prompt_registry import router as prompt_router
 from .retrieval import router as retrieval_router
 from .security_red_team import router as security_red_team_router
@@ -108,6 +109,7 @@ def create_app() -> FastAPI:
     app.include_router(notifications_router)
     app.include_router(org_router)
     app.include_router(plan_intake_router)
+    app.include_router(user_memory_router)
     app.include_router(prompt_router)
     app.include_router(slo_metrics_router)
     app.include_router(finops_router)

@@ -6,8 +6,8 @@ Requirement: FR-F22 (P1 API reference).
 
 API title: E2EAIDEV API
 API version: 0.1.0
-Total paths: 150
-Total operations: 160
+Total paths: 153
+Total operations: 165
 
 ## How to regenerate
 
@@ -722,6 +722,38 @@ Most application routes require a scoped session or API key. This generated refe
 - Summary: Lineage Summary Api
 - Operation ID: `lineage_summary_api_api_v1_lineage_summary_get`
 - Response status codes: 200
+
+### memory
+
+#### GET /api/v1/memory
+
+- Summary: List Api
+- Operation ID: `list_api_api_v1_memory_get`
+- Response status codes: 200
+
+#### POST /api/v1/memory
+
+- Summary: Add Api
+- Operation ID: `add_api_api_v1_memory_post`
+- Response status codes: 200, 422
+
+#### DELETE /api/v1/memory
+
+- Summary: Clear Api
+- Operation ID: `clear_api_api_v1_memory_delete`
+- Response status codes: 200
+
+#### PUT /api/v1/memory/settings
+
+- Summary: Settings Api
+- Operation ID: `settings_api_api_v1_memory_settings_put`
+- Response status codes: 200, 422
+
+#### DELETE /api/v1/memory/{memory_id}
+
+- Summary: Delete Api
+- Operation ID: `delete_api_api_v1_memory__memory_id__delete`
+- Response status codes: 200, 422
 
 ### model-registry
 

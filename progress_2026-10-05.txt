@@ -2037,3 +2037,11 @@ HOW TO RESUME
   - Note: re-running `generate_docs.py` overwrites the admin guides and drops the manually added Prompt Registry section; only the runbook link lines were patched into the guides here.
   - Tests: `python scripts/validate_docs.py` PASS; `cd apps/api && uv run pytest -q tests/test_docs_fr_f22.py` -> 3 passed. Heavy gates intentionally skipped.
   - Remaining unmapped runbook gap: FR-O13 runbooks not yet exercised in a staging drill (needs a staging environment).
+
+- Long-term user memory (FR-B2) (2026-10-13, cron):
+  - PRD audit found FR-B2 (P2) was never implemented. FR-C5 (permission-keyed caches) is covered by FR-M4 semantic_cache; FR-S9 (OpenFGA) is covered by authz.py and the T4 model.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_user_memory_fr_b2.py` -> 4 failed (module/tables/routes missing).
+  - GREEN: `user_memory.py` + `UserMemory`/`UserMemorySetting` models + migration `0032_user_memory` + router wired in `main.py`; same command -> 4 passed. Opt-in (off by default), PII mask + secret redaction before storage, 500-char and 200-item caps, owner-only list/delete/clear (foreign id returns the same 404 as missing), audit carries ids/char counts only, `recall_context` returns newest-first strings only for opted-in active users.
+  - Regenerated `docs/openapi.json` and EN/ID API reference (153 paths); added a Long-term Memory section to EN/ID user guides.
+  - Adjacent regression: `uv run pytest -q tests/test_user_memory_fr_b2.py tests/test_docs_fr_f22.py tests/test_documents_migration_static.py tests/test_us13_offboarding.py tests/test_use_case_intake_fr_p1.py tests/test_us_pii_redaction.py tests/test_us02_cited_answer.py` -> 27 passed; `python scripts/validate_docs.py` PASS. Heavy full-stack gates intentionally skipped.
+  - Follow-ups: wire `recall_context` into the chat pipeline as untrusted context; memory deletion on user data-subject requests (NFR-10); web UI for the memory list.

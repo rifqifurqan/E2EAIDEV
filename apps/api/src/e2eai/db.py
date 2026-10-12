@@ -709,6 +709,24 @@ class UseCaseIntake(Audited, Base):
     status: Mapped[str] = mapped_column(String(16), default="submitted")
 
 
+class UserMemorySetting(Base):
+    """FR-B2: per-user opt-in switch for long-term memory (off by default)."""
+    __tablename__ = "user_memory_settings"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class UserMemory(Base):
+    """FR-B2: one long-term memory item owned by a user (PII-masked, secret-redacted text only)."""
+    __tablename__ = "user_memories"
+    __table_args__ = (Index("user_memories_user_idx", "user_id", "created_at"),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class SystemGrant(Base):
     """FR-X4: principals (role/division) granted access to a registered system."""
     __tablename__ = "system_grants"
