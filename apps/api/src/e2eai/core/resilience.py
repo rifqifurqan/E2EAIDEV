@@ -48,3 +48,53 @@ async def with_retry(
             await sleep(delay + (random.uniform(0, jitter) if jitter else 0.0))
     assert last is not None
     raise RetryExhausted(attempts, last)
+
+
+RETRY_STATUS = frozenset({429, 502, 503, 504})
+
+
+class _RetryableStatus(Exception):
+    def __init__(self, status: int):
+        super().__init__(f"upstream status {status}")
+        self.status = status
+
+
+async def post_json_with_retry(
+    client_factory,
+    *,
+    base_url: str,
+    timeout: float,
+    path: str,
+    headers: dict,
+    json: dict,
+    attempts: int = 3,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+):
+    """POST with bounded retries on transport errors and 429/502/503/504 (NFR-19).
+
+    Other statuses (including 4xx) are returned to the caller unchanged. When retries are exhausted a clear
+    503 ``AppError`` is raised; neither headers nor payload appear in its message.
+    """
+    from .errors import AppError
+
+    async def once():
+        async with client_factory(base_url=base_url, timeout=timeout) as client:
+            response = await client.post(path, headers=headers, json=json)
+        status = getattr(response, "status_code", 200)  # test fakes may omit it
+        if status in RETRY_STATUS:
+            raise _RetryableStatus(status)
+        return response
+
+    retryable = TRANSIENT + (_RetryableStatus,) + _httpx_transient()
+    try:
+        return await with_retry(once, attempts=attempts, timeout=None, retry_on=retryable, sleep=sleep)
+    except RetryExhausted:
+        raise AppError(503, "Upstream service unavailable",
+                       "A model or search service did not respond. Please try again shortly.",
+                       "upstream-unavailable") from None
+
+
+def _httpx_transient() -> tuple[type[BaseException], ...]:
+    import httpx
+
+    return (httpx.TransportError,)

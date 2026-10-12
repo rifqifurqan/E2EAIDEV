@@ -27,6 +27,7 @@ from .auth import current_session
 from .authz import principals
 from .core.config import Settings, get_settings, repo_root
 from .core.errors import AppError
+from .core.resilience import post_json_with_retry
 from .db import Chunk, ChunkEmbedding, DocPrincipal, Document, FolderPrincipal, User, get_session
 from .guardrails import PromptGuardPolicy, PromptInjectionDetector, select_prompt_detector
 from .language import detect_language
@@ -82,17 +83,16 @@ class TeiReranker:
     async def rerank(self, query: str, chunks: list[dict], top_k: int) -> list[dict]:
         if not chunks:
             return []
-        async with self.client_factory(base_url=self.base_url, timeout=self.timeout) as client:
-            response = await client.post(
-                "/rerank",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json={
-                    "model": self.model,
-                    "query": query,
-                    "documents": [c.get("text", "") for c in chunks],
-                    "top_k": min(top_k, len(chunks)),
-                },
-            )
+        response = await post_json_with_retry(
+            self.client_factory, base_url=self.base_url, timeout=self.timeout, path="/rerank",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={
+                "model": self.model,
+                "query": query,
+                "documents": [c.get("text", "") for c in chunks],
+                "top_k": min(top_k, len(chunks)),
+            },
+        )
         response.raise_for_status()
         data = response.json().get("results") or []
         # TEI /rerank returns {results: [{index, score}]} sorted by score desc
@@ -154,12 +154,11 @@ class LiteLLMEmbedder:
     async def embed(self, texts: Sequence[str]) -> list[list[float]]:
         if not texts:
             return []
-        async with self.client_factory(base_url=self.base_url, timeout=self.timeout) as client:
-            response = await client.post(
-                "/v1/embeddings",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json={"model": self.model, "input": list(texts)},
-            )
+        response = await post_json_with_retry(
+            self.client_factory, base_url=self.base_url, timeout=self.timeout, path="/v1/embeddings",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={"model": self.model, "input": list(texts)},
+        )
         response.raise_for_status()
         data = response.json().get("data") or []
         vectors = [[float(value) for value in row.get("embedding", [])] for row in data]
@@ -215,18 +214,18 @@ class LiteLLMAnswerGenerator:
 
     async def generate(self, question: str, chunks: list[dict], answer_language: str) -> str:
         system_prompt = build_answer_system_prompt(chunks, answer_language)
-        async with self.client_factory(base_url=self.base_url, timeout=self.timeout) as client:
-            response = await client.post(
-                "/v1/chat/completions",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json={
-                    "model": self.model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": question},
-                    ],
-                },
-            )
+        response = await post_json_with_retry(
+            self.client_factory, base_url=self.base_url, timeout=self.timeout, path="/v1/chat/completions",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": question},
+                ],
+            },
+            attempts=2,
+        )
         response.raise_for_status()
         choices = response.json().get("choices") or []
         if not choices:
