@@ -1716,3 +1716,14 @@ HOW TO RESUME
     `cd apps/web && pnpm exec vitest run src/components/app-shell.test.tsx src/i18n/i18n.test.ts src/components/chat-screen.test.tsx src/components/documents-screen.test.tsx` -> 4 files passed, 31 tests passed.
     `cd apps/web && pnpm run typecheck` -> passed.
   - `PRD_CRON_BACKLOG.md` item 43 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Use-case intake form (FR-P1) (2026-10-12, cron):
+  - Claude Code was tried first and reached `error_max_turns` without editing files; Hermes continued manually. Codex unused.
+  - Added `UseCaseIntake` ORM model and migration `0021_use_case_intakes` for Plan-stage use-case metadata: title, problem, users, required success metrics, data sources, systems to integrate, owner/status, and audited timestamps.
+  - Added `e2eai.plan_intake` service/API slice and `POST /api/v1/plan/use-cases`, requiring FR-P1 success metric categories (`task_success`, `deflection`, `time_saved`) and returning secret-safe summaries; audit events store only counts/metric keys, not raw problem text or document/system content.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_use_case_intake_fr_p1.py` -> 3 failed (`ImportError: cannot import name 'UseCaseIntake'` and route missing).
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_use_case_intake_fr_p1.py` -> 3 passed.
+    Adjacent regression/app import: `cd apps/api && uv run pytest -q tests/test_use_case_intake_fr_p1.py tests/test_us_system_registration_p1.py tests/test_us_release_gates_p1.py tests/test_migration_static.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 24 passed; app ok.
+  - `PRD_CRON_BACKLOG.md` item 44 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).

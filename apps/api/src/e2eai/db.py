@@ -495,6 +495,25 @@ class SystemRegistration(Audited, Base):
     auth_config: Mapped[dict] = mapped_column(JSONB, default=dict)
 
 
+class UseCaseIntake(Audited, Base):
+    """FR-P1: Plan-stage use-case intake form.
+
+    Stores planning metadata: problem, intended users, success metrics, data sources,
+    and systems to integrate. It must never store credentials, tokens, or connection
+    strings supplied by mistake in form metadata.
+    """
+    __tablename__ = "use_case_intakes"
+    __table_args__ = (CheckConstraint("status in ('draft', 'submitted')", name="use_case_intakes_status"),)
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(200))
+    problem: Mapped[str] = mapped_column(Text)
+    users: Mapped[list] = mapped_column(JSONB, default=list)
+    success_metrics: Mapped[dict] = mapped_column(JSONB, default=dict)
+    data_sources: Mapped[list] = mapped_column(JSONB, default=list)
+    systems_to_integrate: Mapped[list] = mapped_column(JSONB, default=list)
+    status: Mapped[str] = mapped_column(String(16), default="submitted")
+
+
 class SystemGrant(Base):
     """FR-X4: principals (role/division) granted access to a registered system."""
     __tablename__ = "system_grants"

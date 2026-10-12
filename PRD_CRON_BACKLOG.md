@@ -90,7 +90,7 @@ Rules for every cron tick:
 43. [x] [FR-F14] Continue WCAG 2.1 AA accessibility hardening beyond existing EN/ID i18n. Completed as keyboard skip-link/main-focus target and localized feature navigation landmark hardening; see progress_2026-10-05.txt.
 
 ### H. P2 compliance / enterprise / connectors after P1 queue
-44. [FR-P1] Use-case intake form.
+44. [x] [FR-P1] Use-case intake form. Completed as deterministic/offline Plan-stage intake API/service slice capturing problem, users, task-success/deflection/time-saved metrics, data sources, and systems to integrate with safe audit metadata; see progress_2026-10-05.txt.
 45. [FR-P2] AI risk classification per bot.
 46. [FR-P3] AI inventory with model cards/system cards.
 47. [FR-P4] Approval workflow for high-risk bots.
