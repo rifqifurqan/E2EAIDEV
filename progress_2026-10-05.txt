@@ -1664,3 +1664,15 @@ HOW TO RESUME
     App/router import smoke: `cd apps/api && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> app ok.
   - Docker Desktop was unavailable at first (`dockerDesktopLinuxEngine` pipe missing); started Docker Desktop and compose infra, then reran the focused DB-backed tests successfully.
   - `PRD_CRON_BACKLOG.md` item 38 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Upgrade procedure P2 prep (FR-F16) (2026-10-12, cron):
+  - Claude Code was rechecked first and still returned a Pro usage limit (`You've hit your limit`, reset 11am Asia/Jakarta); Hermes continued manually. Codex unused.
+  - Added deterministic `e2eai_wizard.upgrade` plan helpers for FR-F16: semantic-version upgrade-window validation (patch or one-minor only), pre-upgrade backup commands for Postgres/SeaweedFS/Valkey, Alembic migration command, ready/compose health checks, and rollback commands/notes.
+  - Added `uv run e2eai upgrade-plan` CLI command to render a secret-free operator procedure, plus `docs/runbooks/upgrade-procedure.md` with symptoms, diagnosis, fix, verification, and rollback notes.
+  - TDD / RED evidence:
+    `cd cli && uv run pytest -q tests/test_upgrade.py` -> failed at collection with `ModuleNotFoundError: No module named 'e2eai_wizard.upgrade'`; after service helper, CLI slice failed with missing `upgrade-plan` command.
+  - GREEN verified:
+    `cd cli && uv run pytest -q tests/test_upgrade.py` -> 4 passed.
+    Adjacent regression: `cd cli && uv run pytest -q tests/test_upgrade.py tests/test_wizard.py tests/test_profiles.py` -> 37 passed, 1 skipped.
+    Docs validation: `python3 scripts/validate_docs.py` -> PASS.
+  - `PRD_CRON_BACKLOG.md` item 39 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).

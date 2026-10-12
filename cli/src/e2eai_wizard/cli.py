@@ -8,7 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import detect, generate, models
+from . import detect, generate, models, upgrade
 from .services import BY_NAME, SECRETS, SERVICES, USERS, enabled_services, owner_enabled
 
 app = typer.Typer(add_completion=False, help=__doc__, no_args_is_help=True)
@@ -299,3 +299,29 @@ def models_cmd(
     if pull:
         _pull(a, root, yes)
     out.print("\n[bold]Apply:[/bold]  cd deploy/compose && docker compose up -d   (restarts LiteLLM and starts TEI if needed)")
+
+
+@app.command("upgrade-plan")
+def upgrade_plan_cmd(
+    from_version: str = typer.Option(..., "--from-version", help="Currently running E2EAIDEV semantic version."),
+    to_version: str = typer.Option(..., "--to-version", help="Target E2EAIDEV semantic version."),
+    backup_dir: str = typer.Option("backups/pre-upgrade", help="Directory where pre-upgrade backup artifacts are written."),
+    compose_dir: str = typer.Option("deploy/compose", help="Docker Compose directory."),
+    api_dir: str = typer.Option("apps/api", help="API app directory for Alembic migrations."),
+    ready_url: str = typer.Option("http://127.0.0.1:8000/api/v1/ready", help="Post-upgrade readiness URL."),
+    previous_alembic_revision: str = typer.Option("base", help="Alembic revision to downgrade to if health checks fail."),
+) -> None:
+    """Print a secret-free FR-F16 upgrade procedure: backup, migrate, health check, rollback."""
+    try:
+        plan = upgrade.build_upgrade_plan(
+            from_version=from_version,
+            to_version=to_version,
+            backup_dir=backup_dir,
+            compose_dir=compose_dir,
+            api_dir=api_dir,
+            ready_url=ready_url,
+            previous_alembic_revision=previous_alembic_revision,
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    out.print(upgrade.render_upgrade_runbook(plan))
