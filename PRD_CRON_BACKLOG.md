@@ -83,10 +83,10 @@ Rules for every cron tick:
 38. [x] [FR-F11] Finish remaining in-app notification types: review assigned, release approved, incident raised; email stays P2. Completed as safe in-app notification service + API boundary for review.assigned/release.approved/incident.raised; see progress_2026-10-05.txt.
 39. [x] [FR-F16] Upgrade procedure P2 prep: pre-upgrade backup, health check, rollback notes/tests. Completed as secret-free CLI upgrade-plan helper + runbook with version-window validation and focused tests; see progress_2026-10-05.txt.
 40. [x] [FR-F22] P1 docs: generated OpenAPI/API reference and Lab adapter developer guide. Completed: generated OpenAPI JSON + EN/ID API reference from FastAPI schema, EN/ID Lab adapter developer guide, docs validator coverage; see progress_2026-10-05.txt.
-41. [FR-F21] P1 export from UI for configuration-as-code.
+41. [x] [FR-F21] P1 export from UI for configuration-as-code. Completed as secret-safe admin API/UI export to YAML/JSON with audit and EN/ID UI link; see progress_2026-10-05.txt.
 
 ### G. Learning/UI P1
-42. [FR-E2] Why-it-matters enterprise panels per lifecycle stage with OWASP/NIST/EU AI Act/ISO/UU PDP links.
+42. [x] [FR-E2] Why-it-matters enterprise panels per lifecycle stage with OWASP/NIST/EU AI Act/ISO/UU PDP links. Completed as EN/ID accessible lifecycle panels with framework/regulation links; see progress_2026-10-05.txt.
 43. [FR-F14] Continue WCAG 2.1 AA accessibility hardening beyond existing EN/ID i18n.
 
 ### H. P2 compliance / enterprise / connectors after P1 queue

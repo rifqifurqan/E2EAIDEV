@@ -1,7 +1,7 @@
 "use client";
 
 import { useI18n } from "@/i18n/context";
-import type { Dictionary } from "@/i18n";
+import { WhyItMattersPanel } from "./why-it-matters-panel";
 
 type StageKey = "plan" | "data" | "build" | "test" | "release" | "operate" | "improve";
 
@@ -14,6 +14,7 @@ export function StagePlaceholder({ stage }: { stage: StageKey }) {
       <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">
         {label} stage — coming soon.
       </div>
+      <WhyItMattersPanel stage={stage} />
     </section>
   );
 }

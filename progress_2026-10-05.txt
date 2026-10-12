@@ -1690,3 +1690,20 @@ HOW TO RESUME
     `python3 scripts/validate_docs.py` -> PASS.
     `uv --project apps/api run pytest -q apps/api/tests/test_us_tool_adapter_p1.py` -> 8 passed.
   - `PRD_CRON_BACKLOG.md` item 40 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Configuration-as-code export from UI (FR-F21 P1) (2026-10-12, cron):
+  - Verified the existing secret-safe admin config export slice from commit `53955df`: `/api/v1/admin/config/export` emits YAML/JSON for the current install, preserves `env:` secret references, redacts inline secret-like values, records `admin.config.export` audit metadata, and the Admin UI exposes a download link.
+  - Verification:
+    `uv --project apps/api run pytest -q apps/api/tests/test_config_export_fr_f21.py` -> 3 passed.
+    `cd apps/web && pnpm exec vitest run src/components/admin-screen.test.tsx` -> 5 passed.
+  - `PRD_CRON_BACKLOG.md` item 41 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Why-it-matters enterprise lifecycle panels (FR-E2) (2026-10-12, cron):
+  - Claude Code was tried first and reached `error_max_turns` after making partial UI changes; Hermes completed cleanup/verification manually. Codex unused.
+  - Added `WhyItMattersPanel` for every lifecycle stage page, with EN/ID stage-specific enterprise rationale and accessible links to OWASP LLM Top 10, NIST AI RMF, EU AI Act, ISO/IEC 42001, and UU PDP.
+  - Added focused tests for the panel and for `StagePlaceholder` rendering the panel across all seven lifecycle stages.
+  - GREEN verified:
+    `cd apps/web && pnpm exec vitest run src/components/why-it-matters-panel.test.tsx src/components/stage-placeholder.test.tsx src/i18n/i18n.test.ts src/components/app-shell.test.tsx` -> 4 files passed, 23 tests passed.
+    `cd apps/web && pnpm run typecheck` -> passed.
+  - TDD note: Claude Code performed the initial RED/GREEN attempt but hit max turns before returning a detailed transcript; parent verification accepted only the final focused/adjacent green tests above.
+  - `PRD_CRON_BACKLOG.md` item 42 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).

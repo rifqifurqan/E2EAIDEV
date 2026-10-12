@@ -112,6 +112,24 @@ const id: Dictionary = {
     divisions: "Divisi",
     teams: "Tim",
   },
+  whyItMatters: {
+    title: "Mengapa Penting di Perusahaan",
+    frameworks: "Kerangka Kerja & Regulasi Terkait",
+    stages: {
+      plan: "Proyek AI perusahaan membutuhkan perencanaan terstruktur yang selaras dengan persyaratan regulasi, kerangka manajemen risiko, dan kebijakan tata kelola organisasi.",
+      data: "Pengelolaan data dalam AI perusahaan harus mematuhi regulasi privasi, memastikan standar kualitas data, dan memelihara jejak audit untuk akuntabilitas regulasi.",
+      build: "Membangun sistem AI perusahaan menuntut praktik pengembangan yang aman, tata kelola model, dan kepatuhan terhadap standar industri untuk AI yang bertanggung jawab.",
+      test: "Pengujian AI perusahaan melampaui validasi fungsional hingga mencakup deteksi bias, pengujian keamanan, dan verifikasi kepatuhan terhadap tolok ukur regulasi.",
+      release: "Merilis sistem AI di lingkungan perusahaan memerlukan manajemen perubahan, penilaian risiko, dan proses persetujuan terdokumentasi untuk auditabilitas.",
+      operate: "Mengoperasikan AI perusahaan menuntut pemantauan berkelanjutan, prosedur respons insiden, dan pelaporan kepatuhan yang selaras dengan selera risiko organisasi.",
+      improve: "Peningkatan berkelanjutan AI perusahaan harus diatur oleh umpan balik, metrik kinerja, dan pelacakan persyaratan regulasi yang terus berkembang.",
+    },
+    owasp: "OWASP Top 10 untuk Aplikasi LLM",
+    nist: "Kerangka Manajemen Risiko AI NIST",
+    euAiAct: "EU AI Act",
+    iso42001: "ISO/IEC 42001 — Sistem Manajemen AI",
+    uuPdp: "UU PDP — Pelindungan Data Pribadi Indonesia",
+  },
 } as const;
 
 export default id;

@@ -110,6 +110,24 @@ const en = {
     divisions: "Divisions",
     teams: "Teams",
   },
+  whyItMatters: {
+    title: "Why It Matters in Enterprise",
+    frameworks: "Related Frameworks & Regulations",
+    stages: {
+      plan: "Enterprise AI projects require structured planning aligned with regulatory requirements, risk management frameworks, and organizational governance policies.",
+      data: "Data handling in enterprise AI must comply with privacy regulations, ensure data quality standards, and maintain audit trails for regulatory accountability.",
+      build: "Building enterprise AI systems demands secure development practices, model governance, and adherence to industry standards for responsible AI.",
+      test: "Enterprise AI testing extends beyond functional validation to include bias detection, security testing, and compliance verification against regulatory benchmarks.",
+      release: "Releasing AI systems in enterprise environments requires change management, risk assessment, and documented approval processes for auditability.",
+      operate: "Operating enterprise AI demands continuous monitoring, incident response procedures, and compliance reporting aligned with organizational risk appetite.",
+      improve: "Continuous improvement of enterprise AI must be governed by feedback loops, performance metrics, and tracking of evolving regulatory requirements.",
+    },
+    owasp: "OWASP Top 10 for LLM Applications",
+    nist: "NIST AI Risk Management Framework",
+    euAiAct: "EU AI Act",
+    iso42001: "ISO/IEC 42001 — AI Management System",
+    uuPdp: "UU PDP — Indonesia Personal Data Protection",
+  },
 } as const;
 
 // Widen literal types to string so other locales can supply different values
