@@ -1813,3 +1813,12 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_index_lineage_fr_d10.py` -> 3 failed (module/model missing).
   - GREEN: same command -> 3 passed. Adjacent: `uv run pytest -q tests/test_index_lineage_fr_d10.py tests/test_us_upload_ingest.py tests/test_us_document_lifecycle.py tests/test_doc_lifecycle_review_fr_d8.py tests/test_us_malware_scan.py tests/test_us_pii_redaction.py tests/test_us02_cited_answer.py tests/test_migration_static.py` -> 33 passed; `create_app()` ok.
   - Eval-dataset lineage (dataset -> source documents) and lakeFS/DVC integration remain follow-ups. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Legal hold completion for chats and retention (FR-D13) (2026-10-12, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `conversations.legal_hold` (reversible migration `0027_conversation_legal_hold`) and `e2eai.legal_hold`: admin-only `set_document_hold` / `set_conversation_hold` (hold does not reset the conversation's `updated_at`, so the retention clock is untouched), `list_holds`, and `retention_sweep` (chats older than `chats_days`, trashed documents older than `trash_days`; dry-run supported; held chats/documents always skipped and only counted).
+  - `delete_conversation` now returns 409 for a held conversation; existing `purge_document` already blocked held documents and is still covered by the new test.
+  - Routes: `PUT /api/v1/legal-hold/documents/{id}`, `PUT /api/v1/legal-hold/conversations/{id}`, `GET /api/v1/legal-hold`, `POST /api/v1/legal-hold/retention-sweep` (dry-run default), all admin scope + admin role. Audit stores only the hold flag and whether a reason was given (never reason text, titles, or content).
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_legal_hold_fr_d13.py` -> 3 failed (module/column missing).
+  - GREEN: same command -> 3 passed. Adjacent: `uv run pytest -q tests/test_legal_hold_fr_d13.py tests/test_us_chat_conversations.py tests/test_us_document_lifecycle.py tests/test_us13_offboarding.py tests/test_index_lineage_fr_d10.py tests/test_migration_static.py` -> 27 passed; `create_app()` ok.
+  - Scheduling the sweep as a Celery beat job and DSR (data-subject request) interaction remain follow-ups. Heavy full-stack gates intentionally skipped (speed-biased run).

@@ -60,6 +60,8 @@ async def delete_conversation(
     session: AsyncSession, *, user: User, conversation_id: uuid.UUID
 ) -> None:
     conv = await _own_conversation(session, user, conversation_id)
+    if conv.legal_hold:  # FR-D13: legal hold overrides user deletion and retention
+        raise AppError(409, "Legal hold blocks deletion", "This conversation is under legal hold and cannot be deleted.")
     await session.delete(conv)
     await audit.record(session, f"user:{user.id}", "chat.conversation.delete",
                        f"conversation:{conversation_id}", {})

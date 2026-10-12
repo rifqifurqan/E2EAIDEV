@@ -99,7 +99,7 @@ Rules for every cron tick:
 50. [x] [FR-F17] Secret/certificate rotation. Completed as deterministic/offline slice: API-key rotation with grace overlap, immediate emergency revoke (audited, no raw keys), project-charset secret generator, 14-day certificate expiry status, zero-downtime rotation plan, and 4 admin routes under `/api/v1/security`; see progress_2026-10-05.txt.
 51. [x] [FR-D8] Review owner/review date/expiry lifecycle. Completed: `documents.review_owner_id/review_at/expires_at` (migration 0025), expired documents excluded inside the SQL retrieval/search/visible-chunk filters, due-review report for review owners, mark-reviewed, and 3 routes; see progress_2026-10-05.txt.
 52. [x] [FR-D10] Dataset/index lineage. Completed: `index_lineage` table (migration 0026) recording document version, parser, chunker, and embedding model per index build (written at ingest, idempotent), permission-filtered lineage view, admin summary, and 2 routes under `/api/v1/lineage`; see progress_2026-10-05.txt.
-53. [FR-D13] Legal hold completion for chats and retention interactions.
+53. [x] [FR-D13] Legal hold completion for chats and retention interactions. Completed: `conversations.legal_hold` (migration 0027), admin-only hold/release for documents and chats, held chats blocked from user deletion (409), retention sweep (dry-run default) that skips held chats/documents, and 4 routes under `/api/v1/legal-hold`; see progress_2026-10-05.txt.
 54. [FR-M7] Model registry with lineage/eval scores/approval status.
 55. [FR-M8] Model file security: safetensors, pickle scanning, checksums/signatures.
 56. [FR-T9] Bias/fairness tests.
