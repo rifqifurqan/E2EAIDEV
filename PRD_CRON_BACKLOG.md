@@ -120,7 +120,7 @@ Rules for every cron tick:
 69. [FR-M6] Fine-tuning and distillation.
 70. [FR-R9] Advanced RAG: GraphRAG/multimodal/routing across knowledge bases.
 71. [x] [FR-R10] Structured-data questions over spreadsheets/CSV with computation. Completed as deterministic/offline `table_qa.py` (typed CSV parse, structured filter/group-by/aggregate/sort/limit and group comparison executed by plain code, no eval/SQL, formula-cell neutralisation, source file in result) + `POST /api/v1/data/table-query`; see progress_2026-10-05.txt. XLSX parsing and NL-to-query translation remain follow-ups.
-72. [FR-B5] Agent workflows and trajectory evaluation.
+72. [x] [FR-B5] Agent workflows and trajectory evaluation. Completed as deterministic/offline `agent_workflow.py` (bounded dependency-ordered workflow validation incl. cycle/duplicate/unknown-dep checks, allow-listed injected tool runner that stops on blocked/failed steps, safe trajectory with tool names + arg keys + status only, trajectory scoring on tool selection/order/arguments/efficiency/final-answer) + `POST /api/v1/agents/workflow/validate` and `/trajectory/score`; see progress_2026-10-05.txt. LangGraph adapter and persisted runs remain follow-ups.
 73. [FR-O10] GPU scheduling/sharing.
 74. [x] [FR-E4] Role-based learning paths. Completed as static bilingual `learning_paths.py` (AI engineer, evaluator, AI PM, compliance, platform; steps tied to lifecycle stages and FR-E3 scenarios, stateless progress calculator) + 3 routes under `/api/v1/learn/paths`; see progress_2026-10-05.txt. Web UI and per-learner stored progress remain follow-ups.
 

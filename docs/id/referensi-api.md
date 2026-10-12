@@ -6,8 +6,8 @@ Requirement: FR-F22 (referensi API P1).
 
 Judul API: E2EAIDEV API
 Versi API: 0.1.0
-Total path: 139
-Total operasi: 149
+Total path: 141
+Total operasi: 151
 
 ## Cara generate ulang
 
@@ -135,6 +135,20 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 
 - Ringkasan: Export Config Api
 - Operation ID: `export_config_api_api_v1_admin_config_export_get`
+- Kode status respons: 200, 422
+
+### agents
+
+#### POST /api/v1/agents/trajectory/score
+
+- Ringkasan: Score Trajectory Api
+- Operation ID: `score_trajectory_api_api_v1_agents_trajectory_score_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/agents/workflow/validate
+
+- Ringkasan: Validate Workflow Api
+- Operation ID: `validate_workflow_api_api_v1_agents_workflow_validate_post`
 - Kode status respons: 200, 422
 
 ### api-keys

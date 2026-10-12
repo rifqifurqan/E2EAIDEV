@@ -2436,6 +2436,65 @@
         "title": "ScopeIn",
         "type": "object"
       },
+      "ScoreIn": {
+        "properties": {
+          "actual": {
+            "items": {
+              "$ref": "#/components/schemas/TrajectoryStepIn"
+            },
+            "maxItems": 200,
+            "title": "Actual",
+            "type": "array"
+          },
+          "expected": {
+            "items": {
+              "$ref": "#/components/schemas/TrajectoryStepIn"
+            },
+            "maxItems": 200,
+            "title": "Expected",
+            "type": "array"
+          },
+          "final_answer": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Answer"
+          },
+          "must_include": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Must Include",
+            "type": "array"
+          },
+          "ordered": {
+            "default": true,
+            "title": "Ordered",
+            "type": "boolean"
+          },
+          "threshold": {
+            "default": 0.8,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Threshold",
+            "type": "number"
+          }
+        },
+        "required": [
+          "actual",
+          "expected"
+        ],
+        "title": "ScoreIn",
+        "type": "object"
+      },
       "SecurityRedTeamIn": {
         "properties": {
           "dataset_id": {
@@ -2634,6 +2693,42 @@
           "spec"
         ],
         "title": "SpecIn",
+        "type": "object"
+      },
+      "StepIn": {
+        "properties": {
+          "args": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Args",
+            "type": "object"
+          },
+          "depends_on": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Depends On",
+            "type": "array"
+          },
+          "id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "tool": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tool"
+        ],
+        "title": "StepIn",
         "type": "object"
       },
       "StructuredOutputAttemptIn": {
@@ -2879,6 +2974,39 @@
         "title": "TracesIn",
         "type": "object"
       },
+      "TrajectoryStepIn": {
+        "properties": {
+          "arg_keys": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Arg Keys",
+            "type": "array"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "tool": {
+            "maxLength": 100,
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool"
+        ],
+        "title": "TrajectoryStepIn",
+        "type": "object"
+      },
       "TransitionIn": {
         "properties": {
           "assignee_id": {
@@ -3100,6 +3228,23 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "WorkflowIn": {
+        "properties": {
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepIn"
+            },
+            "maxItems": 26,
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "steps"
+        ],
+        "title": "WorkflowIn",
         "type": "object"
       },
       "e2eai__bot_release__GrantIn": {
@@ -4037,6 +4182,94 @@
         "summary": "Test System Api",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/api/v1/agents/trajectory/score": {
+      "post": {
+        "description": "FR-B5: score a recorded agent trajectory against an expected one.",
+        "operationId": "score_trajectory_api_api_v1_agents_trajectory_score_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScoreIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Score Trajectory Api Api V1 Agents Trajectory Score Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Score Trajectory Api",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/v1/agents/workflow/validate": {
+      "post": {
+        "description": "FR-B5: validate a tool-chain workflow and return its execution order (argument values are not echoed).",
+        "operationId": "validate_workflow_api_api_v1_agents_workflow_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Validate Workflow Api Api V1 Agents Workflow Validate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Workflow Api",
+        "tags": [
+          "agents"
         ]
       }
     },

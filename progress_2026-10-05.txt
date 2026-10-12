@@ -1957,3 +1957,11 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_table_qa_fr_r10.py` -> 8 failed (module missing).
   - GREEN: same command -> 8 passed. Regenerated `docs/openapi.json` + EN/ID API reference (139 paths) via `scripts/generate_api_reference.py`. Adjacent: `uv run pytest -q tests/test_docs_fr_f22.py tests/test_table_qa_fr_r10.py tests/test_learning_paths_fr_e4.py tests/test_migration_static.py` -> 16 passed.
   - Not done: XLSX parsing, natural-language question -> structured query translation via LLM, wiring into the chat pipeline/bot scope with document permissions, multi-table joins. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Agent workflows and trajectory evaluation (FR-B5) (2026-10-13, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `e2eai.agent_workflow` (no DB, no migration): `validate_workflow` (1-25 steps, unique ids, known dependencies, cycle rejection, topological order), `run_workflow` (injected async tool runner; only allow-listed tools run; first blocked/failed step stops the run; trajectory records tool, arg keys, status, error code only, never argument values, outputs, or exception text), `score_trajectory` (tool selection, longest-common-subsequence order, argument-key match, efficiency, extra/missing tools, optional final-answer must-include check; passes only with score >= threshold, full tool selection and order, no step errors, final answer ok; the answer text is not echoed).
+  - Routes: `POST /api/v1/agents/workflow/validate` (arg values not echoed) and `POST /api/v1/agents/trajectory/score` (scope `evals`).
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_agent_trajectory_fr_b5.py` -> 7 failed (module missing).
+  - GREEN: same command -> 7 passed. Docs regenerated (141 OpenAPI paths expected) via `scripts/generate_api_reference.py`.
+  - Not done: LangGraph adapter, running workflows against real MCP tools behind delegated identity (FR-X2/X3), persisted runs, LLM-planned workflows, parallel step execution. Heavy full-stack gates intentionally skipped (speed-biased run).

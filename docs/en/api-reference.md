@@ -6,8 +6,8 @@ Requirement: FR-F22 (P1 API reference).
 
 API title: E2EAIDEV API
 API version: 0.1.0
-Total paths: 139
-Total operations: 149
+Total paths: 141
+Total operations: 151
 
 ## How to regenerate
 
@@ -135,6 +135,20 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: Export Config Api
 - Operation ID: `export_config_api_api_v1_admin_config_export_get`
+- Response status codes: 200, 422
+
+### agents
+
+#### POST /api/v1/agents/trajectory/score
+
+- Summary: Score Trajectory Api
+- Operation ID: `score_trajectory_api_api_v1_agents_trajectory_score_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/agents/workflow/validate
+
+- Summary: Validate Workflow Api
+- Operation ID: `validate_workflow_api_api_v1_agents_workflow_validate_post`
 - Response status codes: 200, 422
 
 ### api-keys
