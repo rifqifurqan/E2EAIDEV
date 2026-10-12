@@ -1871,3 +1871,11 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_online_eval_fr_o3.py` -> 4 failed (module missing).
   - GREEN: same command -> 4 passed. Adjacent: `uv run pytest -q tests/test_online_eval_fr_o3.py tests/test_rollout_strategies_fr_rl4.py tests/test_us_eval_lab_p0.py tests/test_us_slo_metrics_p1.py tests/test_migration_static.py` -> 41 passed; `create_app()` ok.
   - Not done: pulling traces from the trace table/Langfuse on a schedule, LLM-judge scoring through the gateway, and feeding results into the FR-RL4 promotion decision. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Drift detection (FR-O4) (2026-10-12, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `e2eai.drift` (no DB, no migration): `topic_shift` (Jensen-Shannon divergence base 2 + PSI over topic counts; lists new/vanished topics), `embedding_drift` (centroid cosine distance + spread ratio; dimension mismatch/empty rejected), `quality_decay` (mean-score drop vs `max_drop`, not judged below `min_samples`), and `detect_drift` (runs each signal whose data is present in both windows; only allowlisted keys `topics`/`scores`/`embeddings` are read, raw queries are never echoed).
+  - Route: `POST /api/v1/operate/drift` (evals scope; window size caps; ValueError -> 400).
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_drift_detection_fr_o4.py` -> 5 failed (module missing).
+  - GREEN: same command -> 5 passed. Adjacent: `uv run pytest -q tests/test_drift_detection_fr_o4.py tests/test_online_eval_fr_o3.py tests/test_us_slo_metrics_p1.py tests/test_migration_static.py` -> 36 passed; `create_app()` ok.
+  - Not done: scheduled windows pulled from traces/embeddings tables, persisting drift reports/alerts, Evidently adapter. Heavy full-stack gates intentionally skipped (speed-biased run).
