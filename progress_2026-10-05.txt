@@ -1787,3 +1787,11 @@ HOW TO RESUME
     `cd apps/api && uv run pytest -q tests/test_audit_export_fr_f10.py` -> 2 passed.
     Adjacent regression/app import: `cd apps/api && uv run pytest -q tests/test_audit_export_fr_f10.py tests/test_bot_approval_fr_p4.py tests/test_ai_inventory_fr_p3.py tests/test_migration_static.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 8 passed; app ok.
   - `PRD_CRON_BACKLOG.md` item 49 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Secret/certificate rotation (FR-F17) (2026-10-12, cron batch):
+  - Hermes worked manually for speed (Claude Code not retried after earlier `error_max_turns`). Codex unused.
+  - Added `e2eai.secret_rotation`: `rotate_api_key` (replacement key with same name/scopes, old key expires after a grace window so clients switch with zero downtime), `emergency_revoke_api_key` (effective on next authentication, audited), `generate_secret` (only `[A-Za-z0-9._~-]`, >= 16 chars), `certificate_status` (`expiring` within 14 days, `expired`), and `build_rotation_plan` (dual-key/dual-credential overlap steps, no secret values).
+  - Routes: `POST /api/v1/security/api-keys/{key_id}/rotate`, `.../emergency-revoke` (admin scope), `/certificate-status`, `/rotation-plan`. Audit events `secret.api_key.rotate` / `secret.api_key.emergency_revoke` store only key ids/prefixes, never raw keys.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_secret_rotation_fr_f17.py` -> 5 failed (module missing).
+  - GREEN: same command -> 5 passed. Adjacent: `uv run pytest -q tests/test_secret_rotation_fr_f17.py tests/test_api_keys.py tests/test_audit_export_fr_f10.py tests/test_migration_static.py` -> 18 passed; `create_app()` ok.
+  - ACME auto-renew / DB credential rotation execution against live services remain operational follow-ups (no live stack changes made). Heavy full-stack gates intentionally skipped (speed-biased run).

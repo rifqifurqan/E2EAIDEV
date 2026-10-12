@@ -96,7 +96,7 @@ Rules for every cron tick:
 47. [x] [FR-P4] Approval workflow for high-risk bots. Completed as deterministic/offline bot approval workflow with request/decision records, inventory approval-state sync, safe audit metadata, migration 0024, and API routes; see progress_2026-10-05.txt.
 48. [x] [FR-F6] Air-gapped install bundle. Completed as deterministic/offline air-gap bundle planning slice with pinned image tarball commands, local model mirror plan, offline docs copy plan, floating-image guard, and CLI command; see progress_2026-10-05.txt.
 49. [x] [FR-F10] Audit export to SIEM. Completed as deterministic/offline syslog/OpenTelemetry/webhook payload exporter with cursoring, secret-safe details handling, and API route; see progress_2026-10-05.txt.
-50. [FR-F17] Secret/certificate rotation.
+50. [x] [FR-F17] Secret/certificate rotation. Completed as deterministic/offline slice: API-key rotation with grace overlap, immediate emergency revoke (audited, no raw keys), project-charset secret generator, 14-day certificate expiry status, zero-downtime rotation plan, and 4 admin routes under `/api/v1/security`; see progress_2026-10-05.txt.
 51. [FR-D8] Review owner/review date/expiry lifecycle.
 52. [FR-D10] Dataset/index lineage.
 53. [FR-D13] Legal hold completion for chats and retention interactions.
