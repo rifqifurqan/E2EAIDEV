@@ -47,6 +47,30 @@ REQUIRED_DOCS: dict[str, list[str]] = {
         "Pemantauan",
         "Manajemen Pengguna",
     ],
+    "en/api-reference.md": [
+        "API Reference",
+        "How to regenerate",
+        "Authentication",
+        "Operations by tag",
+    ],
+    "id/referensi-api.md": [
+        "Referensi API",
+        "Cara generate ulang",
+        "Autentikasi",
+        "Operasi berdasarkan tag",
+    ],
+    "en/lab-adapter-developer-guide.md": [
+        "Architecture Rules",
+        "Adapter Contract",
+        "Contract Tests",
+        "No Secrets",
+    ],
+    "id/panduan-developer-adapter-lab.md": [
+        "Aturan Arsitektur",
+        "Kontrak Adapter",
+        "Contract Tests",
+        "No Secrets",
+    ],
 }
 
 RUNBOOK_HEADINGS = ["Symptoms", "Diagnosis", "Fix", "Verification"]

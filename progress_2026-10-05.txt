@@ -1676,3 +1676,17 @@ HOW TO RESUME
     Adjacent regression: `cd cli && uv run pytest -q tests/test_upgrade.py tests/test_wizard.py tests/test_profiles.py` -> 37 passed, 1 skipped.
     Docs validation: `python3 scripts/validate_docs.py` -> PASS.
   - `PRD_CRON_BACKLOG.md` item 39 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Generated OpenAPI/API reference and Lab adapter developer guide (FR-F22) (2026-10-12, cron):
+  - Claude Code was checked first and returned `usage_limit_reached` / weekly limit reset 11am Asia/Jakarta; Hermes continued manually. Codex unused.
+  - Added `scripts/generate_api_reference.py`, which imports the live FastAPI app through the API uv environment and generates `docs/openapi.json`, `docs/en/api-reference.md`, and `docs/id/referensi-api.md` from `app.openapi()`.
+  - Added EN/ID Lab adapter developer guides documenting the FR-F8 adapter contract, required HTTP endpoints (`GET /info`, `GET /health`, `POST /run`), per-tool container isolation, contract tests, and no-secret output rules.
+  - Extended `scripts/validate_docs.py` so FR-F22 API reference and adapter guide files are part of the documentation validation gate.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_docs_fr_f22.py` -> 3 failed because the generated API docs, OpenAPI JSON artifact, and adapter guides did not exist.
+  - GREEN verified:
+    `uv --project apps/api run python scripts/generate_api_reference.py` -> generated docs from 81 OpenAPI paths.
+    `uv --project apps/api run pytest -q apps/api/tests/test_docs_fr_f22.py` -> 3 passed.
+    `python3 scripts/validate_docs.py` -> PASS.
+    `uv --project apps/api run pytest -q apps/api/tests/test_us_tool_adapter_p1.py` -> 8 passed.
+  - `PRD_CRON_BACKLOG.md` item 40 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).
