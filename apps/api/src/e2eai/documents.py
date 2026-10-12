@@ -369,6 +369,7 @@ async def visible_chunks(session: AsyncSession, principals: Iterable[str]) -> li
         .join(Chunk, Chunk.document_id == Document.id)
         .where(
             Document.status == "active",
+            or_(Document.expires_at.is_(None), Document.expires_at > func.now()),  # FR-D8
             Chunk.version_id == Document.current_version_id,
             allowed,
         )
@@ -407,7 +408,9 @@ async def list_documents_view(session: AsyncSession, *, user: User, view: str = 
     if not principal_list:
         return []
     stmt = select(Document.id, Document.title, Document.owner_id, Document.sensitivity).where(
-        Document.status == "active", _visible_document_clause(principal_list)
+        Document.status == "active",
+        or_(Document.expires_at.is_(None), Document.expires_at > func.now()),  # FR-D8
+        _visible_document_clause(principal_list),
     )
     if view == "my_documents":
         stmt = stmt.where(Document.owner_id == user.id)
@@ -473,6 +476,7 @@ async def search_documents(
     effective_status = status or "active"
     filters = [
         Document.status == effective_status,
+        or_(Document.expires_at.is_(None), Document.expires_at > func.now()),  # FR-D8
         _visible_document_clause(principal_list),
         or_(title_match, content_match),
     ]

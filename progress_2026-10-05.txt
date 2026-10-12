@@ -1795,3 +1795,12 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_secret_rotation_fr_f17.py` -> 5 failed (module missing).
   - GREEN: same command -> 5 passed. Adjacent: `uv run pytest -q tests/test_secret_rotation_fr_f17.py tests/test_api_keys.py tests/test_audit_export_fr_f10.py tests/test_migration_static.py` -> 18 passed; `create_app()` ok.
   - ACME auto-renew / DB credential rotation execution against live services remain operational follow-ups (no live stack changes made). Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Document review owner / review date / expiry lifecycle (FR-D8) (2026-10-12, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added nullable `documents.review_owner_id`, `review_at`, `expires_at` (migration `0025_document_lifecycle`, reversible) and `e2eai.doc_lifecycle` (`set_document_lifecycle`, `mark_reviewed`, `list_due_reviews`).
+  - Expired documents are excluded inside the SQL predicates of `retrieve_relevant_chunks`, `visible_chunks`, document views and document search (`expires_at IS NULL OR expires_at > now()`), so there is no existence hint and no post-filtering; extending the expiry restores retrieval.
+  - Routes: `PUT /api/v1/documents/{id}/lifecycle`, `POST /api/v1/documents/{id}/lifecycle/reviewed`, `GET /api/v1/documents/reviews/due`. Only the document owner sets lifecycle; the review owner or document owner marks reviewed. Audit events (`document.lifecycle.set|reviewed`) store only ids/dates, never titles or content.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_doc_lifecycle_review_fr_d8.py` -> 3 failed (module/columns missing).
+  - GREEN: same command -> 3 passed. Adjacent: `uv run pytest -q tests/test_doc_lifecycle_review_fr_d8.py tests/test_us_document_lifecycle.py tests/test_us_document_search_p1.py tests/test_us02_cited_answer.py tests/test_us01_us03_us04_documents.py tests/test_us_hybrid_search_p1.py tests/test_migration_static.py tests/test_documents_migration_static.py` -> 28 passed; `create_app()` ok.
+  - Heavy full-stack gates intentionally skipped (speed-biased run). Scheduled review-reminder notifications remain a follow-up.

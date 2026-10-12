@@ -292,6 +292,7 @@ async def retrieve_relevant_chunks(
     allowed = _visible_document_clause(principal_list)
     filters = [
         Document.status == "active",
+        or_(Document.expires_at.is_(None), Document.expires_at > func.now()),  # FR-D8
         Chunk.version_id == Document.current_version_id,
         ChunkEmbedding.embedding_model == embedder.model,
         allowed,

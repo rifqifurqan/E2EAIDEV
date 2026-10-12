@@ -162,6 +162,10 @@ class Document(Audited, Base):
     status: Mapped[str] = mapped_column(String(16), default="active")
     trashed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     legal_hold: Mapped[bool] = mapped_column(Boolean, default=False)
+    # FR-D8: review owner / next review date / expiry. Expired documents are excluded from retrieval.
+    review_owner_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    review_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # ponytail: plain UUID (no FK) to avoid the documents<->document_versions circular FK; set after the version row exists.
     current_version_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
 
