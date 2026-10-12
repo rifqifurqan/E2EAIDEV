@@ -1855,3 +1855,11 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_load_test_fr_t10.py` -> 5 failed (module missing).
   - GREEN: same command -> 5 passed. Adjacent: `uv run pytest -q tests/test_load_test_fr_t10.py tests/test_bias_fairness_fr_t9.py tests/test_us_benchmark_runner_p1.py tests/test_us_quotas_rate_limits.py tests/test_migration_static.py` -> 23 passed; `create_app()` ok.
   - Not done: actually running k6/guidellm against the live stack (NFR-1/2/4 load gates need Standard-tier hardware); this slice provides the runner, SLO verdict, and script generator. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Rollout strategies shadow/canary/A-B (FR-RL4) (2026-10-12, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `e2eai.rollout` (no DB, no migration): `bucket` (sha256 of salt+subject into 10,000 buckets, so a subject is sticky), `RolloutPlan` + `validate_plan`, `assign` (canary: candidate share = canary_percent; shadow: baseline always served, candidate mirrored for shadow_percent of subjects; ab: weighted split that must sum to 100 over exactly baseline+candidate; feature flag `enabled=False` forces baseline with reason `disabled`), and `evaluate_promotion` (`continue` below min_samples, `rollback` on quality drop or error-rate increase, else `promote`).
+  - Routes: `POST /api/v1/rollouts/assign`, `POST /api/v1/rollouts/promotion` (bots scope). Outputs carry only version labels, arm names and reason codes.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_rollout_strategies_fr_rl4.py` -> 7 failed (module missing).
+  - GREEN: same command -> 7 passed. Adjacent: `uv run pytest -q tests/test_rollout_strategies_fr_rl4.py tests/test_us_release_bundle_p0.py tests/test_us_release_gates_p1.py tests/test_us_bot_environments_p1.py tests/test_migration_static.py` -> 30 passed; `create_app()` ok.
+  - Not done: persisting a rollout plan per bot/environment, calling `assign` in the chat answer path, and automatically feeding online metrics (needs FR-O3). Heavy full-stack gates intentionally skipped (speed-biased run).
