@@ -470,6 +470,21 @@ class FlywheelItem(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class ConnectorDocument(Base):
+    """FR-X1: maps a source-system document (connector + external id) to a local document.
+
+    Metadata only: no credentials, tokens, or source URLs are stored.
+    """
+    __tablename__ = "connector_documents"
+    __table_args__ = (UniqueConstraint("source", "external_id", name="connector_documents_source_external"),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    source: Mapped[str] = mapped_column(String(120))
+    external_id: Mapped[str] = mapped_column(String(300))
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    content_sha256: Mapped[str] = mapped_column(String(64))
+    last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class AIInventoryEntry(Base):
     """FR-P3: AI inventory entry with model-card and system-card metadata.
 
