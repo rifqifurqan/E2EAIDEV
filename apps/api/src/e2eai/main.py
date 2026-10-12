@@ -11,6 +11,7 @@ from .index_lineage import router as index_lineage_router
 from .legal_hold import router as legal_hold_router
 from .model_registry import router as model_registry_router
 from .model_file_security import router as model_file_security_router
+from .bias_fairness import router as bias_fairness_router
 from .auth import router as auth_router
 from .benchmark import router as benchmark_router
 from .bot_approval import router as bot_approval_router
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(legal_hold_router)
     app.include_router(model_registry_router)
     app.include_router(model_file_security_router)
+    app.include_router(bias_fairness_router)
     app.include_router(documents_router)
     app.include_router(retrieval_router)
     app.include_router(evals_router)

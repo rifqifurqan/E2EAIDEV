@@ -1839,3 +1839,11 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_model_file_security_fr_m8.py` -> 5 failed (module missing).
   - GREEN: same command -> 5 passed. Adjacent: `uv run pytest -q tests/test_model_file_security_fr_m8.py tests/test_model_registry_fr_m7.py tests/test_us_tool_catalog_p1.py tests/test_us_malware_scan.py` -> 20 passed; `create_app()` ok.
   - Not done: signature verification is HMAC with a shared key (no PKI/sigstore); wiring the verdict into the model registry/approval flow and the Ollama/vLLM pull path remain follow-ups. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Bias/fairness tests (FR-T9) (2026-10-12, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `e2eai.bias_fairness`: `score_fairness` (per attribute: per-group n / refusal rate / mean score, refusal and score gaps vs thresholds, worst group; single-group attributes are not scored), `counterfactual_pairs` (matched by `pair_id`; flags `refusal_mismatch` and `score_gap`), `evaluate_bias_fairness` (stores an `EvalRun` with adapter `bias-fairness.local`, a safe dataset with only attribute/group labels). Refusal detection reuses the FR-T8 EN/ID `is_refusal`. Thresholds outside [0, 1] are rejected (400 via API).
+  - Route: `POST /api/v1/evals/bias-fairness` (evals scope, request quota enforced). Stored metrics/item_results hold only labels, rates, and pair ids; prompts and responses are never persisted.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_bias_fairness_fr_t9.py` -> 5 failed (module missing).
+  - GREEN: same command -> 5 passed. Adjacent: `uv run pytest -q tests/test_bias_fairness_fr_t9.py tests/test_us_security_red_team_p1.py tests/test_us_eval_lab_p0.py tests/test_us_judging_modes_p1.py tests/test_migration_static.py` -> 32 passed; `create_app()` ok.
+  - Not done: real DeepEval bias / model-driven demographic probes (boundary metadata only), statistical significance testing, Indonesian-specific bias sets. Heavy full-stack gates intentionally skipped (speed-biased run).
