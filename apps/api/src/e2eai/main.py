@@ -14,6 +14,7 @@ from .model_file_security import router as model_file_security_router
 from .bias_fairness import router as bias_fairness_router
 from .load_test import router as load_test_router
 from .rollout import router as rollout_router
+from .online_eval import router as online_eval_router
 from .auth import router as auth_router
 from .benchmark import router as benchmark_router
 from .bot_approval import router as bot_approval_router
@@ -64,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(bias_fairness_router)
     app.include_router(load_test_router)
     app.include_router(rollout_router)
+    app.include_router(online_eval_router)
     app.include_router(documents_router)
     app.include_router(retrieval_router)
     app.include_router(evals_router)

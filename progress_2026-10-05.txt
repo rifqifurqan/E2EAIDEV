@@ -1863,3 +1863,11 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_rollout_strategies_fr_rl4.py` -> 7 failed (module missing).
   - GREEN: same command -> 7 passed. Adjacent: `uv run pytest -q tests/test_rollout_strategies_fr_rl4.py tests/test_us_release_bundle_p0.py tests/test_us_release_gates_p1.py tests/test_us_bot_environments_p1.py tests/test_migration_static.py` -> 30 passed; `create_app()` ok.
   - Not done: persisting a rollout plan per bot/environment, calling `assign` in the chat answer path, and automatically feeding online metrics (needs FR-O3). Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Online evaluation on sampled production traffic (FR-O3) (2026-10-12, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `e2eai.online_eval`: `should_sample` (sticky salted-hash sampling reusing the FR-RL4 bucketing; rate outside [0, 1] rejected), `heuristic_score` (unanswered = 0.0; -0.4 for no citation; -0.4 for thumbs-down; flags `unanswered` / `no_citation` / `negative_feedback`), `run_online_eval` (aggregates n and mean score per bot version, flag counts, up to 100 flagged trace ids, alert `mean_quality_below_threshold` when the mean falls under `min_quality`; scorer is injectable), and `evaluate_online_traffic` (stores an `EvalRun` with adapter `online-eval.local`).
+  - Route: `POST /api/v1/evals/online` (evals scope + request quota). The route keeps only the allowlisted keys `trace_id`, `bot_version`, `answered`, `has_citation`, `feedback`; prompts, answers, and user ids are dropped before processing and never stored.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_online_eval_fr_o3.py` -> 4 failed (module missing).
+  - GREEN: same command -> 4 passed. Adjacent: `uv run pytest -q tests/test_online_eval_fr_o3.py tests/test_rollout_strategies_fr_rl4.py tests/test_us_eval_lab_p0.py tests/test_us_slo_metrics_p1.py tests/test_migration_static.py` -> 41 passed; `create_app()` ok.
+  - Not done: pulling traces from the trace table/Langfuse on a schedule, LLM-judge scoring through the gateway, and feeding results into the FR-RL4 promotion decision. Heavy full-stack gates intentionally skipped (speed-biased run).
