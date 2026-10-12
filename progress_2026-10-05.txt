@@ -1739,3 +1739,15 @@ HOW TO RESUME
     `cd apps/api && uv run pytest -q tests/test_bot_risk_fr_p2.py` -> 2 passed.
     Adjacent regression/app import: `cd apps/api && uv run pytest -q tests/test_bot_risk_fr_p2.py tests/test_us_release_gates_p1.py tests/test_us_release_bundle_p0.py tests/test_migration_static.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 19 passed; app ok.
   - `PRD_CRON_BACKLOG.md` item 45 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- AI inventory with model cards/system cards (FR-P3) (2026-10-12, cron):
+  - Claude Code was tried first and reached `error_max_turns` after writing the failing test; Hermes continued manually for speed. Codex unused.
+  - Added `AIInventoryEntry` ORM model and migration `0023_ai_inventory` for bot/model governance inventory entries with owner, risk tier, status, approval status, model card, and system card metadata.
+  - Added `e2eai.ai_inventory` service/API slice and `PUT/GET /api/v1/governance/ai-inventory`; bot entries derive owner/name/risk from the bot and FR-P2 classification, while model entries can be registered independently.
+  - Cards and audit events are secret-safe: prompt/trace/document/credential keys are dropped, credential-like scalar values are redacted, and audit metadata stores only card keys/status/risk/kind.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_ai_inventory_fr_p3.py` -> 3 failed (`ModuleNotFoundError: No module named 'e2eai.ai_inventory'` and route missing).
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_ai_inventory_fr_p3.py` -> 3 passed.
+    Adjacent regression/app import: `cd apps/api && uv run pytest -q tests/test_ai_inventory_fr_p3.py tests/test_bot_risk_fr_p2.py tests/test_us_release_gates_p1.py tests/test_migration_static.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 18 passed; app ok.
+  - `PRD_CRON_BACKLOG.md` item 46 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).

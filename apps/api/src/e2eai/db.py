@@ -362,6 +362,35 @@ class BotRiskClassification(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class AIInventoryEntry(Base):
+    """FR-P3: AI inventory entry with model-card and system-card metadata.
+
+    Stores safe governance metadata for a bot/system or standalone model. Cards
+    deliberately avoid prompts, traces, document text, credentials, and raw user
+    data; service helpers sanitize input before persisting.
+    """
+    __tablename__ = "ai_inventory_entries"
+    __table_args__ = (
+        CheckConstraint("kind in ('bot', 'model')", name="ai_inventory_entries_kind"),
+        CheckConstraint("status in ('draft', 'active', 'retired')", name="ai_inventory_entries_status"),
+        CheckConstraint("approval_status in ('not_required', 'pending', 'approved', 'rejected')", name="ai_inventory_entries_approval_status"),
+        Index("ai_inventory_entries_kind_name", "kind", "name"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    kind: Mapped[str] = mapped_column(String(16))
+    bot_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("bots.id", ondelete="CASCADE"), unique=True)
+    name: Mapped[str] = mapped_column(String(200))
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    risk_tier: Mapped[str] = mapped_column(String(32), default="minimal")
+    status: Mapped[str] = mapped_column(String(16), default="draft")
+    approval_status: Mapped[str] = mapped_column(String(16), default="not_required")
+    model_card: Mapped[dict] = mapped_column(JSONB, default=dict)
+    system_card: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_by: Mapped[str | None] = mapped_column(String(80))
+
+
 class BotScope(Base):
     """Knowledge scope entries for a bot. Effective retrieval = bot scope ∩ user permissions."""
     __tablename__ = "bot_scopes"
