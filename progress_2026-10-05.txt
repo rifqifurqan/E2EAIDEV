@@ -1822,3 +1822,12 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_legal_hold_fr_d13.py` -> 3 failed (module/column missing).
   - GREEN: same command -> 3 passed. Adjacent: `uv run pytest -q tests/test_legal_hold_fr_d13.py tests/test_us_chat_conversations.py tests/test_us_document_lifecycle.py tests/test_us13_offboarding.py tests/test_index_lineage_fr_d10.py tests/test_migration_static.py` -> 27 passed; `create_app()` ok.
   - Scheduling the sweep as a Celery beat job and DSR (data-subject request) interaction remain follow-ups. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Model registry with lineage/eval scores/approval status (FR-M7) (2026-10-12, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `ModelRegistryEntry` ORM model and reversible migration `0028_model_registry` (unique name+version, approval_status check). `e2eai.model_registry`: `register_model_version` (sanitized lineage via the FR-P3 safe-card filter, parent version must exist, duplicate -> 409), `attach_eval_run` (snapshots numeric metrics only from an existing `EvalRun`), `decide_approval` (admin only; approval needs >= 1 eval score else 409), `get_lineage_chain`, `list_models`.
+  - Routes: `GET/POST /api/v1/model-registry`, `POST .../{name}/{version}/eval-runs`, `POST .../{name}/{version}/decision` (admin scope), `GET .../{name}/{version}/lineage`. Audit events store only names/versions/run ids/decisions, never lineage values or scores.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_model_registry_fr_m7.py` -> 3 failed (module/model missing).
+  - GREEN: same command -> 3 passed. Adjacent: `uv run pytest -q tests/test_model_registry_fr_m7.py tests/test_ai_inventory_fr_p3.py tests/test_us_eval_lab_p0.py tests/test_legal_hold_fr_d13.py tests/test_migration_static.py` -> 13 passed; `create_app()` ok.
+  - NOTE: the very first combined adjacent run had 1 failure in `test_eval_scores_from_runs_and_approval_requires_scores_and_admin` that I could not capture or reproduce; 10 subsequent runs of the same commands (4x the 5-file set, 6x the 3-file set) all passed. Possible Windows/asyncpg event-loop flake (see agentic-code-delivery references/python-async-db-tests.md); worth watching.
+  - MLflow integration and linking registry entries to bot bundles remain follow-ups. Heavy full-stack gates intentionally skipped (speed-biased run).
