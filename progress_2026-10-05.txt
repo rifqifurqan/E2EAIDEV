@@ -1651,3 +1651,16 @@ HOW TO RESUME
     `cd cli && uv run pytest -q tests/test_wizard.py::test_litellm_config_hardens_virtual_keys_with_budget_caps tests/test_wizard.py::test_litellm_config_adds_budget_checked_chat_fallbacks` -> 2 passed.
     Adjacent regression/config validation: `cd cli && uv run pytest -q tests/test_wizard.py tests/test_models.py tests/test_profiles.py && cd ../deploy/compose && docker compose config --quiet` -> 43 passed, 1 skipped; compose config OK.
   - `PRD_CRON_BACKLOG.md` item 37 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- In-app notification types completion (FR-F11) (2026-10-12, cron):
+  - Claude Code was tried first and returned a Pro usage limit (`You've hit your limit`, reset 11am Asia/Jakarta); Hermes continued manually. Codex unused.
+  - Added `e2eai.notifications` service helpers and `/api/v1/notifications` API boundary for safe in-app `review.assigned`, `release.approved`, and `incident.raised` notifications; email delivery remains P2.
+  - Notification details are limited to routing metadata (IDs, titles/names, severity/status, version, actor IDs), skip inactive users and actor self-notifications, and ignore unsafe raw prompt/trace/description kwargs so secrets/content are not stored in notification payloads.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_us_notifications_fr_f11.py` -> failed at collection with `ModuleNotFoundError: No module named 'e2eai.notifications'`.
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_us_notifications_fr_f11.py` -> 2 passed.
+    Adjacent regression: `cd apps/api && uv run pytest -q tests/test_us_notifications_fr_f11.py tests/test_us_sharing_views_notifications.py tests/test_us_slo_metrics_p1.py::test_slo_alert_notifications_delivered_to_admin_evaluator_only tests/test_finops_p1.py::test_finops_budget_alert_notifications_delivered_to_admin_evaluator_only` -> 9 passed.
+    App/router import smoke: `cd apps/api && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> app ok.
+  - Docker Desktop was unavailable at first (`dockerDesktopLinuxEngine` pipe missing); started Docker Desktop and compose infra, then reran the focused DB-backed tests successfully.
+  - `PRD_CRON_BACKLOG.md` item 38 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).

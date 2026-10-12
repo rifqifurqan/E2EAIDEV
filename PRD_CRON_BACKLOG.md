@@ -80,7 +80,7 @@ Rules for every cron tick:
    - [x] Project containers and project-scoped role grant boundary: `Project` ORM/migration, nullable `UserRole.project_id`, and safe role-scope helpers. See progress_2026-10-05.txt.
    - [x] Admin/service CRUD for divisions, teams, users, memberships, role grants, and project ownership. See progress_2026-10-05.txt.
 37. [x] [FR-F7] Harden LiteLLM gateway virtual keys/budgets/fallbacks beyond current baseline. Completed as deterministic wizard/config hardening: DB-backed key management, upper/default virtual-key budgets, key alias pattern, fallback model access/budget enforcement, and generated chat fallback chains. See progress_2026-10-05.txt.
-38. [FR-F11] Finish remaining in-app notification types: review assigned, release approved, incident raised; email stays P2.
+38. [x] [FR-F11] Finish remaining in-app notification types: review assigned, release approved, incident raised; email stays P2. Completed as safe in-app notification service + API boundary for review.assigned/release.approved/incident.raised; see progress_2026-10-05.txt.
 39. [FR-F16] Upgrade procedure P2 prep: pre-upgrade backup, health check, rollback notes/tests.
 40. [FR-F22] P1 docs: generated OpenAPI/API reference and Lab adapter developer guide.
 41. [FR-F21] P1 export from UI for configuration-as-code.
