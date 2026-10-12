@@ -9270,6 +9270,27 @@
         ]
       }
     },
+    "/api/v1/metrics": {
+      "get": {
+        "operationId": "metrics_api_api_v1_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Metrics Api",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
     "/api/v1/model-registry": {
       "get": {
         "operationId": "list_models_api_api_v1_model_registry_get",
