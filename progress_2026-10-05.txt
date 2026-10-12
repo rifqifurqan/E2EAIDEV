@@ -1727,3 +1727,15 @@ HOW TO RESUME
     `cd apps/api && uv run pytest -q tests/test_use_case_intake_fr_p1.py` -> 3 passed.
     Adjacent regression/app import: `cd apps/api && uv run pytest -q tests/test_use_case_intake_fr_p1.py tests/test_us_system_registration_p1.py tests/test_us_release_gates_p1.py tests/test_migration_static.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 24 passed; app ok.
   - `PRD_CRON_BACKLOG.md` item 44 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- AI risk classification per bot (FR-P2) (2026-10-12, cron):
+  - Claude Code had already been tried this run and hit `error_max_turns`; Hermes continued manually for speed. Codex unused.
+  - Added `BotRiskClassification` ORM model and migration `0022_bot_risk_classification` for EU AI Act tier, NIST AI RMF profile metadata, UU PDP impact summary/level, and tier-derived release-gate requirements.
+  - Added `e2eai.bot_risk` service/API slice and `PUT /api/v1/bots/{bot_id}/risk-classification`; high-risk bots map to eval threshold 0.8, zero permission leaks, red-team pass rate 0.95, human sign-off, and compliance sign-off required.
+  - Audit events store safe metadata only: tier, PDP impact level, and gate keys, never raw prompts, traces, documents, or data-impact text.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_bot_risk_fr_p2.py` -> 2 failed (`ModuleNotFoundError: No module named 'e2eai.bot_risk'` and route missing).
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_bot_risk_fr_p2.py` -> 2 passed.
+    Adjacent regression/app import: `cd apps/api && uv run pytest -q tests/test_bot_risk_fr_p2.py tests/test_us_release_gates_p1.py tests/test_us_release_bundle_p0.py tests/test_migration_static.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 19 passed; app ok.
+  - `PRD_CRON_BACKLOG.md` item 45 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).

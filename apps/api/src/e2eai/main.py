@@ -8,6 +8,7 @@ from .benchmark import router as benchmark_router
 from .config_export import router as config_export_router
 from .doc_understanding import router as doc_understanding_router
 from .bot_release import router as bot_router
+from .bot_risk import router as bot_risk_router
 from .chat import router as chat_router
 from .documents import router as documents_router
 from .eval_lab import router as evals_router
@@ -36,6 +37,7 @@ def create_app() -> FastAPI:
     install(app)
     app.include_router(auth_router)
     app.include_router(bot_router)
+    app.include_router(bot_risk_router)
     app.include_router(chat_router)
     app.include_router(config_export_router)
     app.include_router(documents_router)

@@ -344,6 +344,24 @@ class BotGrant(Base):
     level: Mapped[str] = mapped_column(String(32), default="user")
 
 
+class BotRiskClassification(Base):
+    """FR-P2: AI risk classification per bot.
+
+    Stores EU AI Act tier, NIST AI RMF profile metadata, UU PDP impact summary,
+    and the release-gate requirements derived from the risk tier. No raw prompts,
+    traces, documents, credentials, or user-data samples are stored here.
+    """
+    __tablename__ = "bot_risk_classifications"
+    bot_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bots.id", ondelete="CASCADE"), primary_key=True)
+    eu_ai_act_tier: Mapped[str] = mapped_column(String(32))
+    nist_ai_rmf_profile: Mapped[dict] = mapped_column(JSONB, default=dict)
+    uu_pdp_data_impact: Mapped[str] = mapped_column(Text, default="")
+    pdp_impact_level: Mapped[str] = mapped_column(String(32), default="none")
+    required_release_gates: Mapped[dict] = mapped_column(JSONB, default=dict)
+    classified_by: Mapped[str | None] = mapped_column(String(80))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class BotScope(Base):
     """Knowledge scope entries for a bot. Effective retrieval = bot scope ∩ user permissions."""
     __tablename__ = "bot_scopes"

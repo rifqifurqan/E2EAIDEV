@@ -91,7 +91,7 @@ Rules for every cron tick:
 
 ### H. P2 compliance / enterprise / connectors after P1 queue
 44. [x] [FR-P1] Use-case intake form. Completed as deterministic/offline Plan-stage intake API/service slice capturing problem, users, task-success/deflection/time-saved metrics, data sources, and systems to integrate with safe audit metadata; see progress_2026-10-05.txt.
-45. [FR-P2] AI risk classification per bot.
+45. [x] [FR-P2] AI risk classification per bot. Completed as deterministic/offline bot risk classification slice with EU AI Act tier, NIST AI RMF profile, UU PDP impact level, derived release-gate requirements, safe audit metadata, and API route; see progress_2026-10-05.txt.
 46. [FR-P3] AI inventory with model cards/system cards.
 47. [FR-P4] Approval workflow for high-risk bots.
 48. [FR-F6] Air-gapped install bundle.
