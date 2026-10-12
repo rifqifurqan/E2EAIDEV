@@ -83,6 +83,7 @@ REQUIRED_RUNBOOKS: list[str] = [
     "runbooks/permission-sync-lag.md",
     "runbooks/disk-full.md",
     "runbooks/leaked-key.md",
+    "runbooks/gpu-out-of-memory.md",
 ]
 
 

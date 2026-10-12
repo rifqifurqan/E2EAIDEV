@@ -322,6 +322,7 @@ See the [runbooks directory](../runbooks/) for incident response:
 - [Permission Sync Lag](../runbooks/permission-sync-lag.md)
 - [Disk Full](../runbooks/disk-full.md)
 - [Leaked Key](../runbooks/leaked-key.md)
+- [GPU Out of Memory](../runbooks/gpu-out-of-memory.md)
 
 ---
 

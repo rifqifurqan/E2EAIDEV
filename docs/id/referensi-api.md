@@ -6,8 +6,8 @@ Requirement: FR-F22 (referensi API P1).
 
 Judul API: E2EAIDEV API
 Versi API: 0.1.0
-Total path: 148
-Total operasi: 158
+Total path: 150
+Total operasi: 160
 
 ## Cara generate ulang
 
@@ -37,6 +37,18 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 
 - Ringkasan: Apply Api
 - Operation ID: `apply_api_api_v1_admin_connector_templates__template_id__apply_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/admin/model-endpoints/playground
+
+- Ringkasan: Playground Api
+- Operation ID: `playground_api_api_v1_admin_model_endpoints_playground_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/admin/model-endpoints/register
+
+- Ringkasan: Register Api
+- Operation ID: `register_api_api_v1_admin_model_endpoints_register_post`
 - Kode status respons: 200, 422
 
 #### POST /api/v1/admin/org/divisions

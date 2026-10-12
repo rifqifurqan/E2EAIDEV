@@ -6,8 +6,8 @@ Requirement: FR-F22 (P1 API reference).
 
 API title: E2EAIDEV API
 API version: 0.1.0
-Total paths: 148
-Total operations: 158
+Total paths: 150
+Total operations: 160
 
 ## How to regenerate
 
@@ -37,6 +37,18 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: Apply Api
 - Operation ID: `apply_api_api_v1_admin_connector_templates__template_id__apply_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/admin/model-endpoints/playground
+
+- Summary: Playground Api
+- Operation ID: `playground_api_api_v1_admin_model_endpoints_playground_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/admin/model-endpoints/register
+
+- Summary: Register Api
+- Operation ID: `register_api_api_v1_admin_model_endpoints_register_post`
 - Response status codes: 200, 422
 
 #### POST /api/v1/admin/org/divisions

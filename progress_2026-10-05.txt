@@ -2028,3 +2028,12 @@ HOW TO RESUME
   - Deferred FR-RL3 because GitHub workflow-file work needs CI/deploy decisions and a token with `workflow` scope; current `gh auth status` shows repo/read:org/gist only.
   - Deferred FR-X3 real external OAuth provider integration because it needs external IdP/OAuth provider setup and credentials; the deterministic delegated-identity/token-exchange boundary remains the verified local implementation.
   - Verification: backlog parser found zero unfinished non-deferred entries; no code tests were run because this was backlog/progress metadata only.
+
+- GPU out-of-memory runbook + API reference refresh (FR-O13, FR-F22) (2026-10-13, cron):
+  - PRD audit found the FR-O13 minimum runbook set was missing "GPU out of memory" (7 of 8 existed).
+  - TDD / RED: added `runbooks/gpu-out-of-memory.md` to `REQUIRED_RUNBOOKS` in `scripts/validate_docs.py` -> `python scripts/validate_docs.py` FAIL (missing file).
+  - GREEN: `RUNBOOK_GPU_OOM` added to `scripts/generate_docs.py` (symptoms -> diagnosis -> fix -> verification -> escalation, no secrets), generated `docs/runbooks/gpu-out-of-memory.md`, linked from EN/ID admin guides -> validator PASS.
+  - Regenerated `docs/openapi.json`, `docs/en/api-reference.md`, `docs/id/referensi-api.md` (150 paths) via `uv --project apps/api run python scripts/generate_api_reference.py`; this fixed `test_openapi_json_artifact_matches_live_schema`, which was already failing on clean HEAD because the artifact was stale.
+  - Note: re-running `generate_docs.py` overwrites the admin guides and drops the manually added Prompt Registry section; only the runbook link lines were patched into the guides here.
+  - Tests: `python scripts/validate_docs.py` PASS; `cd apps/api && uv run pytest -q tests/test_docs_fr_f22.py` -> 3 passed. Heavy gates intentionally skipped.
+  - Remaining unmapped runbook gap: FR-O13 runbooks not yet exercised in a staging drill (needs a staging environment).

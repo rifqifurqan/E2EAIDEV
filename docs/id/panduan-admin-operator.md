@@ -321,6 +321,7 @@ Lihat [direktori runbook](../runbooks/) untuk prosedur respons insiden:
 - [Lag Sinkronisasi Izin](../runbooks/permission-sync-lag.md)
 - [Disk Penuh](../runbooks/disk-full.md)
 - [Kunci Bocor](../runbooks/leaked-key.md)
+- [GPU Kehabisan Memori](../runbooks/gpu-out-of-memory.md)
 
 ---
 

@@ -1855,6 +1855,66 @@
         "title": "MessageIn",
         "type": "object"
       },
+      "ModelEndpointIn": {
+        "properties": {
+          "api_key_ref": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key Ref"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "id": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "model": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "role": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "provider",
+          "model"
+        ],
+        "title": "ModelEndpointIn",
+        "type": "object"
+      },
       "OnlineEvalIn": {
         "properties": {
           "dataset_id": {
@@ -1902,6 +1962,34 @@
           "traces"
         ],
         "title": "OnlineEvalIn",
+        "type": "object"
+      },
+      "PlaygroundIn": {
+        "properties": {
+          "model": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "prompt": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "role": {
+            "default": "chat",
+            "maxLength": 30,
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "prompt"
+        ],
+        "title": "PlaygroundIn",
         "type": "object"
       },
       "PostmortemIn": {
@@ -3993,6 +4081,92 @@
           }
         },
         "summary": "Apply Api",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/model-endpoints/playground": {
+      "post": {
+        "operationId": "playground_api_api_v1_admin_model_endpoints_playground_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaygroundIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Playground Api Api V1 Admin Model Endpoints Playground Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Playground Api",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/model-endpoints/register": {
+      "post": {
+        "operationId": "register_api_api_v1_admin_model_endpoints_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelEndpointIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Register Api Api V1 Admin Model Endpoints Register Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register Api",
         "tags": [
           "admin"
         ]
