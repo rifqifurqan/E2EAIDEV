@@ -144,6 +144,8 @@ Rules for every cron tick:
 
 85. [x] [NFR-10] Data-subject requests (export / erase a person's data). Completed as `data_subject.py` (admin-only; erase requires offboarded user, blocked by legal hold, pseudonymises profile, audit retained) and 2 routes under `/api/v1/privacy`; see progress_2026-10-05.txt. Follow-up: traces/vectors erasure, self-service, request ledger with deadlines.
 
+86. [x] [NFR-12] No outbound telemetry by default (LiteLLM, vLLM, TEI). Completed as config/compose opt-outs with tests; see progress_2026-10-05.txt. Follow-up: web (Next.js) and other services, live egress-block verification.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.

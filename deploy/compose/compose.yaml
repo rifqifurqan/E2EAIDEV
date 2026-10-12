@@ -97,6 +97,10 @@ services:
     profiles: [vllm]
     image: ${E2EAI_IMAGE_VLLM:-}
     command: ["--model", "${VLLM_MODEL:-}", "--host", "0.0.0.0", "--port", "8000", "--api-key", "${VLLM_API_KEY:-}"]
+    environment:  # NFR-12: no usage stats or telemetry
+      VLLM_NO_USAGE_STATS: "1"
+      DO_NOT_TRACK: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
     volumes: [vllmcache:/root/.cache/huggingface]
     ports: ["${BIND_ADDRESS}:${VLLM_PORT:-18083}:8000"]
     ipc: host
@@ -106,7 +110,7 @@ services:
     profiles: [tei-embed]
     image: ${E2EAI_IMAGE_TEI:-}
     command: ["--model-id", "${TEI_EMBED_MODEL}"]
-    environment: {API_KEY: "${TEI_API_KEY}"}
+    environment: {API_KEY: "${TEI_API_KEY}", HF_HUB_DISABLE_TELEMETRY: "1"}
     volumes: [teidata:/data]
     ports: ["${BIND_ADDRESS}:${TEI_EMBED_PORT}:80"]
     restart: unless-stopped
@@ -118,7 +122,7 @@ services:
     profiles: [tei-rerank]
     image: ${E2EAI_IMAGE_TEI:-}
     command: ["--model-id", "${TEI_RERANK_MODEL}"]
-    environment: {API_KEY: "${TEI_API_KEY}"}
+    environment: {API_KEY: "${TEI_API_KEY}", HF_HUB_DISABLE_TELEMETRY: "1"}
     volumes: [teidata:/data]
     ports: ["${BIND_ADDRESS}:${TEI_RERANK_PORT}:80"]
     restart: unless-stopped

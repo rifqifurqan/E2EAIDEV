@@ -174,6 +174,7 @@ def render_litellm_config(a: dict, catalog: dict[str, Model]) -> str:
         model_names.append(name)
     litellm_settings = {
         "drop_params": True,
+        "telemetry": False,  # NFR-12: no outbound telemetry by default
         "upperbound_key_generate_params": dict(LITELLM_KEY_UPPERBOUND),
         "default_key_generate_params": _virtual_key_defaults(model_names),
         "key_alias_pattern": LITELLM_KEY_ALIAS_PATTERN,
