@@ -41,7 +41,7 @@ Rules for every cron tick:
    - [x] Add real MCP client execution behind delegated identity once FR-X3 is in progress: MCPClient protocol + MCPClientExecutor boundary, intended to be wrapped by DelegatedExecutor so user-data calls validate delegated/token-exchange identity before execution. See progress_2026-10-05.txt.
 15. [x] [FR-X3] AI acts as the real user using delegated identity/token exchange.
    - [x] Deterministic/offline delegated-identity boundary: AuthMode enum (DELEGATED/TOKEN_EXCHANGE/SERVICE_ACCOUNT), DelegatedIdentityContext (safe metadata only, no raw tokens), validate_identity_for_user_data (rejects SERVICE_ACCOUNT, rejects empty user_id), DelegatedExecutor wrapping Executor protocol, safe audit metadata, McpToolCall auth_mode + acting_user_id persistence, API validation route. See progress_2026-10-05.txt.
-   - [ ] Real external OAuth provider / token exchange integration (deferred: requires external IdP setup).
+   - Deferred to Z: real external OAuth provider / token exchange integration requires external IdP setup and credentials.
 16. [x] [FR-X4] Admin flow to register a system, upload OpenAPI spec, choose endpoints, configure auth, test, and grant roles. Completed as deterministic/offline admin flow boundary with SystemRegistration/SystemGrant DB models, migration 0019, 6 admin API routes, and safe output contracts. See progress_2026-10-05.txt.
 17. [x] [FR-X5] Read-only by default; write actions require explicit confirmation and audit. Completed as deterministic/offline write-confirmation flow: confirm/deny pending tool calls, safe audit, API route. See progress_2026-10-05.txt.
 18. [x] [FR-X6] Answers combine documents and live data with citations for document pages and system record IDs. Completed as deterministic combined-citation builder merging doc citations (source=document, page, section) and executed live MCP tool-call citations (source=live_system, system_id, operation_id, record_id when present). See progress_2026-10-05.txt.
@@ -126,6 +126,7 @@ Rules for every cron tick:
 
 ### Z. Deferred until CI/deploy is needed
 75. [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
+76. [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.
 
 ## Notes
 - Items already completed before this file should not be repeated; cron must verify and skip them.

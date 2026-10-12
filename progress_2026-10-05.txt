@@ -1998,3 +1998,9 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_advanced_rag_fr_r9.py` -> 7 failed (module missing).
   - GREEN: same command -> 7 passed. Docs regenerated via `scripts/generate_api_reference.py`.
   - Not done: wiring routing/graph expansion into `answer_question`, LLM-based entity extraction, persistent graph index, true multimodal embeddings (image/chart vectors). Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Backlog deferral cleanup (FR-X3 / FR-RL3) (2026-10-13, cron):
+  - Audited `PRD_CRON_BACKLOG.md` top-down after item 74 and found no remaining actionable local code slices.
+  - Moved the remaining FR-X3 external OAuth/token-exchange provider integration out of the active queue and into the deferred section because it requires external IdP/OAuth setup and credentials.
+  - Remaining deferred items are FR-X3 real external OAuth provider integration and FR-RL3 CI integration; both need external setup/permissions before implementation can resume.
+  - Verification: `python` backlog scan -> zero `- [ ]` active backlog entries; no code tests were run because this was backlog/progress metadata only.
