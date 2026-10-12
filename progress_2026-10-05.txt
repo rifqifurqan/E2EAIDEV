@@ -1935,3 +1935,11 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_scim_org_sync_fr_s8.py` -> import failures (module missing).
   - GREEN: same command -> 5 passed. Adjacent: `uv run pytest -q tests/test_scim_org_sync_fr_s8.py tests/test_us13_offboarding.py tests/test_migration_static.py` -> passed; `create_app()` ok.
   - Not done: a standards-compliant SCIM 2.0 server surface (`/Users`, `/Groups`, PATCH ops, ServiceProviderConfig, dedicated SCIM bearer token), IdP-specific wiring (Entra/Okta/Keycloak), manager attribute sync, revoking API keys/delegated tokens (still the FR-F18 placeholder). Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Role-based learning paths (FR-E4) (2026-10-12, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `e2eai.learning_paths` (no DB, no migration): 5 PRD roles (`ai-engineer`, `evaluator`, `ai-pm`, `compliance`, `platform`), each 4 ordered EN/ID steps tied to a lifecycle stage; steps reference FR-E3 scenarios (tests assert every `scenario_id` resolves). `path_progress` is stateless: it takes completed step ids, ignores unknown ids and duplicates, and returns completed/total/percent/next step.
+  - Routes (any authenticated session): GET `/api/v1/learn/paths`, GET `/{path_id}`, POST `/{path_id}/progress`.
+  - TDD note (deviation): the module was written before the RED run, so the RED run only failed on the route-wiring test (3 other tests passed immediately). The tests were written first and assert the behavior; this slice did not get a clean module-missing RED.
+  - GREEN: `cd apps/api && uv run pytest -q tests/test_learning_paths_fr_e4.py tests/test_guided_scenarios_fr_e3.py tests/test_migration_static.py` -> 11 passed; `create_app()` ok.
+  - Not done: web UI for paths, per-learner persisted progress, links into real doc pages. Heavy full-stack gates intentionally skipped (speed-biased run).

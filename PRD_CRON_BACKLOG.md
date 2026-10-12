@@ -122,7 +122,7 @@ Rules for every cron tick:
 71. [FR-R10] Structured-data questions over spreadsheets/CSV with computation.
 72. [FR-B5] Agent workflows and trajectory evaluation.
 73. [FR-O10] GPU scheduling/sharing.
-74. [FR-E4] Role-based learning paths.
+74. [x] [FR-E4] Role-based learning paths. Completed as static bilingual `learning_paths.py` (AI engineer, evaluator, AI PM, compliance, platform; steps tied to lifecycle stages and FR-E3 scenarios, stateless progress calculator) + 3 routes under `/api/v1/learn/paths`; see progress_2026-10-05.txt. Web UI and per-learner stored progress remain follow-ups.
 
 ### Z. Deferred until CI/deploy is needed
 75. [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
