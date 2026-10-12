@@ -54,6 +54,7 @@ Rules for every cron tick:
 22. [x] [FR-M3] Model routing: simple queries to small model, complex to large model, rules/classifier, fallback. Completed: deterministic/offline query complexity classifier + small/large routing with large-model fallback. See progress_2026-10-05.txt.
 23. [x] [FR-M4] Semantic/prompt caching keyed on permission set. Completed: safe `semantic_cache.py` permission-set hash/key helpers, in-memory semantic/prompt cache boundary, optional answer-path cache hit/miss wiring, and safe audit metadata; cache entries never cross permission principal sets. See progress_2026-10-05.txt.
 24. [x] [FR-M2] vLLM serving engine selectable for GPU profile, behind the serving interface. Completed: vLLM catalog `served_by`, GPU-only fit gate, wizard/env/config support, pinned compose vLLM service, GPU compose reservation, and LiteLLM OpenAI-compatible routing. See progress_2026-10-05.txt.
+24.1. [x] [FR-M1] Register model endpoints and test them through the gateway/playground. Completed as secret-safe LiteLLM registration payload builder plus admin playground probe API; see progress_2026-10-05.txt.
 
 ### E. Data/document P1
 25. [x] [FR-D7] Data quality checks: duplicate/near-duplicate detection, stale documents, unparseable files. Completed: pure/offline title duplicate + near-duplicate checks, stale document freshness check, and unparseable status/error detection. See progress_2026-10-05.txt.

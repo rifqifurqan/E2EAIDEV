@@ -2012,3 +2012,12 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_us_upload_ingest.py::test_s3_storage_uses_seaweedfs_compatible_bucket_and_content_addressed_keys` -> failed during import because `S3ObjectStorage` was missing.
   - GREEN: same command -> 1 passed. Adjacent: `cd apps/api && uv run pytest -q tests/test_us_upload_ingest.py tests/test_us_document_lifecycle.py` -> 12 passed.
   - `PRD_CRON_BACKLOG.md` item 12 marked done. Heavy full-stack/live SeaweedFS smoke intentionally skipped in this speed-biased cron run.
+
+- Model endpoint registration and playground probe (FR-M1) (2026-10-13, cron):
+  - Hermes worked manually after the earlier Claude Code `error_max_turns`; Codex unused.
+  - Added `e2eai.model_endpoints`: `register_model_endpoint` validates local Ollama/vLLM and external OpenAI/Anthropic/Gemini endpoint specs, rejects raw `api_key`, requires `api_key_ref=env:NAME` for external models, and returns a safe LiteLLM registration payload.
+  - Added `test_model_endpoint`, a secret-safe OpenAI-compatible gateway probe for chat/vision/reranker-style chat completion and embedding endpoints; the safe result does not echo the prompt or gateway key.
+  - Routes: `POST /api/v1/admin/model-endpoints/register` and `/playground` (admin scope), wired into FastAPI.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_model_endpoints_fr_m1.py` -> 4 failed (module/routes missing).
+  - GREEN: same command -> 4 passed. Adjacent: `cd apps/api && uv run pytest -q tests/test_model_endpoints_fr_m1.py tests/test_us02_cited_answer.py tests/test_model_registry_fr_m7.py tests/test_config_export_fr_f21.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 12 passed; app ok.
+  - `PRD_CRON_BACKLOG.md` item 24.1 marked done. Heavy live model/LiteLLM smoke intentionally skipped in this speed-biased run.
