@@ -391,6 +391,31 @@ class AIInventoryEntry(Base):
     updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
+class BotApproval(Base):
+    """FR-P4: approval workflow record for high-risk bot releases.
+
+    Stores only governance metadata and sanitized rationale/decision notes. Raw
+    prompts, traces, documents, user data, and credentials do not belong here.
+    """
+    __tablename__ = "bot_approvals"
+    __table_args__ = (
+        CheckConstraint("approval_type in ('high_risk_release')", name="bot_approvals_type"),
+        CheckConstraint("status in ('pending', 'approved', 'rejected')", name="bot_approvals_status"),
+        Index("bot_approvals_bot_status", "bot_id", "status"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    bot_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bots.id", ondelete="CASCADE"))
+    approval_type: Mapped[str] = mapped_column(String(32), default="high_risk_release")
+    risk_tier: Mapped[str] = mapped_column(String(32), default="minimal")
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    rationale: Mapped[str] = mapped_column(Text, default="")
+    decision_note: Mapped[str] = mapped_column(Text, default="")
+    requested_by: Mapped[str] = mapped_column(String(80))
+    decided_by: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class BotScope(Base):
     """Knowledge scope entries for a bot. Effective retrieval = bot scope ∩ user permissions."""
     __tablename__ = "bot_scopes"

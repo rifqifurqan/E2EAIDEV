@@ -93,7 +93,7 @@ Rules for every cron tick:
 44. [x] [FR-P1] Use-case intake form. Completed as deterministic/offline Plan-stage intake API/service slice capturing problem, users, task-success/deflection/time-saved metrics, data sources, and systems to integrate with safe audit metadata; see progress_2026-10-05.txt.
 45. [x] [FR-P2] AI risk classification per bot. Completed as deterministic/offline bot risk classification slice with EU AI Act tier, NIST AI RMF profile, UU PDP impact level, derived release-gate requirements, safe audit metadata, and API route; see progress_2026-10-05.txt.
 46. [x] [FR-P3] AI inventory with model cards/system cards. Completed as deterministic/offline governance inventory slice with safe model/system cards, owner/risk/status/approval metadata, audit, migration 0023, and API route; see progress_2026-10-05.txt.
-47. [FR-P4] Approval workflow for high-risk bots.
+47. [x] [FR-P4] Approval workflow for high-risk bots. Completed as deterministic/offline bot approval workflow with request/decision records, inventory approval-state sync, safe audit metadata, migration 0024, and API routes; see progress_2026-10-05.txt.
 48. [FR-F6] Air-gapped install bundle.
 49. [FR-F10] Audit export to SIEM.
 50. [FR-F17] Secret/certificate rotation.

@@ -6,6 +6,7 @@ from sqlalchemy import text
 from .ai_inventory import router as ai_inventory_router
 from .auth import router as auth_router
 from .benchmark import router as benchmark_router
+from .bot_approval import router as bot_approval_router
 from .config_export import router as config_export_router
 from .doc_understanding import router as doc_understanding_router
 from .bot_release import router as bot_router
@@ -38,6 +39,7 @@ def create_app() -> FastAPI:
     install(app)
     app.include_router(ai_inventory_router)
     app.include_router(auth_router)
+    app.include_router(bot_approval_router)
     app.include_router(bot_router)
     app.include_router(bot_risk_router)
     app.include_router(chat_router)
