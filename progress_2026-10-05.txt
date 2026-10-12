@@ -2053,3 +2053,9 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_http_hardening_nfr.py` -> 6 failed. GREEN: same -> 6 passed.
   - Adjacent: `uv run pytest -q tests/test_phase0_core.py tests/test_auth.py tests/test_api_keys.py tests/test_docs_fr_f22.py tests/test_user_memory_fr_b2.py tests/test_model_endpoints_fr_m1.py` + openai/scim tests -> 43 passed. Heavy gates skipped.
   - Not done: idempotency keys for create operations, cursor pagination on list endpoints, OpenTelemetry export, per-endpoint retry policies.
+
+- Idempotency keys for create operations (NFR-20) (2026-10-13, cron):
+  - Added `core/idempotency.py` pure ASGI middleware (wired in `main.py` with a Valkey store): for POST/PUT/PATCH/DELETE with `Idempotency-Key`, the first non-5xx response is stored 24 h and replayed (`Idempotent-Replayed: true`) for the same key + body; same key with a different body -> 422 problem (EN/ID title); malformed key -> 422; keys scoped per principal + method + path via SHA-256 (raw key and credentials never stored); 5xx, streaming and >1 MB responses are not cached; store outage degrades to normal processing.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_idempotency_nfr20.py` -> collection error (module missing). GREEN: same -> 8 passed.
+  - Adjacent: `uv run pytest -q tests/test_idempotency_nfr20.py tests/test_http_hardening_nfr.py tests/test_phase0_core.py tests/test_auth.py tests/test_api_keys.py tests/test_docs_fr_f22.py tests/test_user_memory_fr_b2.py` -> 43 passed. Heavy gates skipped.
+  - Not done: concurrent in-flight duplicate lock (two simultaneous identical requests may both run), cursor pagination on list endpoints.
