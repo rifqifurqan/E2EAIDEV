@@ -21,6 +21,7 @@ from .flywheel import router as flywheel_router
 from .scenarios import router as scenarios_router
 from .connectors import router as connectors_router
 from .connector_templates import router as connector_templates_router
+from .openai_compat import router as openai_compat_router
 from .auth import router as auth_router
 from .benchmark import router as benchmark_router
 from .bot_approval import router as bot_approval_router
@@ -78,6 +79,7 @@ def create_app() -> FastAPI:
     app.include_router(scenarios_router)
     app.include_router(connectors_router)
     app.include_router(connector_templates_router)
+    app.include_router(openai_compat_router)
     app.include_router(documents_router)
     app.include_router(retrieval_router)
     app.include_router(evals_router)
