@@ -4,6 +4,7 @@ const id: Dictionary = {
   app: {
     title: "E2EAIDEV",
     subtitle: "Lab Pengembangan AI Perusahaan",
+    skipToContent: "Lewati ke konten utama",
   },
   nav: {
     plan: "Perencanaan",
@@ -13,6 +14,7 @@ const id: Dictionary = {
     release: "Rilis",
     operate: "Operasi",
     improve: "Peningkatan",
+    features: "Fitur",
     documents: "Dokumen",
     chat: "Obrolan",
     admin: "Admin",

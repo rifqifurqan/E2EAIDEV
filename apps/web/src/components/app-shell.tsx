@@ -35,9 +35,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { locale, t, setLocale } = useI18n();
 
   const lifecycleLabel = locale === "id" ? "Navigasi siklus hidup" : "Lifecycle navigation";
+  const featuresLabel = t.nav.features;
 
   return (
     <div className="flex min-h-screen flex-col">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-blue-700 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+      >
+        {t.app.skipToContent}
+      </a>
       <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
         <div className="flex items-center gap-3">
           <span className="text-lg font-bold">{t.app.title}</span>
@@ -71,7 +78,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex flex-1">
         <aside className="hidden w-48 border-r border-gray-100 bg-white p-4 md:block">
-          <nav aria-label="Features">
+          <nav aria-label={featuresLabel}>
             <ul className="space-y-1">
               {FEATURE_LINKS.map((feat) => (
                 <li key={feat}>
@@ -87,7 +94,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </aside>
 
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main id="main-content" tabIndex={-1} className="flex-1 p-4 md:p-6">
+          {children}
+        </main>
       </div>
     </div>
   );

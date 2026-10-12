@@ -1707,3 +1707,12 @@ HOW TO RESUME
     `cd apps/web && pnpm run typecheck` -> passed.
   - TDD note: Claude Code performed the initial RED/GREEN attempt but hit max turns before returning a detailed transcript; parent verification accepted only the final focused/adjacent green tests above.
   - `PRD_CRON_BACKLOG.md` item 42 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- WCAG 2.1 AA accessibility hardening slice (FR-F14) (2026-10-12, cron):
+  - Added a keyboard skip link to the main content, an explicit `main-content` focus target, and a localized feature-navigation landmark label in EN/ID.
+  - TDD / RED evidence:
+    `cd apps/web && pnpm exec vitest run src/components/app-shell.test.tsx` -> 2 failed because the skip link/main target and Indonesian feature-nav label were missing.
+  - GREEN verified:
+    `cd apps/web && pnpm exec vitest run src/components/app-shell.test.tsx src/i18n/i18n.test.ts src/components/chat-screen.test.tsx src/components/documents-screen.test.tsx` -> 4 files passed, 31 tests passed.
+    `cd apps/web && pnpm run typecheck` -> passed.
+  - `PRD_CRON_BACKLOG.md` item 43 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).

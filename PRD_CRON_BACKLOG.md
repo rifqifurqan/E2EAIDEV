@@ -87,7 +87,7 @@ Rules for every cron tick:
 
 ### G. Learning/UI P1
 42. [x] [FR-E2] Why-it-matters enterprise panels per lifecycle stage with OWASP/NIST/EU AI Act/ISO/UU PDP links. Completed as EN/ID accessible lifecycle panels with framework/regulation links; see progress_2026-10-05.txt.
-43. [FR-F14] Continue WCAG 2.1 AA accessibility hardening beyond existing EN/ID i18n.
+43. [x] [FR-F14] Continue WCAG 2.1 AA accessibility hardening beyond existing EN/ID i18n. Completed as keyboard skip-link/main-focus target and localized feature navigation landmark hardening; see progress_2026-10-05.txt.
 
 ### H. P2 compliance / enterprise / connectors after P1 queue
 44. [FR-P1] Use-case intake form.

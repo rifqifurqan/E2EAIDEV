@@ -79,6 +79,20 @@ describe("AppShell", () => {
     expect(within(main).getByTestId("page-content")).toBeInTheDocument();
   });
 
+  it("provides a keyboard skip link to the main content", () => {
+    renderShell();
+    const skipLink = screen.getByRole("link", { name: /skip to main content/i });
+    const main = screen.getByRole("main");
+    expect(skipLink).toHaveAttribute("href", "#main-content");
+    expect(main).toHaveAttribute("id", "main-content");
+    expect(main).toHaveAttribute("tabIndex", "-1");
+  });
+
+  it("localizes the feature navigation landmark label", () => {
+    renderShell("id");
+    expect(screen.getByRole("navigation", { name: /fitur/i })).toBeInTheDocument();
+  });
+
   it("has banner landmark for header", () => {
     renderShell();
     expect(screen.getByRole("banner")).toBeInTheDocument();

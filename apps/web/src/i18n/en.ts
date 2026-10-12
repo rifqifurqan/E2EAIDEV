@@ -2,6 +2,7 @@ const en = {
   app: {
     title: "E2EAIDEV",
     subtitle: "Enterprise AI Development Lab",
+    skipToContent: "Skip to main content",
   },
   nav: {
     plan: "Plan",
@@ -11,6 +12,7 @@ const en = {
     release: "Release",
     operate: "Operate",
     improve: "Improve",
+    features: "Features",
     documents: "Documents",
     chat: "Chat",
     admin: "Admin",
