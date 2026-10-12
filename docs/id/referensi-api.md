@@ -6,8 +6,8 @@ Requirement: FR-F22 (referensi API P1).
 
 Judul API: E2EAIDEV API
 Versi API: 0.1.0
-Total path: 146
-Total operasi: 156
+Total path: 148
+Total operasi: 158
 
 ## Cara generate ulang
 
@@ -955,6 +955,20 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 
 - Ringkasan: Add Prompt Version Api
 - Operation ID: `add_prompt_version_api_api_v1_prompts__prompt_id__versions_post`
+- Kode status respons: 200, 422
+
+### retrieval
+
+#### POST /api/v1/retrieval/graph-expand
+
+- Ringkasan: Graph Expand Api
+- Operation ID: `graph_expand_api_api_v1_retrieval_graph_expand_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/retrieval/route-kbs
+
+- Ringkasan: Route Kbs Api
+- Operation ID: `route_kbs_api_api_v1_retrieval_route_kbs_post`
 - Kode status respons: 200, 422
 
 ### rollouts

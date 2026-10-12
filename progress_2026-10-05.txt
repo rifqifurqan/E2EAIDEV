@@ -1989,3 +1989,12 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_gpu_scheduler_fr_o10.py` -> 8 failed (module missing).
   - GREEN: same command -> 8 passed (after tightening one weak `or` assertion on time-slice share). Docs regenerated via `scripts/generate_api_reference.py`.
   - Not done: applying plans to Kubernetes Kueue (ClusterQueue/ResourceFlavor) and the NVIDIA device plugin, preemption, fair-share between teams, live GPU inventory discovery. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Advanced RAG helpers (FR-R9) (2026-10-13, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `e2eai.advanced_rag` (no DB, no migration, pure): `route_knowledge_bases` (ranks KBs by topic-word overlap with the query, EN/ID; KBs outside `accessible_ids` are never scored; falls back to all accessible KBs with score 0 when nothing matches; empty access gives no routes), `build_entity_graph` + `expand_with_graph` (GraphRAG-style: entities are runs of 2+ capitalised words, co-occurrence edges, BFS up to 3 hops, chunks ranked closest-first; returns lowercased entity names and chunk ids only, never text), `detect_modality` + `rerank_by_modality` (chart/figure intent in EN/ID boosts chunks of matching `kind`).
+  - Routes (scope `chat`): `POST /api/v1/retrieval/route-kbs` (also returns the detected modality) and `POST /api/v1/retrieval/graph-expand`.
+  - Security caveat: the route accepts `accessible_ids` from the request body, so it is NOT an authorization boundary. It is a pure helper; the chat/retrieval pipeline must call `route_knowledge_bases` with ids computed server-side from the user's real permissions, and feed `expand_with_graph` only chunks that already passed the SQL permission filter.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_advanced_rag_fr_r9.py` -> 7 failed (module missing).
+  - GREEN: same command -> 7 passed. Docs regenerated via `scripts/generate_api_reference.py`.
+  - Not done: wiring routing/graph expansion into `answer_question`, LLM-based entity extraction, persistent graph index, true multimodal embeddings (image/chart vectors). Heavy full-stack gates intentionally skipped (speed-biased run).

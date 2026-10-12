@@ -6,8 +6,8 @@ Requirement: FR-F22 (P1 API reference).
 
 API title: E2EAIDEV API
 API version: 0.1.0
-Total paths: 146
-Total operations: 156
+Total paths: 148
+Total operations: 158
 
 ## How to regenerate
 
@@ -955,6 +955,20 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: Add Prompt Version Api
 - Operation ID: `add_prompt_version_api_api_v1_prompts__prompt_id__versions_post`
+- Response status codes: 200, 422
+
+### retrieval
+
+#### POST /api/v1/retrieval/graph-expand
+
+- Summary: Graph Expand Api
+- Operation ID: `graph_expand_api_api_v1_retrieval_graph_expand_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/retrieval/route-kbs
+
+- Summary: Route Kbs Api
+- Operation ID: `route_kbs_api_api_v1_retrieval_route_kbs_post`
 - Response status codes: 200, 422
 
 ### rollouts

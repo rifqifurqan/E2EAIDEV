@@ -1348,6 +1348,56 @@
         "title": "GpuScheduleIn",
         "type": "object"
       },
+      "GraphChunkIn": {
+        "properties": {
+          "id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 20000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "GraphChunkIn",
+        "type": "object"
+      },
+      "GraphExpandIn": {
+        "properties": {
+          "chunks": {
+            "items": {
+              "$ref": "#/components/schemas/GraphChunkIn"
+            },
+            "maxItems": 2000,
+            "title": "Chunks",
+            "type": "array"
+          },
+          "hops": {
+            "default": 1,
+            "title": "Hops",
+            "type": "integer"
+          },
+          "query": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "chunks"
+        ],
+        "title": "GraphExpandIn",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1530,6 +1580,36 @@
           "target"
         ],
         "title": "K6ScriptIn",
+        "type": "object"
+      },
+      "KbIn": {
+        "properties": {
+          "id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Name",
+            "type": "string"
+          },
+          "topics": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Topics",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "KbIn",
         "type": "object"
       },
       "LifecycleIn": {
@@ -2585,6 +2665,46 @@
           "secrets"
         ],
         "title": "RotationPlanIn",
+        "type": "object"
+      },
+      "RouteKbsIn": {
+        "properties": {
+          "accessible_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Accessible Ids",
+            "type": "array"
+          },
+          "knowledge_bases": {
+            "items": {
+              "$ref": "#/components/schemas/KbIn"
+            },
+            "maxItems": 200,
+            "title": "Knowledge Bases",
+            "type": "array"
+          },
+          "query": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "top_k": {
+            "default": 3,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Top K",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query",
+          "knowledge_bases",
+          "accessible_ids"
+        ],
+        "title": "RouteKbsIn",
         "type": "object"
       },
       "RunIn": {
@@ -10407,6 +10527,94 @@
         "summary": "Ready",
         "tags": [
           "ops"
+        ]
+      }
+    },
+    "/api/v1/retrieval/graph-expand": {
+      "post": {
+        "description": "FR-R9: GraphRAG-style multi-hop expansion over already permission-filtered chunks (ids only returned).",
+        "operationId": "graph_expand_api_api_v1_retrieval_graph_expand_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GraphExpandIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Graph Expand Api Api V1 Retrieval Graph Expand Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Graph Expand Api",
+        "tags": [
+          "retrieval"
+        ]
+      }
+    },
+    "/api/v1/retrieval/route-kbs": {
+      "post": {
+        "description": "FR-R9: pick which of the user's accessible knowledge bases to search (also returns modality intent).",
+        "operationId": "route_kbs_api_api_v1_retrieval_route_kbs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteKbsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Route Kbs Api Api V1 Retrieval Route Kbs Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Route Kbs Api",
+        "tags": [
+          "retrieval"
         ]
       }
     },
