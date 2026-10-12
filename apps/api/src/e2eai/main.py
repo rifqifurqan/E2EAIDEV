@@ -12,6 +12,7 @@ from .documents import router as documents_router
 from .eval_lab import router as evals_router
 from .finops import router as finops_router
 from .offboarding import router as offboarding_router
+from .org import router as org_router
 from .prompt_registry import router as prompt_router
 from .retrieval import router as retrieval_router
 from .security_red_team import router as security_red_team_router
@@ -40,6 +41,7 @@ def create_app() -> FastAPI:
     app.include_router(doc_understanding_router)
     app.include_router(security_red_team_router)
     app.include_router(offboarding_router)
+    app.include_router(org_router)
     app.include_router(prompt_router)
     app.include_router(slo_metrics_router)
     app.include_router(finops_router)

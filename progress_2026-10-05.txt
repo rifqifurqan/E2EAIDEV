@@ -1628,3 +1628,14 @@ HOW TO RESUME
     `cd apps/api && uv run pytest -q tests/test_org_scope.py` -> 2 passed.
     Adjacent regression/app import: `cd apps/api && uv run pytest -q tests/test_org_scope.py tests/test_authz_model.py tests/test_migration_static.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 9 passed, 1 skipped; app ok.
   - `PRD_CRON_BACKLOG.md` item 36 split: project-scoped role boundary marked done; admin/service CRUD remains next. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Admin/service org CRUD slice (FR-F2 complete) (2026-10-12, cron):
+  - Claude Code was tried first and returned a Pro usage limit (`You've hit your limit`, reset 11am Asia/Jakarta); Hermes continued manually. Codex unused.
+  - Added explicit admin org service functions and API routes for division/team/user creation, team membership add/remove helpers, project creation/owner update, role grant/revoke, and safe org snapshot output.
+  - API routes are registered under `/api/v1/admin/org/*` and expose only safe IDs/metadata; audit events are recorded for access-relevant admin changes.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_org_admin_fr_f2.py` -> failed: Postgres/Docker unavailable for DB smoke (`ConnectionRefusedError`) and route registration test needed FastAPI's OpenAPI path surface for lazy included routers.
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_org_admin_fr_f2.py tests/test_org_scope.py tests/test_phase0_core.py` -> 6 passed, 1 skipped, 1 warning.
+  - The skipped test is the DB-backed service smoke because Docker Desktop/Postgres is unavailable in this cron environment (`dockerDesktopLinuxEngine` pipe missing); deterministic route/model/adjacent tests passed.
+  - `PRD_CRON_BACKLOG.md` item 36 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).

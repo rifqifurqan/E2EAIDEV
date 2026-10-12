@@ -76,9 +76,9 @@ Rules for every cron tick:
 35. [x] [FR-F1] OIDC SSO option and identity-provider-down fallback path integration.
    - [x] Secret-free OIDC authorization URL helper + OIDC-mode local password fallback policy (break-glass only, normal users must use SSO). See progress_2026-10-05.txt.
    - [x] OIDC callback/token validation against bundled Keycloak and user/session creation. Completed as deterministic callback boundary using Keycloak token + userinfo endpoints; see progress_2026-10-05.txt.
-36. [FR-F2] Complete Org -> Division -> Team -> User and roles/project scoping gaps; leave SCIM sync for P2.
+36. [x] [FR-F2] Complete Org -> Division -> Team -> User and roles/project scoping gaps; leave SCIM sync for P2.
    - [x] Project containers and project-scoped role grant boundary: `Project` ORM/migration, nullable `UserRole.project_id`, and safe role-scope helpers. See progress_2026-10-05.txt.
-   - [ ] Admin/service CRUD for divisions, teams, users, memberships, role grants, and project ownership.
+   - [x] Admin/service CRUD for divisions, teams, users, memberships, role grants, and project ownership. See progress_2026-10-05.txt.
 37. [FR-F7] Harden LiteLLM gateway virtual keys/budgets/fallbacks beyond current baseline.
 38. [FR-F11] Finish remaining in-app notification types: review assigned, release approved, incident raised; email stays P2.
 39. [FR-F16] Upgrade procedure P2 prep: pre-upgrade backup, health check, rollback notes/tests.
