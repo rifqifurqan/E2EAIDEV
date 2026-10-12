@@ -61,10 +61,12 @@ from .write_confirmation import router as write_confirmation_router
 from .core.errors import install
 from .core.http_hardening import HardeningMiddleware
 from .core.idempotency import IdempotencyMiddleware, ValkeyIdempotencyStore
+from .core.log_redaction import install_log_redaction
 from .db import sessions
 
 
 def create_app() -> FastAPI:
+    install_log_redaction()
     app = FastAPI(title="E2EAIDEV API", version="0.1.0")
     install(app)
     from .auth import redis_client
