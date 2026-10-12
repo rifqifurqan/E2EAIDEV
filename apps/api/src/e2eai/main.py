@@ -64,6 +64,7 @@ from .core.idempotency import IdempotencyMiddleware, ValkeyIdempotencyStore
 from .core.log_redaction import install_log_redaction
 from .core.metrics import MetricsMiddleware
 from .metrics_api import router as metrics_router
+from .data_subject import router as data_subject_router
 from .db import sessions
 
 
@@ -76,6 +77,7 @@ def create_app() -> FastAPI:
     app.add_middleware(HardeningMiddleware)
     app.add_middleware(MetricsMiddleware)
     app.include_router(metrics_router)
+    app.include_router(data_subject_router)
     app.include_router(ai_inventory_router)
     app.include_router(audit_export_router)
     app.include_router(secret_rotation_router)

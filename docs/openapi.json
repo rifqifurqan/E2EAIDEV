@@ -10642,6 +10642,96 @@
         ]
       }
     },
+    "/api/v1/privacy/subjects/{user_id}/erase": {
+      "post": {
+        "operationId": "erase_api_api_v1_privacy_subjects__user_id__erase_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Erase Api Api V1 Privacy Subjects  User Id  Erase Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Erase Api",
+        "tags": [
+          "privacy"
+        ]
+      }
+    },
+    "/api/v1/privacy/subjects/{user_id}/export": {
+      "get": {
+        "operationId": "export_api_api_v1_privacy_subjects__user_id__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Export Api Api V1 Privacy Subjects  User Id  Export Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Api",
+        "tags": [
+          "privacy"
+        ]
+      }
+    },
     "/api/v1/prompts": {
       "post": {
         "operationId": "create_prompt_api_api_v1_prompts_post",
