@@ -1847,3 +1847,11 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_bias_fairness_fr_t9.py` -> 5 failed (module missing).
   - GREEN: same command -> 5 passed. Adjacent: `uv run pytest -q tests/test_bias_fairness_fr_t9.py tests/test_us_security_red_team_p1.py tests/test_us_eval_lab_p0.py tests/test_us_judging_modes_p1.py tests/test_migration_static.py` -> 32 passed; `create_app()` ok.
   - Not done: real DeepEval bias / model-driven demographic probes (boundary metadata only), statistical significance testing, Indonesian-specific bias sets. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Load tests on model endpoints and the full chat API (FR-T10) (2026-10-12, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `e2eai.load_test`: `percentile` (linear interpolation), `summarize_samples` (requests, errors, error rate, throughput, min/p50/p95/p99/max latency, status counts), `check_thresholds` (p95, error rate, min RPS; every violation listed), `run_load_test` (semaphore-bounded concurrency over an injected async target; exceptions recorded as status `error` with the text discarded), `generate_k6_script` (chat API or model `/chat/completions`; `__ENV.E2EAI_BASE_URL` / `__ENV.E2EAI_API_KEY` placeholders, strict validation of vus/duration/p95), and `evaluate_load_samples` (stores an `EvalRun` with adapter `load-test.local`; only aggregates, never bodies).
+  - Routes: `POST /api/v1/evals/load-test` (summarize client-collected samples; evals scope + request quota) and `POST /api/v1/evals/load-test/k6-script`.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_load_test_fr_t10.py` -> 5 failed (module missing).
+  - GREEN: same command -> 5 passed. Adjacent: `uv run pytest -q tests/test_load_test_fr_t10.py tests/test_bias_fairness_fr_t9.py tests/test_us_benchmark_runner_p1.py tests/test_us_quotas_rate_limits.py tests/test_migration_static.py` -> 23 passed; `create_app()` ok.
+  - Not done: actually running k6/guidellm against the live stack (NFR-1/2/4 load gates need Standard-tier hardware); this slice provides the runner, SLO verdict, and script generator. Heavy full-stack gates intentionally skipped (speed-biased run).
