@@ -1879,3 +1879,11 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_drift_detection_fr_o4.py` -> 5 failed (module missing).
   - GREEN: same command -> 5 passed. Adjacent: `uv run pytest -q tests/test_drift_detection_fr_o4.py tests/test_online_eval_fr_o3.py tests/test_us_slo_metrics_p1.py tests/test_migration_static.py` -> 36 passed; `create_app()` ok.
   - Not done: scheduled windows pulled from traces/embeddings tables, persisting drift reports/alerts, Evidently adapter. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- AI incident management (FR-O8) (2026-10-12, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `AIIncident` model + migration `0029_ai_incidents` and `e2eai.incidents`: `report_incident` (severity sev1-sev4, title/description credential-redacted, trace ids must match a plain-id pattern and are de-duplicated, audit `incident.report`, notifies active admins via `incident.raised`), `add_traces` (reporter or admin), `transition_incident` (admin only; strictly sequential reported -> triaged -> fixing -> fixed -> released -> closed; `fixed` needs fix notes, `released` needs a release ref, `closed` needs the post-incident record), `record_postmortem` (summary, root cause, lessons, action items; redacted), `list_incidents`.
+  - Routes (`/api/v1/incidents`): POST report, GET list (admin), POST `/{id}/transition`, POST `/{id}/postmortem`, POST `/{id}/traces`.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_incident_management_fr_o8.py` -> import/model failures (module missing).
+  - GREEN: same command -> 4 passed. Adjacent: `uv run pytest -q tests/test_incident_management_fr_o8.py tests/test_migration_static.py tests/test_model_registry_fr_m7.py <notification tests>` -> 15 passed; `create_app()` ok.
+  - Not done: auto-opening incidents from SLO/drift/guardrail alerts, validating trace ids against the trace table, linking the release_ref to a real bot bundle version. Heavy full-stack gates intentionally skipped (speed-biased run).

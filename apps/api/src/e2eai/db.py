@@ -409,6 +409,35 @@ class ModelRegistryEntry(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class AIIncident(Base):
+    """FR-O8: AI incident record (report -> severity -> linked traces -> fix -> release -> post-incident).
+
+    Free text is redacted for credential markers; traces are linked by id only (no content).
+    """
+    __tablename__ = "ai_incidents"
+    __table_args__ = (
+        CheckConstraint("severity in ('sev1', 'sev2', 'sev3', 'sev4')", name="ai_incidents_severity"),
+        CheckConstraint(
+            "status in ('reported', 'triaged', 'fixing', 'fixed', 'released', 'closed')", name="ai_incidents_status"
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    severity: Mapped[str] = mapped_column(String(8))
+    status: Mapped[str] = mapped_column(String(16), default="reported")
+    bot_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("bots.id", ondelete="SET NULL"))
+    trace_ids: Mapped[list] = mapped_column(JSONB, default=list)
+    assignee_id: Mapped[str | None] = mapped_column(String(80))
+    fix_notes: Mapped[str | None] = mapped_column(Text)
+    release_ref: Mapped[str | None] = mapped_column(String(200))
+    postmortem: Mapped[dict | None] = mapped_column(JSONB)
+    reported_by: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class AIInventoryEntry(Base):
     """FR-P3: AI inventory entry with model-card and system-card metadata.
 
