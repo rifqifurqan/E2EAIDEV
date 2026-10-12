@@ -1981,3 +1981,11 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_finetune_plan_fr_m6.py` -> 8 failed (module missing).
   - GREEN: same command -> 8 passed. Docs regenerated via `scripts/generate_api_reference.py`.
   - Not done: launching real training jobs (needs GPU + trainer adapters through FR-F20 job engine), registering the tuned model in the FR-M7 registry automatically, persisting plans. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- GPU scheduling and sharing (FR-O10) (2026-10-13, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `e2eai.gpu_scheduler` (no DB, no migration): `validate_inventory` (1-64 GPUs, unique ids, positive memory, known MIG profiles that fit the GPU), `schedule` (workloads ordered by priority then request order; per-team memory quota; exclusive placement on the smallest free GPU that fits; MIG placement on the smallest fitting slice profile packed onto MIG-enabled GPUs; time-slice sharing up to GPU memory with equal-share fractions; queue reasons `exceeds_largest_gpu`, `team_quota_exceeded`, `no_free_gpu`, `no_mig_capacity`, `insufficient_memory`; per-GPU utilization). Output has ids, teams, and numbers only.
+  - Route: `POST /api/v1/operate/gpu-schedule` (scope `evals`; pure planner, no side effects).
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_gpu_scheduler_fr_o10.py` -> 8 failed (module missing).
+  - GREEN: same command -> 8 passed (after tightening one weak `or` assertion on time-slice share). Docs regenerated via `scripts/generate_api_reference.py`.
+  - Not done: applying plans to Kubernetes Kueue (ClusterQueue/ResourceFlavor) and the NVIDIA device plugin, preemption, fair-share between teams, live GPU inventory discovery. Heavy full-stack gates intentionally skipped (speed-biased run).

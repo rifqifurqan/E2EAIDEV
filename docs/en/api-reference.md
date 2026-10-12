@@ -6,8 +6,8 @@ Requirement: FR-F22 (P1 API reference).
 
 API title: E2EAIDEV API
 API version: 0.1.0
-Total paths: 145
-Total operations: 155
+Total paths: 146
+Total operations: 156
 
 ## How to regenerate
 
@@ -859,6 +859,12 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: Finops Window Persist Api
 - Operation ID: `finops_window_persist_api_api_v1_operate_finops_window_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/operate/gpu-schedule
+
+- Summary: Gpu Schedule Api
+- Operation ID: `gpu_schedule_api_api_v1_operate_gpu_schedule_post`
 - Response status codes: 200, 422
 
 #### GET /api/v1/operate/slo-dashboard

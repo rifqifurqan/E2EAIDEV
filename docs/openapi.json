@@ -1281,6 +1281,73 @@
         "title": "FlagIn",
         "type": "object"
       },
+      "GpuIn": {
+        "properties": {
+          "id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "memory_gb": {
+            "title": "Memory Gb",
+            "type": "number"
+          },
+          "mig_enabled": {
+            "default": false,
+            "title": "Mig Enabled",
+            "type": "boolean"
+          },
+          "mig_profiles": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Mig Profiles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "memory_gb"
+        ],
+        "title": "GpuIn",
+        "type": "object"
+      },
+      "GpuScheduleIn": {
+        "properties": {
+          "gpus": {
+            "items": {
+              "$ref": "#/components/schemas/GpuIn"
+            },
+            "maxItems": 64,
+            "title": "Gpus",
+            "type": "array"
+          },
+          "team_quota_gb": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Team Quota Gb",
+            "type": "object"
+          },
+          "workloads": {
+            "items": {
+              "$ref": "#/components/schemas/WorkloadIn"
+            },
+            "maxItems": 500,
+            "title": "Workloads",
+            "type": "array"
+          }
+        },
+        "required": [
+          "gpus",
+          "workloads"
+        ],
+        "title": "GpuScheduleIn",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -3458,6 +3525,44 @@
           "steps"
         ],
         "title": "WorkflowIn",
+        "type": "object"
+      },
+      "WorkloadIn": {
+        "properties": {
+          "id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "memory_gb": {
+            "title": "Memory Gb",
+            "type": "number"
+          },
+          "priority": {
+            "default": 0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "sharing": {
+            "default": "exclusive",
+            "maxLength": 20,
+            "title": "Sharing",
+            "type": "string"
+          },
+          "team": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Team",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "team",
+          "memory_gb"
+        ],
+        "title": "WorkloadIn",
         "type": "object"
       },
       "e2eai__bot_release__GrantIn": {
@@ -9669,6 +9774,50 @@
           }
         },
         "summary": "Finops Window Persist Api",
+        "tags": [
+          "operate"
+        ]
+      }
+    },
+    "/api/v1/operate/gpu-schedule": {
+      "post": {
+        "description": "FR-O10: plan GPU placement (exclusive / MIG / time-slice) with priorities and team quotas.",
+        "operationId": "gpu_schedule_api_api_v1_operate_gpu_schedule_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GpuScheduleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Gpu Schedule Api Api V1 Operate Gpu Schedule Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gpu Schedule Api",
         "tags": [
           "operate"
         ]

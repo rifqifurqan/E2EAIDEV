@@ -28,6 +28,7 @@ from .table_qa import router as table_qa_router
 from .agent_workflow import router as agent_workflow_router
 from .quantization_lab import router as quantization_lab_router
 from .finetune_plan import router as finetune_plan_router
+from .gpu_scheduler import router as gpu_scheduler_router
 from .auth import router as auth_router
 from .benchmark import router as benchmark_router
 from .bot_approval import router as bot_approval_router
@@ -92,6 +93,7 @@ def create_app() -> FastAPI:
     app.include_router(agent_workflow_router)
     app.include_router(quantization_lab_router)
     app.include_router(finetune_plan_router)
+    app.include_router(gpu_scheduler_router)
     app.include_router(documents_router)
     app.include_router(retrieval_router)
     app.include_router(evals_router)

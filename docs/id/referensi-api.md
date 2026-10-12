@@ -6,8 +6,8 @@ Requirement: FR-F22 (referensi API P1).
 
 Judul API: E2EAIDEV API
 Versi API: 0.1.0
-Total path: 145
-Total operasi: 155
+Total path: 146
+Total operasi: 156
 
 ## Cara generate ulang
 
@@ -859,6 +859,12 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 
 - Ringkasan: Finops Window Persist Api
 - Operation ID: `finops_window_persist_api_api_v1_operate_finops_window_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/operate/gpu-schedule
+
+- Ringkasan: Gpu Schedule Api
+- Operation ID: `gpu_schedule_api_api_v1_operate_gpu_schedule_post`
 - Kode status respons: 200, 422
 
 #### GET /api/v1/operate/slo-dashboard
