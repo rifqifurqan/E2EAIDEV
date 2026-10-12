@@ -6,8 +6,8 @@ Requirement: FR-F22 (referensi API P1).
 
 Judul API: E2EAIDEV API
 Versi API: 0.1.0
-Total path: 81
-Total operasi: 87
+Total path: 138
+Total operasi: 148
 
 ## Cara generate ulang
 
@@ -20,6 +20,24 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 ## Operasi berdasarkan tag
 
 ### admin
+
+#### GET /api/v1/admin/connector-templates
+
+- Ringkasan: List Api
+- Operation ID: `list_api_api_v1_admin_connector_templates_get`
+- Kode status respons: 200
+
+#### GET /api/v1/admin/connector-templates/{template_id}
+
+- Ringkasan: Get Api
+- Operation ID: `get_api_api_v1_admin_connector_templates__template_id__get`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/admin/connector-templates/{template_id}/apply
+
+- Ringkasan: Apply Api
+- Operation ID: `apply_api_api_v1_admin_connector_templates__template_id__apply_post`
+- Kode status respons: 200, 422
 
 #### POST /api/v1/admin/org/divisions
 
@@ -111,6 +129,14 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 - Operation ID: `deactivate_user_api_api_v1_users__user_id__deactivate_post`
 - Kode status respons: 200, 422
 
+### admin-config
+
+#### GET /api/v1/admin/config/export
+
+- Ringkasan: Export Config Api
+- Operation ID: `export_config_api_api_v1_admin_config_export_get`
+- Kode status respons: 200, 422
+
 ### api-keys
 
 #### GET /api/v1/api-keys
@@ -129,6 +155,14 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 
 - Ringkasan: Revoke Api Key Api
 - Operation ID: `revoke_api_key_api_api_v1_api_keys__key_id__delete`
+- Kode status respons: 200, 422
+
+### audit
+
+#### POST /api/v1/audit/export
+
+- Ringkasan: Export Audit Events Api
+- Operation ID: `export_audit_events_api_api_v1_audit_export_post`
 - Kode status respons: 200, 422
 
 ### auth
@@ -156,6 +190,14 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 - Ringkasan: Me
 - Operation ID: `me_api_v1_me_get`
 - Kode status respons: 200
+
+### bot-risk
+
+#### PUT /api/v1/bots/{bot_id}/risk-classification
+
+- Ringkasan: Classify Bot Risk Api
+- Operation ID: `classify_bot_risk_api_api_v1_bots__bot_id__risk_classification_put`
+- Kode status respons: 200, 422
 
 ### bots
 
@@ -269,6 +311,14 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 - Operation ID: `stop_api_api_v1_messages__message_id__stop_post`
 - Kode status respons: 200, 422
 
+### connectors
+
+#### POST /api/v1/connectors/sync
+
+- Ringkasan: Sync Api
+- Operation ID: `sync_api_api_v1_connectors_sync_post`
+- Kode status respons: 200, 422
+
 ### documents
 
 #### POST /api/v1/documents
@@ -301,6 +351,12 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 - Operation ID: `deny_access_request_api_api_v1_documents_access_requests__request_id__deny_post`
 - Kode status respons: 200, 422
 
+#### GET /api/v1/documents/reviews/due
+
+- Ringkasan: Due Reviews Api
+- Operation ID: `due_reviews_api_api_v1_documents_reviews_due_get`
+- Kode status respons: 200
+
 #### GET /api/v1/documents/search
 
 - Ringkasan: Search Documents Api
@@ -317,6 +373,18 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 
 - Ringkasan: Delete Document Api
 - Operation ID: `delete_document_api_api_v1_documents__document_id__delete`
+- Kode status respons: 200, 422
+
+#### PUT /api/v1/documents/{document_id}/lifecycle
+
+- Ringkasan: Set Lifecycle Api
+- Operation ID: `set_lifecycle_api_api_v1_documents__document_id__lifecycle_put`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/documents/{document_id}/lifecycle/reviewed
+
+- Ringkasan: Mark Reviewed Api
+- Operation ID: `mark_reviewed_api_api_v1_documents__document_id__lifecycle_reviewed_post`
 - Kode status respons: 200, 422
 
 #### POST /api/v1/documents/{document_id}/restore
@@ -343,6 +411,12 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 
 - Ringkasan: Run Benchmark Api
 - Operation ID: `run_benchmark_api_api_v1_evals_benchmark_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/evals/bias-fairness
+
+- Ringkasan: Run Bias Fairness Api
+- Operation ID: `run_bias_fairness_api_api_v1_evals_bias_fairness_post`
 - Kode status respons: 200, 422
 
 #### POST /api/v1/evals/compare
@@ -375,6 +449,24 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 - Operation ID: `run_doc_understanding_api_api_v1_evals_doc_understanding_post`
 - Kode status respons: 200, 422
 
+#### POST /api/v1/evals/load-test
+
+- Ringkasan: Run Load Test Api
+- Operation ID: `run_load_test_api_api_v1_evals_load_test_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/evals/load-test/k6-script
+
+- Ringkasan: K6 Script Api
+- Operation ID: `k6_script_api_api_v1_evals_load_test_k6_script_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/evals/online
+
+- Ringkasan: Online Eval Api
+- Operation ID: `online_eval_api_api_v1_evals_online_post`
+- Kode status respons: 200, 422
+
 #### POST /api/v1/evals/retrieval-metrics
 
 - Ringkasan: Run Retrieval Metrics Api
@@ -405,12 +497,242 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 - Operation ID: `tool_catalog_api_api_v1_evals_tool_catalog_get`
 - Kode status respons: 200
 
+### governance
+
+#### GET /api/v1/governance/ai-inventory
+
+- Ringkasan: List Inventory Api
+- Operation ID: `list_inventory_api_api_v1_governance_ai_inventory_get`
+- Kode status respons: 200, 422
+
+#### PUT /api/v1/governance/ai-inventory
+
+- Ringkasan: Upsert Inventory Entry Api
+- Operation ID: `upsert_inventory_entry_api_api_v1_governance_ai_inventory_put`
+- Kode status respons: 200, 422
+
+#### GET /api/v1/governance/bot-approvals
+
+- Ringkasan: List Bot Approvals Api
+- Operation ID: `list_bot_approvals_api_api_v1_governance_bot_approvals_get`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/governance/bot-approvals
+
+- Ringkasan: Request Bot Approval Api
+- Operation ID: `request_bot_approval_api_api_v1_governance_bot_approvals_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/governance/bot-approvals/{approval_id}/decisions
+
+- Ringkasan: Decide Bot Approval Api
+- Operation ID: `decide_bot_approval_api_api_v1_governance_bot_approvals__approval_id__decisions_post`
+- Kode status respons: 200, 422
+
 ### improve
+
+#### GET /api/v1/improve/flywheel
+
+- Ringkasan: Queue Api
+- Operation ID: `queue_api_api_v1_improve_flywheel_get`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/improve/flywheel/collect
+
+- Ringkasan: Collect Api
+- Operation ID: `collect_api_api_v1_improve_flywheel_collect_post`
+- Kode status respons: 200
+
+#### POST /api/v1/improve/flywheel/export
+
+- Ringkasan: Export Api
+- Operation ID: `export_api_api_v1_improve_flywheel_export_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/improve/flywheel/flag
+
+- Ringkasan: Flag Api
+- Operation ID: `flag_api_api_v1_improve_flywheel_flag_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/improve/flywheel/{item_id}/reeval
+
+- Ringkasan: Reeval Api
+- Operation ID: `reeval_api_api_v1_improve_flywheel__item_id__reeval_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/improve/flywheel/{item_id}/release
+
+- Ringkasan: Release Api
+- Operation ID: `release_api_api_v1_improve_flywheel__item_id__release_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/improve/flywheel/{item_id}/triage
+
+- Ringkasan: Triage Api
+- Operation ID: `triage_api_api_v1_improve_flywheel__item_id__triage_post`
+- Kode status respons: 200, 422
 
 #### POST /api/v1/improve/top-unanswered
 
 - Ringkasan: Top Unanswered Api
 - Operation ID: `top_unanswered_api_api_v1_improve_top_unanswered_post`
+- Kode status respons: 200, 422
+
+### incidents
+
+#### GET /api/v1/incidents
+
+- Ringkasan: List Api
+- Operation ID: `list_api_api_v1_incidents_get`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/incidents
+
+- Ringkasan: Report Api
+- Operation ID: `report_api_api_v1_incidents_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/incidents/{incident_id}/postmortem
+
+- Ringkasan: Postmortem Api
+- Operation ID: `postmortem_api_api_v1_incidents__incident_id__postmortem_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/incidents/{incident_id}/traces
+
+- Ringkasan: Traces Api
+- Operation ID: `traces_api_api_v1_incidents__incident_id__traces_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/incidents/{incident_id}/transition
+
+- Ringkasan: Transition Api
+- Operation ID: `transition_api_api_v1_incidents__incident_id__transition_post`
+- Kode status respons: 200, 422
+
+### learn
+
+#### GET /api/v1/learn/paths
+
+- Ringkasan: List Api
+- Operation ID: `list_api_api_v1_learn_paths_get`
+- Kode status respons: 200
+
+#### GET /api/v1/learn/paths/{path_id}
+
+- Ringkasan: Get Api
+- Operation ID: `get_api_api_v1_learn_paths__path_id__get`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/learn/paths/{path_id}/progress
+
+- Ringkasan: Progress Api
+- Operation ID: `progress_api_api_v1_learn_paths__path_id__progress_post`
+- Kode status respons: 200, 422
+
+#### GET /api/v1/learn/scenarios
+
+- Ringkasan: List Api
+- Operation ID: `list_api_api_v1_learn_scenarios_get`
+- Kode status respons: 200
+
+#### GET /api/v1/learn/scenarios/{scenario_id}
+
+- Ringkasan: Get Api
+- Operation ID: `get_api_api_v1_learn_scenarios__scenario_id__get`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/learn/scenarios/{scenario_id}/check
+
+- Ringkasan: Check Api
+- Operation ID: `check_api_api_v1_learn_scenarios__scenario_id__check_post`
+- Kode status respons: 200, 422
+
+### legal-hold
+
+#### GET /api/v1/legal-hold
+
+- Ringkasan: List Holds Api
+- Operation ID: `list_holds_api_api_v1_legal_hold_get`
+- Kode status respons: 200
+
+#### PUT /api/v1/legal-hold/conversations/{conversation_id}
+
+- Ringkasan: Set Conversation Hold Api
+- Operation ID: `set_conversation_hold_api_api_v1_legal_hold_conversations__conversation_id__put`
+- Kode status respons: 200, 422
+
+#### PUT /api/v1/legal-hold/documents/{document_id}
+
+- Ringkasan: Set Document Hold Api
+- Operation ID: `set_document_hold_api_api_v1_legal_hold_documents__document_id__put`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/legal-hold/retention-sweep
+
+- Ringkasan: Retention Sweep Api
+- Operation ID: `retention_sweep_api_api_v1_legal_hold_retention_sweep_post`
+- Kode status respons: 200, 422
+
+### lineage
+
+#### GET /api/v1/lineage
+
+- Ringkasan: Lineage Api
+- Operation ID: `lineage_api_api_v1_lineage_get`
+- Kode status respons: 200, 422
+
+#### GET /api/v1/lineage/summary
+
+- Ringkasan: Lineage Summary Api
+- Operation ID: `lineage_summary_api_api_v1_lineage_summary_get`
+- Kode status respons: 200
+
+### model-registry
+
+#### GET /api/v1/model-registry
+
+- Ringkasan: List Models Api
+- Operation ID: `list_models_api_api_v1_model_registry_get`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/model-registry
+
+- Ringkasan: Register Model Api
+- Operation ID: `register_model_api_api_v1_model_registry_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/model-registry/{name}/{version}/decision
+
+- Ringkasan: Decide Api
+- Operation ID: `decide_api_api_v1_model_registry__name___version__decision_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/model-registry/{name}/{version}/eval-runs
+
+- Ringkasan: Attach Eval Run Api
+- Operation ID: `attach_eval_run_api_api_v1_model_registry__name___version__eval_runs_post`
+- Kode status respons: 200, 422
+
+#### GET /api/v1/model-registry/{name}/{version}/lineage
+
+- Ringkasan: Lineage Api
+- Operation ID: `lineage_api_api_v1_model_registry__name___version__lineage_get`
+- Kode status respons: 200, 422
+
+### model-security
+
+#### POST /api/v1/model-security/evaluate
+
+- Ringkasan: Evaluate Api
+- Operation ID: `evaluate_api_api_v1_model_security_evaluate_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/model-security/scan-pickle
+
+- Ringkasan: Scan Pickle Api
+- Operation ID: `scan_pickle_api_api_v1_model_security_scan_pickle_post`
 - Kode status respons: 200, 422
 
 ### notifications
@@ -439,7 +761,27 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 - Operation ID: `review_assigned_api_api_v1_notifications_review_assigned_post`
 - Kode status respons: 200, 422
 
+### openai-compatible
+
+#### POST /api/v1/openai/chat/completions
+
+- Ringkasan: Completions Api
+- Operation ID: `completions_api_api_v1_openai_chat_completions_post`
+- Kode status respons: 200, 422
+
+#### GET /api/v1/openai/models
+
+- Ringkasan: Models Api
+- Operation ID: `models_api_api_v1_openai_models_get`
+- Kode status respons: 200
+
 ### operate
+
+#### POST /api/v1/operate/drift
+
+- Ringkasan: Drift Api
+- Operation ID: `drift_api_api_v1_operate_drift_post`
+- Kode status respons: 200, 422
 
 #### POST /api/v1/operate/finops-chargeback
 
@@ -515,6 +857,14 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 - Operation ID: `ready_api_v1_ready_get`
 - Kode status respons: 200
 
+### plan
+
+#### POST /api/v1/plan/use-cases
+
+- Ringkasan: Create Use Case Intake Api
+- Operation ID: `create_use_case_intake_api_api_v1_plan_use_cases_post`
+- Kode status respons: 200, 422
+
 ### prompts
 
 #### POST /api/v1/prompts
@@ -551,6 +901,54 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 
 - Ringkasan: Add Prompt Version Api
 - Operation ID: `add_prompt_version_api_api_v1_prompts__prompt_id__versions_post`
+- Kode status respons: 200, 422
+
+### rollouts
+
+#### POST /api/v1/rollouts/assign
+
+- Ringkasan: Assign Api
+- Operation ID: `assign_api_api_v1_rollouts_assign_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/rollouts/promotion
+
+- Ringkasan: Promotion Api
+- Operation ID: `promotion_api_api_v1_rollouts_promotion_post`
+- Kode status respons: 200, 422
+
+### scim
+
+#### POST /api/v1/scim/sync
+
+- Ringkasan: Scim Sync Api
+- Operation ID: `scim_sync_api_api_v1_scim_sync_post`
+- Kode status respons: 200, 422
+
+### security
+
+#### POST /api/v1/security/api-keys/{key_id}/emergency-revoke
+
+- Ringkasan: Emergency Revoke Api Key Api
+- Operation ID: `emergency_revoke_api_key_api_api_v1_security_api_keys__key_id__emergency_revoke_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/security/api-keys/{key_id}/rotate
+
+- Ringkasan: Rotate Api Key Api
+- Operation ID: `rotate_api_key_api_api_v1_security_api_keys__key_id__rotate_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/security/certificate-status
+
+- Ringkasan: Certificate Status Api
+- Operation ID: `certificate_status_api_api_v1_security_certificate_status_post`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/security/rotation-plan
+
+- Ringkasan: Rotation Plan Api
+- Operation ID: `rotation_plan_api_api_v1_security_rotation_plan_post`
 - Kode status respons: 200, 422
 
 ### systems

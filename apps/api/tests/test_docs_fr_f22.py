@@ -30,9 +30,19 @@ def test_api_reference_docs_are_generated_from_fastapi_openapi() -> None:
         assert path in content
 
     # The reference may document auth schemes, but it must not contain live credentials or examples.
-    unsafe_markers = ["gho_", "sk-", "bearer token", "api key value", "password="]
+    # Use patterns that match actual credential formats, not substrings that appear in route paths
+    # (e.g. "sk-" appears in "risk-classification").
+    import re as _re
     lowered = content.lower()
-    assert not any(marker in lowered for marker in unsafe_markers)
+    secret_patterns = [
+        r"gho_[a-z0-9]+",            # GitHub token prefix
+        r"sk-[a-z0-9_-]{16,}",        # OpenAI-style key (sk- followed by 16+ chars)
+        r"bearer token",
+        r"api key value",
+        r"password=",
+    ]
+    assert not any(_re.search(p, lowered) for p in secret_patterns), \
+        f"Unsafe credential marker found in api-reference.md"
 
     id_content = id_.read_text(encoding="utf-8")
     assert "Referensi API" in id_content

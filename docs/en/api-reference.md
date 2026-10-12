@@ -6,8 +6,8 @@ Requirement: FR-F22 (P1 API reference).
 
 API title: E2EAIDEV API
 API version: 0.1.0
-Total paths: 81
-Total operations: 87
+Total paths: 138
+Total operations: 148
 
 ## How to regenerate
 
@@ -20,6 +20,24 @@ Most application routes require a scoped session or API key. This generated refe
 ## Operations by tag
 
 ### admin
+
+#### GET /api/v1/admin/connector-templates
+
+- Summary: List Api
+- Operation ID: `list_api_api_v1_admin_connector_templates_get`
+- Response status codes: 200
+
+#### GET /api/v1/admin/connector-templates/{template_id}
+
+- Summary: Get Api
+- Operation ID: `get_api_api_v1_admin_connector_templates__template_id__get`
+- Response status codes: 200, 422
+
+#### POST /api/v1/admin/connector-templates/{template_id}/apply
+
+- Summary: Apply Api
+- Operation ID: `apply_api_api_v1_admin_connector_templates__template_id__apply_post`
+- Response status codes: 200, 422
 
 #### POST /api/v1/admin/org/divisions
 
@@ -111,6 +129,14 @@ Most application routes require a scoped session or API key. This generated refe
 - Operation ID: `deactivate_user_api_api_v1_users__user_id__deactivate_post`
 - Response status codes: 200, 422
 
+### admin-config
+
+#### GET /api/v1/admin/config/export
+
+- Summary: Export Config Api
+- Operation ID: `export_config_api_api_v1_admin_config_export_get`
+- Response status codes: 200, 422
+
 ### api-keys
 
 #### GET /api/v1/api-keys
@@ -129,6 +155,14 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: Revoke Api Key Api
 - Operation ID: `revoke_api_key_api_api_v1_api_keys__key_id__delete`
+- Response status codes: 200, 422
+
+### audit
+
+#### POST /api/v1/audit/export
+
+- Summary: Export Audit Events Api
+- Operation ID: `export_audit_events_api_api_v1_audit_export_post`
 - Response status codes: 200, 422
 
 ### auth
@@ -156,6 +190,14 @@ Most application routes require a scoped session or API key. This generated refe
 - Summary: Me
 - Operation ID: `me_api_v1_me_get`
 - Response status codes: 200
+
+### bot-risk
+
+#### PUT /api/v1/bots/{bot_id}/risk-classification
+
+- Summary: Classify Bot Risk Api
+- Operation ID: `classify_bot_risk_api_api_v1_bots__bot_id__risk_classification_put`
+- Response status codes: 200, 422
 
 ### bots
 
@@ -269,6 +311,14 @@ Most application routes require a scoped session or API key. This generated refe
 - Operation ID: `stop_api_api_v1_messages__message_id__stop_post`
 - Response status codes: 200, 422
 
+### connectors
+
+#### POST /api/v1/connectors/sync
+
+- Summary: Sync Api
+- Operation ID: `sync_api_api_v1_connectors_sync_post`
+- Response status codes: 200, 422
+
 ### documents
 
 #### POST /api/v1/documents
@@ -301,6 +351,12 @@ Most application routes require a scoped session or API key. This generated refe
 - Operation ID: `deny_access_request_api_api_v1_documents_access_requests__request_id__deny_post`
 - Response status codes: 200, 422
 
+#### GET /api/v1/documents/reviews/due
+
+- Summary: Due Reviews Api
+- Operation ID: `due_reviews_api_api_v1_documents_reviews_due_get`
+- Response status codes: 200
+
 #### GET /api/v1/documents/search
 
 - Summary: Search Documents Api
@@ -317,6 +373,18 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: Delete Document Api
 - Operation ID: `delete_document_api_api_v1_documents__document_id__delete`
+- Response status codes: 200, 422
+
+#### PUT /api/v1/documents/{document_id}/lifecycle
+
+- Summary: Set Lifecycle Api
+- Operation ID: `set_lifecycle_api_api_v1_documents__document_id__lifecycle_put`
+- Response status codes: 200, 422
+
+#### POST /api/v1/documents/{document_id}/lifecycle/reviewed
+
+- Summary: Mark Reviewed Api
+- Operation ID: `mark_reviewed_api_api_v1_documents__document_id__lifecycle_reviewed_post`
 - Response status codes: 200, 422
 
 #### POST /api/v1/documents/{document_id}/restore
@@ -343,6 +411,12 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: Run Benchmark Api
 - Operation ID: `run_benchmark_api_api_v1_evals_benchmark_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/evals/bias-fairness
+
+- Summary: Run Bias Fairness Api
+- Operation ID: `run_bias_fairness_api_api_v1_evals_bias_fairness_post`
 - Response status codes: 200, 422
 
 #### POST /api/v1/evals/compare
@@ -375,6 +449,24 @@ Most application routes require a scoped session or API key. This generated refe
 - Operation ID: `run_doc_understanding_api_api_v1_evals_doc_understanding_post`
 - Response status codes: 200, 422
 
+#### POST /api/v1/evals/load-test
+
+- Summary: Run Load Test Api
+- Operation ID: `run_load_test_api_api_v1_evals_load_test_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/evals/load-test/k6-script
+
+- Summary: K6 Script Api
+- Operation ID: `k6_script_api_api_v1_evals_load_test_k6_script_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/evals/online
+
+- Summary: Online Eval Api
+- Operation ID: `online_eval_api_api_v1_evals_online_post`
+- Response status codes: 200, 422
+
 #### POST /api/v1/evals/retrieval-metrics
 
 - Summary: Run Retrieval Metrics Api
@@ -405,12 +497,242 @@ Most application routes require a scoped session or API key. This generated refe
 - Operation ID: `tool_catalog_api_api_v1_evals_tool_catalog_get`
 - Response status codes: 200
 
+### governance
+
+#### GET /api/v1/governance/ai-inventory
+
+- Summary: List Inventory Api
+- Operation ID: `list_inventory_api_api_v1_governance_ai_inventory_get`
+- Response status codes: 200, 422
+
+#### PUT /api/v1/governance/ai-inventory
+
+- Summary: Upsert Inventory Entry Api
+- Operation ID: `upsert_inventory_entry_api_api_v1_governance_ai_inventory_put`
+- Response status codes: 200, 422
+
+#### GET /api/v1/governance/bot-approvals
+
+- Summary: List Bot Approvals Api
+- Operation ID: `list_bot_approvals_api_api_v1_governance_bot_approvals_get`
+- Response status codes: 200, 422
+
+#### POST /api/v1/governance/bot-approvals
+
+- Summary: Request Bot Approval Api
+- Operation ID: `request_bot_approval_api_api_v1_governance_bot_approvals_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/governance/bot-approvals/{approval_id}/decisions
+
+- Summary: Decide Bot Approval Api
+- Operation ID: `decide_bot_approval_api_api_v1_governance_bot_approvals__approval_id__decisions_post`
+- Response status codes: 200, 422
+
 ### improve
+
+#### GET /api/v1/improve/flywheel
+
+- Summary: Queue Api
+- Operation ID: `queue_api_api_v1_improve_flywheel_get`
+- Response status codes: 200, 422
+
+#### POST /api/v1/improve/flywheel/collect
+
+- Summary: Collect Api
+- Operation ID: `collect_api_api_v1_improve_flywheel_collect_post`
+- Response status codes: 200
+
+#### POST /api/v1/improve/flywheel/export
+
+- Summary: Export Api
+- Operation ID: `export_api_api_v1_improve_flywheel_export_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/improve/flywheel/flag
+
+- Summary: Flag Api
+- Operation ID: `flag_api_api_v1_improve_flywheel_flag_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/improve/flywheel/{item_id}/reeval
+
+- Summary: Reeval Api
+- Operation ID: `reeval_api_api_v1_improve_flywheel__item_id__reeval_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/improve/flywheel/{item_id}/release
+
+- Summary: Release Api
+- Operation ID: `release_api_api_v1_improve_flywheel__item_id__release_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/improve/flywheel/{item_id}/triage
+
+- Summary: Triage Api
+- Operation ID: `triage_api_api_v1_improve_flywheel__item_id__triage_post`
+- Response status codes: 200, 422
 
 #### POST /api/v1/improve/top-unanswered
 
 - Summary: Top Unanswered Api
 - Operation ID: `top_unanswered_api_api_v1_improve_top_unanswered_post`
+- Response status codes: 200, 422
+
+### incidents
+
+#### GET /api/v1/incidents
+
+- Summary: List Api
+- Operation ID: `list_api_api_v1_incidents_get`
+- Response status codes: 200, 422
+
+#### POST /api/v1/incidents
+
+- Summary: Report Api
+- Operation ID: `report_api_api_v1_incidents_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/incidents/{incident_id}/postmortem
+
+- Summary: Postmortem Api
+- Operation ID: `postmortem_api_api_v1_incidents__incident_id__postmortem_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/incidents/{incident_id}/traces
+
+- Summary: Traces Api
+- Operation ID: `traces_api_api_v1_incidents__incident_id__traces_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/incidents/{incident_id}/transition
+
+- Summary: Transition Api
+- Operation ID: `transition_api_api_v1_incidents__incident_id__transition_post`
+- Response status codes: 200, 422
+
+### learn
+
+#### GET /api/v1/learn/paths
+
+- Summary: List Api
+- Operation ID: `list_api_api_v1_learn_paths_get`
+- Response status codes: 200
+
+#### GET /api/v1/learn/paths/{path_id}
+
+- Summary: Get Api
+- Operation ID: `get_api_api_v1_learn_paths__path_id__get`
+- Response status codes: 200, 422
+
+#### POST /api/v1/learn/paths/{path_id}/progress
+
+- Summary: Progress Api
+- Operation ID: `progress_api_api_v1_learn_paths__path_id__progress_post`
+- Response status codes: 200, 422
+
+#### GET /api/v1/learn/scenarios
+
+- Summary: List Api
+- Operation ID: `list_api_api_v1_learn_scenarios_get`
+- Response status codes: 200
+
+#### GET /api/v1/learn/scenarios/{scenario_id}
+
+- Summary: Get Api
+- Operation ID: `get_api_api_v1_learn_scenarios__scenario_id__get`
+- Response status codes: 200, 422
+
+#### POST /api/v1/learn/scenarios/{scenario_id}/check
+
+- Summary: Check Api
+- Operation ID: `check_api_api_v1_learn_scenarios__scenario_id__check_post`
+- Response status codes: 200, 422
+
+### legal-hold
+
+#### GET /api/v1/legal-hold
+
+- Summary: List Holds Api
+- Operation ID: `list_holds_api_api_v1_legal_hold_get`
+- Response status codes: 200
+
+#### PUT /api/v1/legal-hold/conversations/{conversation_id}
+
+- Summary: Set Conversation Hold Api
+- Operation ID: `set_conversation_hold_api_api_v1_legal_hold_conversations__conversation_id__put`
+- Response status codes: 200, 422
+
+#### PUT /api/v1/legal-hold/documents/{document_id}
+
+- Summary: Set Document Hold Api
+- Operation ID: `set_document_hold_api_api_v1_legal_hold_documents__document_id__put`
+- Response status codes: 200, 422
+
+#### POST /api/v1/legal-hold/retention-sweep
+
+- Summary: Retention Sweep Api
+- Operation ID: `retention_sweep_api_api_v1_legal_hold_retention_sweep_post`
+- Response status codes: 200, 422
+
+### lineage
+
+#### GET /api/v1/lineage
+
+- Summary: Lineage Api
+- Operation ID: `lineage_api_api_v1_lineage_get`
+- Response status codes: 200, 422
+
+#### GET /api/v1/lineage/summary
+
+- Summary: Lineage Summary Api
+- Operation ID: `lineage_summary_api_api_v1_lineage_summary_get`
+- Response status codes: 200
+
+### model-registry
+
+#### GET /api/v1/model-registry
+
+- Summary: List Models Api
+- Operation ID: `list_models_api_api_v1_model_registry_get`
+- Response status codes: 200, 422
+
+#### POST /api/v1/model-registry
+
+- Summary: Register Model Api
+- Operation ID: `register_model_api_api_v1_model_registry_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/model-registry/{name}/{version}/decision
+
+- Summary: Decide Api
+- Operation ID: `decide_api_api_v1_model_registry__name___version__decision_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/model-registry/{name}/{version}/eval-runs
+
+- Summary: Attach Eval Run Api
+- Operation ID: `attach_eval_run_api_api_v1_model_registry__name___version__eval_runs_post`
+- Response status codes: 200, 422
+
+#### GET /api/v1/model-registry/{name}/{version}/lineage
+
+- Summary: Lineage Api
+- Operation ID: `lineage_api_api_v1_model_registry__name___version__lineage_get`
+- Response status codes: 200, 422
+
+### model-security
+
+#### POST /api/v1/model-security/evaluate
+
+- Summary: Evaluate Api
+- Operation ID: `evaluate_api_api_v1_model_security_evaluate_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/model-security/scan-pickle
+
+- Summary: Scan Pickle Api
+- Operation ID: `scan_pickle_api_api_v1_model_security_scan_pickle_post`
 - Response status codes: 200, 422
 
 ### notifications
@@ -439,7 +761,27 @@ Most application routes require a scoped session or API key. This generated refe
 - Operation ID: `review_assigned_api_api_v1_notifications_review_assigned_post`
 - Response status codes: 200, 422
 
+### openai-compatible
+
+#### POST /api/v1/openai/chat/completions
+
+- Summary: Completions Api
+- Operation ID: `completions_api_api_v1_openai_chat_completions_post`
+- Response status codes: 200, 422
+
+#### GET /api/v1/openai/models
+
+- Summary: Models Api
+- Operation ID: `models_api_api_v1_openai_models_get`
+- Response status codes: 200
+
 ### operate
+
+#### POST /api/v1/operate/drift
+
+- Summary: Drift Api
+- Operation ID: `drift_api_api_v1_operate_drift_post`
+- Response status codes: 200, 422
 
 #### POST /api/v1/operate/finops-chargeback
 
@@ -515,6 +857,14 @@ Most application routes require a scoped session or API key. This generated refe
 - Operation ID: `ready_api_v1_ready_get`
 - Response status codes: 200
 
+### plan
+
+#### POST /api/v1/plan/use-cases
+
+- Summary: Create Use Case Intake Api
+- Operation ID: `create_use_case_intake_api_api_v1_plan_use_cases_post`
+- Response status codes: 200, 422
+
 ### prompts
 
 #### POST /api/v1/prompts
@@ -551,6 +901,54 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: Add Prompt Version Api
 - Operation ID: `add_prompt_version_api_api_v1_prompts__prompt_id__versions_post`
+- Response status codes: 200, 422
+
+### rollouts
+
+#### POST /api/v1/rollouts/assign
+
+- Summary: Assign Api
+- Operation ID: `assign_api_api_v1_rollouts_assign_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/rollouts/promotion
+
+- Summary: Promotion Api
+- Operation ID: `promotion_api_api_v1_rollouts_promotion_post`
+- Response status codes: 200, 422
+
+### scim
+
+#### POST /api/v1/scim/sync
+
+- Summary: Scim Sync Api
+- Operation ID: `scim_sync_api_api_v1_scim_sync_post`
+- Response status codes: 200, 422
+
+### security
+
+#### POST /api/v1/security/api-keys/{key_id}/emergency-revoke
+
+- Summary: Emergency Revoke Api Key Api
+- Operation ID: `emergency_revoke_api_key_api_api_v1_security_api_keys__key_id__emergency_revoke_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/security/api-keys/{key_id}/rotate
+
+- Summary: Rotate Api Key Api
+- Operation ID: `rotate_api_key_api_api_v1_security_api_keys__key_id__rotate_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/security/certificate-status
+
+- Summary: Certificate Status Api
+- Operation ID: `certificate_status_api_api_v1_security_certificate_status_post`
+- Response status codes: 200, 422
+
+#### POST /api/v1/security/rotation-plan
+
+- Summary: Rotation Plan Api
+- Operation ID: `rotation_plan_api_api_v1_security_rotation_plan_post`
 - Response status codes: 200, 422
 
 ### systems

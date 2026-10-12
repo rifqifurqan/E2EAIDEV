@@ -48,6 +48,60 @@
         "title": "ApiKeyCreateIn",
         "type": "object"
       },
+      "ApprovalDecisionIn": {
+        "properties": {
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "ApprovalDecisionIn",
+        "type": "object"
+      },
+      "ApprovalRequestIn": {
+        "properties": {
+          "approval_type": {
+            "default": "high_risk_release",
+            "title": "Approval Type",
+            "type": "string"
+          },
+          "bot_id": {
+            "format": "uuid",
+            "title": "Bot Id",
+            "type": "string"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          }
+        },
+        "required": [
+          "bot_id"
+        ],
+        "title": "ApprovalRequestIn",
+        "type": "object"
+      },
       "AskIn": {
         "properties": {
           "document_id": {
@@ -86,6 +140,99 @@
           "question"
         ],
         "title": "AskIn",
+        "type": "object"
+      },
+      "AssignIn": {
+        "properties": {
+          "ab_weights": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Ab Weights",
+            "type": "object"
+          },
+          "baseline": {
+            "title": "Baseline",
+            "type": "string"
+          },
+          "canary_percent": {
+            "default": 0.0,
+            "title": "Canary Percent",
+            "type": "number"
+          },
+          "candidate": {
+            "title": "Candidate",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "salt": {
+            "default": "rollout",
+            "title": "Salt",
+            "type": "string"
+          },
+          "shadow_percent": {
+            "default": 0.0,
+            "title": "Shadow Percent",
+            "type": "number"
+          },
+          "strategy": {
+            "title": "Strategy",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy",
+          "baseline",
+          "candidate",
+          "subject"
+        ],
+        "title": "AssignIn",
+        "type": "object"
+      },
+      "AttachRunIn": {
+        "properties": {
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "title": "AttachRunIn",
+        "type": "object"
+      },
+      "AuditExportIn": {
+        "properties": {
+          "after_seq": {
+            "default": 0,
+            "title": "After Seq",
+            "type": "integer"
+          },
+          "limit": {
+            "default": 100,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "sink": {
+            "title": "Sink",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sink"
+        ],
+        "title": "AuditExportIn",
         "type": "object"
       },
       "AuthIn": {
@@ -225,6 +372,50 @@
         "title": "BenchmarkSampleIn",
         "type": "object"
       },
+      "BiasFairnessIn": {
+        "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "max_refusal_gap": {
+            "default": 0.1,
+            "title": "Max Refusal Gap",
+            "type": "number"
+          },
+          "max_score_gap": {
+            "default": 0.1,
+            "title": "Max Score Gap",
+            "type": "number"
+          },
+          "name": {
+            "default": "bias-fairness",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BiasFairnessIn",
+        "type": "object"
+      },
       "Body_upload_document_api_v1_documents_post": {
         "properties": {
           "file": {
@@ -297,6 +488,34 @@
           "bundle"
         ],
         "title": "BundleIn",
+        "type": "object"
+      },
+      "CertificateStatusIn": {
+        "properties": {
+          "not_after": {
+            "format": "date-time",
+            "title": "Not After",
+            "type": "string"
+          }
+        },
+        "required": [
+          "not_after"
+        ],
+        "title": "CertificateStatusIn",
+        "type": "object"
+      },
+      "CheckIn": {
+        "properties": {
+          "submission": {
+            "additionalProperties": true,
+            "title": "Submission",
+            "type": "object"
+          }
+        },
+        "required": [
+          "submission"
+        ],
+        "title": "CheckIn",
         "type": "object"
       },
       "CompareIn": {
@@ -546,6 +765,19 @@
         "title": "DeactivateIn",
         "type": "object"
       },
+      "DecisionIn": {
+        "properties": {
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "DecisionIn",
+        "type": "object"
+      },
       "DelegatedIdentityValidateIn": {
         "properties": {
           "auth_mode": {
@@ -622,6 +854,109 @@
         "title": "DocUnderstandingIn",
         "type": "object"
       },
+      "DriftIn": {
+        "properties": {
+          "baseline": {
+            "$ref": "#/components/schemas/DriftWindow"
+          },
+          "current": {
+            "$ref": "#/components/schemas/DriftWindow"
+          },
+          "embedding_threshold": {
+            "default": 0.1,
+            "title": "Embedding Threshold",
+            "type": "number"
+          },
+          "js_threshold": {
+            "default": 0.1,
+            "title": "Js Threshold",
+            "type": "number"
+          },
+          "max_quality_drop": {
+            "default": 0.05,
+            "title": "Max Quality Drop",
+            "type": "number"
+          },
+          "min_samples": {
+            "default": 30,
+            "title": "Min Samples",
+            "type": "integer"
+          },
+          "psi_threshold": {
+            "default": 0.25,
+            "title": "Psi Threshold",
+            "type": "number"
+          }
+        },
+        "required": [
+          "baseline",
+          "current"
+        ],
+        "title": "DriftIn",
+        "type": "object"
+      },
+      "DriftWindow": {
+        "properties": {
+          "embeddings": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embeddings"
+          },
+          "scores": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scores"
+          },
+          "topics": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topics"
+          }
+        },
+        "title": "DriftWindow",
+        "type": "object"
+      },
+      "EmergencyRevokeIn": {
+        "properties": {
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "title": "EmergencyRevokeIn",
+        "type": "object"
+      },
       "EndpointsIn": {
         "properties": {
           "operation_ids": {
@@ -655,6 +990,53 @@
           "bundle"
         ],
         "title": "EnvironmentReleaseIn",
+        "type": "object"
+      },
+      "EvaluateIn": {
+        "properties": {
+          "content_b64": {
+            "title": "Content B64",
+            "type": "string"
+          },
+          "expected_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Sha256"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename",
+          "content_b64"
+        ],
+        "title": "EvaluateIn",
+        "type": "object"
+      },
+      "ExportIn": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "name"
+        ],
+        "title": "ExportIn",
         "type": "object"
       },
       "FeedbackIn": {
@@ -753,6 +1135,57 @@
         "title": "FinopsWindowIn",
         "type": "object"
       },
+      "FlagIn": {
+        "properties": {
+          "correction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correction"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "source": {
+            "default": "reviewer_flag",
+            "title": "Source",
+            "type": "string"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "FlagIn",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -764,6 +1197,24 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HoldIn": {
+        "properties": {
+          "hold": {
+            "title": "Hold",
+            "type": "boolean"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hold"
+        ],
+        "title": "HoldIn",
         "type": "object"
       },
       "IncidentRaisedIn": {
@@ -802,6 +1253,240 @@
           "title"
         ],
         "title": "IncidentRaisedIn",
+        "type": "object"
+      },
+      "InventoryEntryIn": {
+        "properties": {
+          "approval_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Status"
+          },
+          "bot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bot Id"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "model_card": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Model Card",
+            "type": "object"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "risk_tier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Tier"
+          },
+          "status": {
+            "default": "draft",
+            "title": "Status",
+            "type": "string"
+          },
+          "system_card": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "System Card",
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "InventoryEntryIn",
+        "type": "object"
+      },
+      "K6ScriptIn": {
+        "properties": {
+          "duration": {
+            "default": "30s",
+            "title": "Duration",
+            "type": "string"
+          },
+          "p95_ms": {
+            "default": 3000,
+            "title": "P95 Ms",
+            "type": "integer"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "vus": {
+            "default": 10,
+            "title": "Vus",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "title": "K6ScriptIn",
+        "type": "object"
+      },
+      "LifecycleIn": {
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
+          },
+          "review_owner_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Owner Id"
+          }
+        },
+        "title": "LifecycleIn",
+        "type": "object"
+      },
+      "LoadTestIn": {
+        "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
+          "duration_s": {
+            "title": "Duration S",
+            "type": "number"
+          },
+          "error_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Rate"
+          },
+          "min_rps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Rps"
+          },
+          "name": {
+            "default": "load-test",
+            "title": "Name",
+            "type": "string"
+          },
+          "p95_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95 Ms"
+          },
+          "samples": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Samples",
+            "type": "array"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "samples",
+          "duration_s"
+        ],
+        "title": "LoadTestIn",
         "type": "object"
       },
       "LoginIn": {
@@ -928,6 +1613,104 @@
         "title": "MessageIn",
         "type": "object"
       },
+      "OnlineEvalIn": {
+        "properties": {
+          "dataset_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
+          "min_quality": {
+            "default": 0.7,
+            "title": "Min Quality",
+            "type": "number"
+          },
+          "name": {
+            "default": "online-eval",
+            "title": "Name",
+            "type": "string"
+          },
+          "rate": {
+            "default": 0.1,
+            "title": "Rate",
+            "type": "number"
+          },
+          "salt": {
+            "default": "online-eval",
+            "title": "Salt",
+            "type": "string"
+          },
+          "traces": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Traces",
+            "type": "array"
+          }
+        },
+        "required": [
+          "traces"
+        ],
+        "title": "OnlineEvalIn",
+        "type": "object"
+      },
+      "PostmortemIn": {
+        "properties": {
+          "action_items": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Action Items",
+            "type": "array"
+          },
+          "lessons": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Lessons",
+            "type": "array"
+          },
+          "root_cause": {
+            "title": "Root Cause",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary",
+          "root_cause"
+        ],
+        "title": "PostmortemIn",
+        "type": "object"
+      },
+      "ProgressIn": {
+        "properties": {
+          "completed_step_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Completed Step Ids",
+            "type": "array"
+          }
+        },
+        "title": "ProgressIn",
+        "type": "object"
+      },
       "ProjectIn": {
         "properties": {
           "actor": {
@@ -1049,6 +1832,45 @@
         "title": "PromoteIn",
         "type": "object"
       },
+      "PromotionIn": {
+        "properties": {
+          "baseline": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Baseline",
+            "type": "object"
+          },
+          "candidate": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Candidate",
+            "type": "object"
+          },
+          "max_error_increase": {
+            "default": 0.005,
+            "title": "Max Error Increase",
+            "type": "number"
+          },
+          "max_quality_drop": {
+            "default": 0.02,
+            "title": "Max Quality Drop",
+            "type": "number"
+          },
+          "min_samples": {
+            "default": 200,
+            "title": "Min Samples",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "baseline",
+          "candidate"
+        ],
+        "title": "PromotionIn",
+        "type": "object"
+      },
       "PromptDiffIn": {
         "properties": {
           "from_version_id": {
@@ -1155,22 +1977,18 @@
         "title": "PromptVersionIn",
         "type": "object"
       },
-      "RegisterIn": {
+      "ReevalIn": {
         "properties": {
-          "description": {
-            "default": "",
-            "title": "Description",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
             "type": "string"
           }
         },
         "required": [
-          "name"
+          "run_id"
         ],
-        "title": "RegisterIn",
+        "title": "ReevalIn",
         "type": "object"
       },
       "ReleaseApprovedIn": {
@@ -1269,6 +2087,19 @@
         "title": "ReleaseGatePolicyIn",
         "type": "object"
       },
+      "ReleaseIn": {
+        "properties": {
+          "release_ref": {
+            "title": "Release Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "release_ref"
+        ],
+        "title": "ReleaseIn",
+        "type": "object"
+      },
       "RenameIn": {
         "properties": {
           "title": {
@@ -1280,6 +2111,49 @@
           "title"
         ],
         "title": "RenameIn",
+        "type": "object"
+      },
+      "ReportIn": {
+        "properties": {
+          "bot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bot Id"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "trace_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Trace Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "title",
+          "severity"
+        ],
+        "title": "ReportIn",
         "type": "object"
       },
       "RetrievalMetricsIn": {
@@ -1337,6 +2211,41 @@
         "title": "ReviewAssignedIn",
         "type": "object"
       },
+      "ReviewedIn": {
+        "properties": {
+          "next_review_in_days": {
+            "default": 180,
+            "title": "Next Review In Days",
+            "type": "integer"
+          }
+        },
+        "title": "ReviewedIn",
+        "type": "object"
+      },
+      "RiskClassificationIn": {
+        "properties": {
+          "eu_ai_act_tier": {
+            "title": "Eu Ai Act Tier",
+            "type": "string"
+          },
+          "nist_ai_rmf_profile": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Nist Ai Rmf Profile",
+            "type": "object"
+          },
+          "uu_pdp_data_impact": {
+            "default": "",
+            "title": "Uu Pdp Data Impact",
+            "type": "string"
+          }
+        },
+        "required": [
+          "eu_ai_act_tier"
+        ],
+        "title": "RiskClassificationIn",
+        "type": "object"
+      },
       "RoleGrantIn": {
         "properties": {
           "actor": {
@@ -1373,6 +2282,33 @@
         "title": "RoleGrantIn",
         "type": "object"
       },
+      "RotateIn": {
+        "properties": {
+          "grace_minutes": {
+            "default": 10,
+            "title": "Grace Minutes",
+            "type": "integer"
+          }
+        },
+        "title": "RotateIn",
+        "type": "object"
+      },
+      "RotationPlanIn": {
+        "properties": {
+          "secrets": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Secrets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "secrets"
+        ],
+        "title": "RotationPlanIn",
+        "type": "object"
+      },
       "RunIn": {
         "properties": {
           "adapter": {
@@ -1390,6 +2326,45 @@
           "dataset_id"
         ],
         "title": "RunIn",
+        "type": "object"
+      },
+      "ScanPickleIn": {
+        "properties": {
+          "content_b64": {
+            "title": "Content B64",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content_b64"
+        ],
+        "title": "ScanPickleIn",
+        "type": "object"
+      },
+      "ScimSyncIn": {
+        "properties": {
+          "groups": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 500,
+            "title": "Groups",
+            "type": "array"
+          },
+          "users": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 1000,
+            "title": "Users",
+            "type": "array"
+          }
+        },
+        "title": "ScimSyncIn",
         "type": "object"
       },
       "ScopeIn": {
@@ -1565,6 +2540,43 @@
         "title": "SloWindowIn",
         "type": "object"
       },
+      "SourceDocIn": {
+        "properties": {
+          "acl": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Acl",
+            "type": "array"
+          },
+          "external_id": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "External Id",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 200000,
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "external_id",
+          "title",
+          "text"
+        ],
+        "title": "SourceDocIn",
+        "type": "object"
+      },
       "SpecIn": {
         "properties": {
           "spec": {
@@ -1622,6 +2634,59 @@
           "attempts"
         ],
         "title": "StructuredOutputValidityIn",
+        "type": "object"
+      },
+      "SweepIn": {
+        "properties": {
+          "chats_days": {
+            "default": 365,
+            "title": "Chats Days",
+            "type": "integer"
+          },
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "trash_days": {
+            "default": 30,
+            "title": "Trash Days",
+            "type": "integer"
+          }
+        },
+        "title": "SweepIn",
+        "type": "object"
+      },
+      "SyncIn": {
+        "properties": {
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/SourceDocIn"
+            },
+            "maxItems": 500,
+            "title": "Documents",
+            "type": "array"
+          },
+          "group_map": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "title": "Group Map",
+            "type": "object"
+          },
+          "source": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "documents"
+        ],
+        "title": "SyncIn",
         "type": "object"
       },
       "TeamIn": {
@@ -1690,6 +2755,92 @@
         "title": "TopUnansweredIn",
         "type": "object"
       },
+      "TracesIn": {
+        "properties": {
+          "trace_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Trace Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "trace_ids"
+        ],
+        "title": "TracesIn",
+        "type": "object"
+      },
+      "TransitionIn": {
+        "properties": {
+          "assignee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Id"
+          },
+          "fix_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fix Notes"
+          },
+          "release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Ref"
+          },
+          "to_status": {
+            "title": "To Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to_status"
+        ],
+        "title": "TransitionIn",
+        "type": "object"
+      },
+      "TriageIn": {
+        "properties": {
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "TriageIn",
+        "type": "object"
+      },
       "UsageRoiIn": {
         "properties": {
           "events": {
@@ -1705,6 +2856,48 @@
           "events"
         ],
         "title": "UsageRoiIn",
+        "type": "object"
+      },
+      "UseCaseIntakeIn": {
+        "properties": {
+          "data_sources": {
+            "default": [],
+            "items": {},
+            "title": "Data Sources",
+            "type": "array"
+          },
+          "problem": {
+            "title": "Problem",
+            "type": "string"
+          },
+          "success_metrics": {
+            "additionalProperties": true,
+            "title": "Success Metrics",
+            "type": "object"
+          },
+          "systems_to_integrate": {
+            "default": [],
+            "items": {},
+            "title": "Systems To Integrate",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "users": {
+            "items": {},
+            "title": "Users",
+            "type": "array"
+          }
+        },
+        "required": [
+          "title",
+          "problem",
+          "users",
+          "success_metrics"
+        ],
+        "title": "UseCaseIntakeIn",
         "type": "object"
       },
       "UserIn": {
@@ -1819,6 +3012,41 @@
         "title": "GrantIn",
         "type": "object"
       },
+      "e2eai__model_registry__RegisterIn": {
+        "properties": {
+          "lineage": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Lineage",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Version"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ],
+        "title": "RegisterIn",
+        "type": "object"
+      },
       "e2eai__system_registration__GrantIn": {
         "properties": {
           "principals": {
@@ -1834,6 +3062,24 @@
         ],
         "title": "GrantIn",
         "type": "object"
+      },
+      "e2eai__system_registration__RegisterIn": {
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "RegisterIn",
+        "type": "object"
       }
     }
   },
@@ -1843,6 +3089,160 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/config/export": {
+      "get": {
+        "description": "Export the current install as configuration-as-code from the Admin UI (FR-F21).",
+        "operationId": "export_config_api_api_v1_admin_config_export_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "yaml",
+              "pattern": "^(yaml|json)$",
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Config Api",
+        "tags": [
+          "admin-config"
+        ]
+      }
+    },
+    "/api/v1/admin/connector-templates": {
+      "get": {
+        "operationId": "list_api_api_v1_admin_connector_templates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Api Api V1 Admin Connector Templates Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Api",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/connector-templates/{template_id}": {
+      "get": {
+        "operationId": "get_api_api_v1_admin_connector_templates__template_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "template_id",
+            "required": true,
+            "schema": {
+              "title": "Template Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Api Api V1 Admin Connector Templates  Template Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Api",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/connector-templates/{template_id}/apply": {
+      "post": {
+        "operationId": "apply_api_api_v1_admin_connector_templates__template_id__apply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "template_id",
+            "required": true,
+            "schema": {
+              "title": "Template Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Apply Api Api V1 Admin Connector Templates  Template Id  Apply Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply Api",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/org/divisions": {
       "post": {
         "operationId": "create_division_route_api_v1_admin_org_divisions_post",
@@ -2226,7 +3626,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RegisterIn"
+                "$ref": "#/components/schemas/e2eai__system_registration__RegisterIn"
               }
             }
           },
@@ -2638,6 +4038,50 @@
         "summary": "Revoke Api Key Api",
         "tags": [
           "api-keys"
+        ]
+      }
+    },
+    "/api/v1/audit/export": {
+      "post": {
+        "description": "FR-F10: Export audit events to syslog/OTel/webhook payload format.",
+        "operationId": "export_audit_events_api_api_v1_audit_export_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuditExportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Export Audit Events Api Api V1 Audit Export Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Audit Events Api",
+        "tags": [
+          "audit"
         ]
       }
     },
@@ -3157,6 +4601,62 @@
         ]
       }
     },
+    "/api/v1/bots/{bot_id}/risk-classification": {
+      "put": {
+        "description": "FR-P2: classify a bot's AI risk and derive release gates.",
+        "operationId": "classify_bot_risk_api_api_v1_bots__bot_id__risk_classification_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bot_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Bot Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RiskClassificationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Classify Bot Risk Api Api V1 Bots  Bot Id  Risk Classification Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Classify Bot Risk Api",
+        "tags": [
+          "bot-risk"
+        ]
+      }
+    },
     "/api/v1/bots/{bot_id}/scope": {
       "put": {
         "operationId": "set_bot_scope_api_api_v1_bots__bot_id__scope_put",
@@ -3600,6 +5100,50 @@
         ]
       }
     },
+    "/api/v1/connectors/sync": {
+      "post": {
+        "description": "FR-X1: push a connector's documents + source ACLs for permission-mirrored sync (admin only).",
+        "operationId": "sync_api_api_v1_connectors_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Sync Api Api V1 Connectors Sync Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Api",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
     "/api/v1/documents": {
       "post": {
         "operationId": "upload_document_api_v1_documents_post",
@@ -3823,6 +5367,30 @@
         ]
       }
     },
+    "/api/v1/documents/reviews/due": {
+      "get": {
+        "description": "FR-D8: documents whose review is due for the calling user.",
+        "operationId": "due_reviews_api_api_v1_documents_reviews_due_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Due Reviews Api Api V1 Documents Reviews Due Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Due Reviews Api",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/api/v1/documents/search": {
       "get": {
         "description": "Permission-filtered document search (FR-S10). Returns safe metadata only.",
@@ -3969,6 +5537,116 @@
           }
         },
         "summary": "Delete Document Api",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/lifecycle": {
+      "put": {
+        "operationId": "set_lifecycle_api_api_v1_documents__document_id__lifecycle_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifecycleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Lifecycle Api Api V1 Documents  Document Id  Lifecycle Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Lifecycle Api",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/lifecycle/reviewed": {
+      "post": {
+        "operationId": "mark_reviewed_api_api_v1_documents__document_id__lifecycle_reviewed_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewedIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Mark Reviewed Api Api V1 Documents  Document Id  Lifecycle Reviewed Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mark Reviewed Api",
         "tags": [
           "documents"
         ]
@@ -4169,6 +5847,50 @@
           }
         },
         "summary": "Run Benchmark Api",
+        "tags": [
+          "evals"
+        ]
+      }
+    },
+    "/api/v1/evals/bias-fairness": {
+      "post": {
+        "description": "FR-T9: run a bias/fairness suite across groups and store a safe EvalRun.",
+        "operationId": "run_bias_fairness_api_api_v1_evals_bias_fairness_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiasFairnessIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Run Bias Fairness Api Api V1 Evals Bias Fairness Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Bias Fairness Api",
         "tags": [
           "evals"
         ]
@@ -4405,6 +6127,138 @@
         ]
       }
     },
+    "/api/v1/evals/load-test": {
+      "post": {
+        "description": "FR-T10: summarize client-collected load samples against SLO thresholds.",
+        "operationId": "run_load_test_api_api_v1_evals_load_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadTestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Run Load Test Api Api V1 Evals Load Test Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Load Test Api",
+        "tags": [
+          "evals"
+        ]
+      }
+    },
+    "/api/v1/evals/load-test/k6-script": {
+      "post": {
+        "description": "FR-T10: k6 script with env placeholders (no URLs or credentials embedded).",
+        "operationId": "k6_script_api_api_v1_evals_load_test_k6_script_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/K6ScriptIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response K6 Script Api Api V1 Evals Load Test K6 Script Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "K6 Script Api",
+        "tags": [
+          "evals"
+        ]
+      }
+    },
+    "/api/v1/evals/online": {
+      "post": {
+        "description": "FR-O3: score a sampled share of production traces and store a safe EvalRun.",
+        "operationId": "online_eval_api_api_v1_evals_online_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnlineEvalIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Online Eval Api Api V1 Evals Online Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Online Eval Api",
+        "tags": [
+          "evals"
+        ]
+      }
+    },
     "/api/v1/evals/retrieval-metrics": {
       "post": {
         "description": "Run FR-R8 retrieval metrics over a dataset using permission-filtered retrieval.",
@@ -4604,6 +6458,251 @@
         ]
       }
     },
+    "/api/v1/governance/ai-inventory": {
+      "get": {
+        "description": "FR-P3: List AI inventory entries.",
+        "operationId": "list_inventory_api_api_v1_governance_ai_inventory_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Inventory Api Api V1 Governance Ai Inventory Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Inventory Api",
+        "tags": [
+          "governance"
+        ]
+      },
+      "put": {
+        "description": "FR-P3: Create or update an AI inventory entry.",
+        "operationId": "upsert_inventory_entry_api_api_v1_governance_ai_inventory_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventoryEntryIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Upsert Inventory Entry Api Api V1 Governance Ai Inventory Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upsert Inventory Entry Api",
+        "tags": [
+          "governance"
+        ]
+      }
+    },
+    "/api/v1/governance/bot-approvals": {
+      "get": {
+        "description": "FR-P4: List bot approval workflow records.",
+        "operationId": "list_bot_approvals_api_api_v1_governance_bot_approvals_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "bot_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Bot Approvals Api Api V1 Governance Bot Approvals Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Bot Approvals Api",
+        "tags": [
+          "governance"
+        ]
+      },
+      "post": {
+        "description": "FR-P4: Request compliance approval for a bot.",
+        "operationId": "request_bot_approval_api_api_v1_governance_bot_approvals_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalRequestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Request Bot Approval Api Api V1 Governance Bot Approvals Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Bot Approval Api",
+        "tags": [
+          "governance"
+        ]
+      }
+    },
+    "/api/v1/governance/bot-approvals/{approval_id}/decisions": {
+      "post": {
+        "description": "FR-P4: Approve or reject a bot approval request.",
+        "operationId": "decide_bot_approval_api_api_v1_governance_bot_approvals__approval_id__decisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Approval Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Decide Bot Approval Api Api V1 Governance Bot Approvals  Approval Id  Decisions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decide Bot Approval Api",
+        "tags": [
+          "governance"
+        ]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "operationId": "health_api_v1_health_get",
@@ -4626,6 +6725,331 @@
         "summary": "Health",
         "tags": [
           "ops"
+        ]
+      }
+    },
+    "/api/v1/improve/flywheel": {
+      "get": {
+        "operationId": "queue_api_api_v1_improve_flywheel_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Queue Api Api V1 Improve Flywheel Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Queue Api",
+        "tags": [
+          "improve"
+        ]
+      }
+    },
+    "/api/v1/improve/flywheel/collect": {
+      "post": {
+        "operationId": "collect_api_api_v1_improve_flywheel_collect_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Collect Api Api V1 Improve Flywheel Collect Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Collect Api",
+        "tags": [
+          "improve"
+        ]
+      }
+    },
+    "/api/v1/improve/flywheel/export": {
+      "post": {
+        "operationId": "export_api_api_v1_improve_flywheel_export_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Export Api Api V1 Improve Flywheel Export Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Api",
+        "tags": [
+          "improve"
+        ]
+      }
+    },
+    "/api/v1/improve/flywheel/flag": {
+      "post": {
+        "operationId": "flag_api_api_v1_improve_flywheel_flag_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlagIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Flag Api Api V1 Improve Flywheel Flag Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Flag Api",
+        "tags": [
+          "improve"
+        ]
+      }
+    },
+    "/api/v1/improve/flywheel/{item_id}/reeval": {
+      "post": {
+        "operationId": "reeval_api_api_v1_improve_flywheel__item_id__reeval_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReevalIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reeval Api Api V1 Improve Flywheel  Item Id  Reeval Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reeval Api",
+        "tags": [
+          "improve"
+        ]
+      }
+    },
+    "/api/v1/improve/flywheel/{item_id}/release": {
+      "post": {
+        "operationId": "release_api_api_v1_improve_flywheel__item_id__release_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Release Api Api V1 Improve Flywheel  Item Id  Release Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Release Api",
+        "tags": [
+          "improve"
+        ]
+      }
+    },
+    "/api/v1/improve/flywheel/{item_id}/triage": {
+      "post": {
+        "operationId": "triage_api_api_v1_improve_flywheel__item_id__triage_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriageIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Triage Api Api V1 Improve Flywheel  Item Id  Triage Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Triage Api",
+        "tags": [
+          "improve"
         ]
       }
     },
@@ -4670,6 +7094,759 @@
         "summary": "Top Unanswered Api",
         "tags": [
           "improve"
+        ]
+      }
+    },
+    "/api/v1/incidents": {
+      "get": {
+        "operationId": "list_api_api_v1_incidents_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Api Api V1 Incidents Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Api",
+        "tags": [
+          "incidents"
+        ]
+      },
+      "post": {
+        "operationId": "report_api_api_v1_incidents_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Report Api Api V1 Incidents Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report Api",
+        "tags": [
+          "incidents"
+        ]
+      }
+    },
+    "/api/v1/incidents/{incident_id}/postmortem": {
+      "post": {
+        "operationId": "postmortem_api_api_v1_incidents__incident_id__postmortem_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "incident_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Incident Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostmortemIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Postmortem Api Api V1 Incidents  Incident Id  Postmortem Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Postmortem Api",
+        "tags": [
+          "incidents"
+        ]
+      }
+    },
+    "/api/v1/incidents/{incident_id}/traces": {
+      "post": {
+        "operationId": "traces_api_api_v1_incidents__incident_id__traces_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "incident_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Incident Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TracesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Traces Api Api V1 Incidents  Incident Id  Traces Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Traces Api",
+        "tags": [
+          "incidents"
+        ]
+      }
+    },
+    "/api/v1/incidents/{incident_id}/transition": {
+      "post": {
+        "operationId": "transition_api_api_v1_incidents__incident_id__transition_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "incident_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Incident Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransitionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Transition Api Api V1 Incidents  Incident Id  Transition Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Transition Api",
+        "tags": [
+          "incidents"
+        ]
+      }
+    },
+    "/api/v1/learn/paths": {
+      "get": {
+        "operationId": "list_api_api_v1_learn_paths_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Api Api V1 Learn Paths Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Api",
+        "tags": [
+          "learn"
+        ]
+      }
+    },
+    "/api/v1/learn/paths/{path_id}": {
+      "get": {
+        "operationId": "get_api_api_v1_learn_paths__path_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "path_id",
+            "required": true,
+            "schema": {
+              "title": "Path Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Api Api V1 Learn Paths  Path Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Api",
+        "tags": [
+          "learn"
+        ]
+      }
+    },
+    "/api/v1/learn/paths/{path_id}/progress": {
+      "post": {
+        "operationId": "progress_api_api_v1_learn_paths__path_id__progress_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "path_id",
+            "required": true,
+            "schema": {
+              "title": "Path Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProgressIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Progress Api Api V1 Learn Paths  Path Id  Progress Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Progress Api",
+        "tags": [
+          "learn"
+        ]
+      }
+    },
+    "/api/v1/learn/scenarios": {
+      "get": {
+        "operationId": "list_api_api_v1_learn_scenarios_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Api Api V1 Learn Scenarios Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Api",
+        "tags": [
+          "learn"
+        ]
+      }
+    },
+    "/api/v1/learn/scenarios/{scenario_id}": {
+      "get": {
+        "operationId": "get_api_api_v1_learn_scenarios__scenario_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Api Api V1 Learn Scenarios  Scenario Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Api",
+        "tags": [
+          "learn"
+        ]
+      }
+    },
+    "/api/v1/learn/scenarios/{scenario_id}/check": {
+      "post": {
+        "operationId": "check_api_api_v1_learn_scenarios__scenario_id__check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Check Api Api V1 Learn Scenarios  Scenario Id  Check Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check Api",
+        "tags": [
+          "learn"
+        ]
+      }
+    },
+    "/api/v1/legal-hold": {
+      "get": {
+        "operationId": "list_holds_api_api_v1_legal_hold_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Holds Api Api V1 Legal Hold Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Holds Api",
+        "tags": [
+          "legal-hold"
+        ]
+      }
+    },
+    "/api/v1/legal-hold/conversations/{conversation_id}": {
+      "put": {
+        "operationId": "set_conversation_hold_api_api_v1_legal_hold_conversations__conversation_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HoldIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Conversation Hold Api Api V1 Legal Hold Conversations  Conversation Id  Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Conversation Hold Api",
+        "tags": [
+          "legal-hold"
+        ]
+      }
+    },
+    "/api/v1/legal-hold/documents/{document_id}": {
+      "put": {
+        "operationId": "set_document_hold_api_api_v1_legal_hold_documents__document_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HoldIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Document Hold Api Api V1 Legal Hold Documents  Document Id  Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Document Hold Api",
+        "tags": [
+          "legal-hold"
+        ]
+      }
+    },
+    "/api/v1/legal-hold/retention-sweep": {
+      "post": {
+        "description": "Dry-run by default; held chats/documents are always skipped.",
+        "operationId": "retention_sweep_api_api_v1_legal_hold_retention_sweep_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SweepIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Retention Sweep Api Api V1 Legal Hold Retention Sweep Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retention Sweep Api",
+        "tags": [
+          "legal-hold"
+        ]
+      }
+    },
+    "/api/v1/lineage": {
+      "get": {
+        "description": "FR-D10: lineage of the documents the caller can access.",
+        "operationId": "lineage_api_api_v1_lineage_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "document_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Lineage Api Api V1 Lineage Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Lineage Api",
+        "tags": [
+          "lineage"
+        ]
+      }
+    },
+    "/api/v1/lineage/summary": {
+      "get": {
+        "description": "FR-D10: admin-only aggregate of index versions.",
+        "operationId": "lineage_summary_api_api_v1_lineage_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Lineage Summary Api Api V1 Lineage Summary Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Lineage Summary Api",
+        "tags": [
+          "lineage"
         ]
       }
     },
@@ -4793,6 +7970,365 @@
         "summary": "Stop Api",
         "tags": [
           "chat"
+        ]
+      }
+    },
+    "/api/v1/model-registry": {
+      "get": {
+        "operationId": "list_models_api_api_v1_model_registry_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Models Api Api V1 Model Registry Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Models Api",
+        "tags": [
+          "model-registry"
+        ]
+      },
+      "post": {
+        "operationId": "register_model_api_api_v1_model_registry_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/e2eai__model_registry__RegisterIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Register Model Api Api V1 Model Registry Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register Model Api",
+        "tags": [
+          "model-registry"
+        ]
+      }
+    },
+    "/api/v1/model-registry/{name}/{version}/decision": {
+      "post": {
+        "operationId": "decide_api_api_v1_model_registry__name___version__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "title": "Version",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Decide Api Api V1 Model Registry  Name   Version  Decision Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decide Api",
+        "tags": [
+          "model-registry"
+        ]
+      }
+    },
+    "/api/v1/model-registry/{name}/{version}/eval-runs": {
+      "post": {
+        "operationId": "attach_eval_run_api_api_v1_model_registry__name___version__eval_runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "title": "Version",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachRunIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Attach Eval Run Api Api V1 Model Registry  Name   Version  Eval Runs Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Attach Eval Run Api",
+        "tags": [
+          "model-registry"
+        ]
+      }
+    },
+    "/api/v1/model-registry/{name}/{version}/lineage": {
+      "get": {
+        "operationId": "lineage_api_api_v1_model_registry__name___version__lineage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "title": "Version",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Lineage Api Api V1 Model Registry  Name   Version  Lineage Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Lineage Api",
+        "tags": [
+          "model-registry"
+        ]
+      }
+    },
+    "/api/v1/model-security/evaluate": {
+      "post": {
+        "description": "FR-M8: format + checksum + pickle verdict for a model file (admin only).",
+        "operationId": "evaluate_api_api_v1_model_security_evaluate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Evaluate Api Api V1 Model Security Evaluate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Evaluate Api",
+        "tags": [
+          "model-security"
+        ]
+      }
+    },
+    "/api/v1/model-security/scan-pickle": {
+      "post": {
+        "description": "FR-M8: static pickle opcode scan (never executes the pickle).",
+        "operationId": "scan_pickle_api_api_v1_model_security_scan_pickle_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanPickleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Scan Pickle Api Api V1 Model Security Scan Pickle Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scan Pickle Api",
+        "tags": [
+          "model-security"
         ]
       }
     },
@@ -4967,6 +8503,114 @@
         "summary": "Review Assigned Api",
         "tags": [
           "notifications"
+        ]
+      }
+    },
+    "/api/v1/openai/chat/completions": {
+      "post": {
+        "operationId": "completions_api_api_v1_openai_chat_completions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Completions Api",
+        "tags": [
+          "openai-compatible"
+        ]
+      }
+    },
+    "/api/v1/openai/models": {
+      "get": {
+        "operationId": "models_api_api_v1_openai_models_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Models Api Api V1 Openai Models Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Models Api",
+        "tags": [
+          "openai-compatible"
+        ]
+      }
+    },
+    "/api/v1/operate/drift": {
+      "post": {
+        "description": "FR-O4: compare a baseline window with the current window across topic/embedding/quality signals.",
+        "operationId": "drift_api_api_v1_operate_drift_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriftIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Drift Api Api V1 Operate Drift Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Drift Api",
+        "tags": [
+          "operate"
         ]
       }
     },
@@ -5416,6 +9060,50 @@
         ]
       }
     },
+    "/api/v1/plan/use-cases": {
+      "post": {
+        "description": "FR-P1: Submit a use-case intake form.",
+        "operationId": "create_use_case_intake_api_api_v1_plan_use_cases_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UseCaseIntakeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Use Case Intake Api Api V1 Plan Use Cases Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Use Case Intake Api",
+        "tags": [
+          "plan"
+        ]
+      }
+    },
     "/api/v1/prompts": {
       "post": {
         "operationId": "create_prompt_api_api_v1_prompts_post",
@@ -5732,6 +9420,338 @@
         "summary": "Ready",
         "tags": [
           "ops"
+        ]
+      }
+    },
+    "/api/v1/rollouts/assign": {
+      "post": {
+        "description": "FR-RL4: which bundle version serves a subject under a rollout plan.",
+        "operationId": "assign_api_api_v1_rollouts_assign_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Assign Api Api V1 Rollouts Assign Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Assign Api",
+        "tags": [
+          "rollouts"
+        ]
+      }
+    },
+    "/api/v1/rollouts/promotion": {
+      "post": {
+        "description": "FR-RL4: promote / continue / rollback decision from online arm metrics.",
+        "operationId": "promotion_api_api_v1_rollouts_promotion_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromotionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Promotion Api Api V1 Rollouts Promotion Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Promotion Api",
+        "tags": [
+          "rollouts"
+        ]
+      }
+    },
+    "/api/v1/scim/sync": {
+      "post": {
+        "description": "FR-S8: apply SCIM-style users/groups so access follows org changes (admin only).",
+        "operationId": "scim_sync_api_api_v1_scim_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScimSyncIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Scim Sync Api Api V1 Scim Sync Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scim Sync Api",
+        "tags": [
+          "scim"
+        ]
+      }
+    },
+    "/api/v1/security/api-keys/{key_id}/emergency-revoke": {
+      "post": {
+        "description": "FR-F17: admin emergency revocation of a leaked key.",
+        "operationId": "emergency_revoke_api_key_api_api_v1_security_api_keys__key_id__emergency_revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Key Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmergencyRevokeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Emergency Revoke Api Key Api Api V1 Security Api Keys  Key Id  Emergency Revoke Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Emergency Revoke Api Key Api",
+        "tags": [
+          "security"
+        ]
+      }
+    },
+    "/api/v1/security/api-keys/{key_id}/rotate": {
+      "post": {
+        "description": "FR-F17: rotate one of the caller's API keys with an overlap window.",
+        "operationId": "rotate_api_key_api_api_v1_security_api_keys__key_id__rotate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Key Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rotate Api Key Api Api V1 Security Api Keys  Key Id  Rotate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rotate Api Key Api",
+        "tags": [
+          "security"
+        ]
+      }
+    },
+    "/api/v1/security/certificate-status": {
+      "post": {
+        "description": "FR-F17: report certificate expiry state (warns 14 days before).",
+        "operationId": "certificate_status_api_api_v1_security_certificate_status_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertificateStatusIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Certificate Status Api Api V1 Security Certificate Status Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Certificate Status Api",
+        "tags": [
+          "security"
+        ]
+      }
+    },
+    "/api/v1/security/rotation-plan": {
+      "post": {
+        "description": "FR-F17: zero-downtime rotation steps (no secret values).",
+        "operationId": "rotation_plan_api_api_v1_security_rotation_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotationPlanIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rotation Plan Api Api V1 Security Rotation Plan Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rotation Plan Api",
+        "tags": [
+          "security"
         ]
       }
     },
