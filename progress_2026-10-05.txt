@@ -2059,3 +2059,10 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_idempotency_nfr20.py` -> collection error (module missing). GREEN: same -> 8 passed.
   - Adjacent: `uv run pytest -q tests/test_idempotency_nfr20.py tests/test_http_hardening_nfr.py tests/test_phase0_core.py tests/test_auth.py tests/test_api_keys.py tests/test_docs_fr_f22.py tests/test_user_memory_fr_b2.py` -> 43 passed. Heavy gates skipped.
   - Not done: concurrent in-flight duplicate lock (two simultaneous identical requests may both run), cursor pagination on list endpoints.
+
+- Cursor pagination (NFR-20) (2026-10-13, cron):
+  - Added `core/pagination.py`: opaque url-safe base64 keyset cursor over `(timestamp, id)`, `clamp_limit` (default 50, 1..200), `make_page` (fetch limit+1 rows to detect a next page), malformed cursor -> 422 problem. The cursor holds no user data and never replaces the ownership filter.
+  - Applied to `GET /api/v1/chat/conversations` (`limit`, `cursor` query params; response adds `next_cursor`) through `list_conversations_page` (owner-scoped, newest first, id tiebreak). The unpaged `list_conversations` is kept for existing callers.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_pagination_nfr20.py` -> collection error (module missing), then 1 failed (page function missing). GREEN: 9 passed.
+  - Adjacent: `uv run pytest -q tests/test_pagination_nfr20.py tests/test_us_chat_conversations.py tests/test_docs_fr_f22.py` -> 18 passed; `python scripts/validate_docs.py` run; docs/openapi.json regenerated. Heavy gates skipped.
+  - Not done: cursor pagination on the other list endpoints (documents search, notifications, incidents, flywheel, ai-inventory, model-registry, legal-hold); apply the same helper per endpoint.

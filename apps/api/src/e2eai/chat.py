@@ -10,12 +10,13 @@ import uuid
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
 from .auth import current_session, require_scope
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import Conversation, Message, MessageCitation, MessageFeedback, User, get_session
 from .pii import mask_text
 from .retrieval import AnswerGenerator, Embedder, answer_question
@@ -42,6 +43,23 @@ async def list_conversations(
         stmt = stmt.where(Conversation.title.ilike(f"%{search}%"))
     stmt = stmt.order_by(Conversation.updated_at.desc())
     return list((await session.execute(stmt)).scalars().all())
+
+
+async def list_conversations_page(
+    session: AsyncSession, *, user: User, search: str | None = None,
+    limit: int | None = None, cursor: str | None = None,
+) -> tuple[list[Conversation], str | None]:
+    """Keyset-paginated, owner-scoped conversation list (NFR-20): newest first, ties broken by id."""
+    size = clamp_limit(limit)
+    stmt = select(Conversation).where(Conversation.user_id == user.id)
+    if search:
+        stmt = stmt.where(Conversation.title.ilike(f"%{search}%"))
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(Conversation.updated_at, Conversation.id) < tuple_(ts, last_id))
+    stmt = stmt.order_by(Conversation.updated_at.desc(), Conversation.id.desc()).limit(size + 1)
+    rows = list((await session.execute(stmt)).scalars().all())
+    return make_page(rows, size, lambda c: (c.updated_at, c.id))
 
 
 async def rename_conversation(
@@ -274,16 +292,18 @@ router = APIRouter(prefix="/api/v1", tags=["chat"])
 @router.get("/chat/conversations")
 async def list_conversations_api(
     search: str | None = None,
+    limit: int | None = None,
+    cursor: str | None = None,
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
 ) -> dict:
     require_scope(sess, "chat")
     user = await _current_user(db, sess)
-    convos = await list_conversations(db, user=user, search=search)
+    convos, next_cursor = await list_conversations_page(db, user=user, search=search, limit=limit, cursor=cursor)
     return {"conversations": [
         {"id": str(c.id), "title": c.title, "created_at": c.created_at.isoformat(), "updated_at": c.updated_at.isoformat()}
         for c in convos
-    ]}
+    ], "next_cursor": next_cursor}
 
 
 @router.post("/chat/conversations")

@@ -134,6 +134,8 @@ Rules for every cron tick:
 
 80. [x] [NFR-20] Idempotency keys for create operations. Completed as `core/idempotency.py` ASGI middleware with Valkey store (replay, body-mismatch 422, per-principal scope, no raw key/credentials stored, degrade on store outage); see progress_2026-10-05.txt. Follow-up: in-flight duplicate lock.
 
+81. [x] [NFR-20] Cursor pagination. Completed as `core/pagination.py` (opaque keyset cursor, limit clamp, 422 on bad cursor) applied to chat conversations list; see progress_2026-10-05.txt. Follow-up: roll out to the other list endpoints.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.
