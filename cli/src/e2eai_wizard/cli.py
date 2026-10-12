@@ -8,7 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import detect, generate, models, upgrade
+from . import airgap, detect, generate, models, upgrade
 from .services import BY_NAME, SECRETS, SERVICES, USERS, enabled_services, owner_enabled
 
 app = typer.Typer(add_completion=False, help=__doc__, no_args_is_help=True)
@@ -299,6 +299,20 @@ def models_cmd(
     if pull:
         _pull(a, root, yes)
     out.print("\n[bold]Apply:[/bold]  cd deploy/compose && docker compose up -d   (restarts LiteLLM and starts TEI if needed)")
+
+
+@app.command("airgap-plan")
+def airgap_plan_cmd(
+    root: Path | None = typer.Option(None, help="Repo root (default: auto-detect)."),
+    bundle_dir: str = typer.Option("dist/e2eai-airgap", help="Directory to stage the offline bundle."),
+) -> None:
+    """Print a secret-free FR-F6 plan for image tarballs, model mirror, and offline docs."""
+    root = root or _find_root(Path.cwd())
+    try:
+        manifest = airgap.build_airgap_manifest(root, bundle_dir=bundle_dir)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    out.print(airgap.render_airgap_runbook(manifest))
 
 
 @app.command("upgrade-plan")
