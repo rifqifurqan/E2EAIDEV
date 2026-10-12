@@ -438,6 +438,38 @@ class AIIncident(Base):
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class FlywheelItem(Base):
+    """FR-I1: flagged answer in the improvement triage queue.
+
+    Holds PII-masked question/correction text and ids only; the assistant answer is never stored.
+    """
+    __tablename__ = "flywheel_items"
+    __table_args__ = (
+        CheckConstraint(
+            "source in ('thumbs_down', 'low_online_score', 'reviewer_flag')", name="flywheel_items_source"
+        ),
+        CheckConstraint(
+            "status in ('queued', 'accepted', 'dismissed', 'exported', 'reevaluated', 'released')",
+            name="flywheel_items_status",
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    source: Mapped[str] = mapped_column(String(24))
+    status: Mapped[str] = mapped_column(String(16), default="queued")
+    message_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("messages.id", ondelete="SET NULL"), unique=True)
+    trace_id: Mapped[str | None] = mapped_column(String(120))
+    question_masked: Mapped[str] = mapped_column(Text)
+    correction_masked: Mapped[str | None] = mapped_column(Text)
+    reason: Mapped[str | None] = mapped_column(String(300))
+    target: Mapped[str | None] = mapped_column(String(16))
+    dataset_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("eval_datasets.id", ondelete="SET NULL"))
+    eval_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("eval_runs.id", ondelete="SET NULL"))
+    release_ref: Mapped[str | None] = mapped_column(String(200))
+    triaged_by: Mapped[str | None] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class AIInventoryEntry(Base):
     """FR-P3: AI inventory entry with model-card and system-card metadata.
 

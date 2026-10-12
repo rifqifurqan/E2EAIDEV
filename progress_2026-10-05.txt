@@ -1887,3 +1887,11 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_incident_management_fr_o8.py` -> import/model failures (module missing).
   - GREEN: same command -> 4 passed. Adjacent: `uv run pytest -q tests/test_incident_management_fr_o8.py tests/test_migration_static.py tests/test_model_registry_fr_m7.py <notification tests>` -> 15 passed; `create_app()` ok.
   - Not done: auto-opening incidents from SLO/drift/guardrail alerts, validating trace ids against the trace table, linking the release_ref to a real bot bundle version. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Data flywheel (FR-I1) (2026-10-12, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `FlywheelItem` + migration `0030_flywheel_items` and `e2eai.flywheel`: `collect_from_feedback` (queues thumbs-down answers, idempotent per message, pairs the preceding user question), `flag_answer` (sources thumbs_down / low_online_score / reviewer_flag), `triage_item` (admin; accept needs a correction and a target `eval` or `finetune`; dismiss), `export_to_dataset` (accepted items -> new versioned EvalDataset with source `flywheel`, gold split for eval, fine_tuning split for finetune, FR-D11 annotation shape), `link_reeval` (existing EvalRun), `link_release` (release ref), `queue_summary`. Question/correction are PII-masked (`mask_text`) and credential-redacted; the assistant answer is never stored. Audit actions `flywheel.*` carry ids/labels only.
+  - Routes (admin scope): GET `/api/v1/improve/flywheel`, POST `/collect`, `/flag`, `/export`, `/{id}/triage`, `/{id}/reeval`, `/{id}/release`.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_data_flywheel_fr_i1.py` -> collection/import failures (module and model missing).
+  - GREEN: same command -> 5 passed. Adjacent: `uv run pytest -q tests/test_data_flywheel_fr_i1.py tests/test_incident_management_fr_o8.py tests/test_migration_static.py tests/test_us_chat_conversations.py tests/test_us_eval_lab_p0.py` -> 19 passed; `create_app()` ok.
+  - Not done: auto-enqueue from FR-O3 low online scores and FR-O8 incidents, actually running the re-eval/fine-tune job from the item, auto-creating the release bundle. Heavy full-stack gates intentionally skipped (speed-biased run).

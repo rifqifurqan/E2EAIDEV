@@ -17,6 +17,7 @@ from .rollout import router as rollout_router
 from .online_eval import router as online_eval_router
 from .drift import router as drift_router
 from .incidents import router as incidents_router
+from .flywheel import router as flywheel_router
 from .auth import router as auth_router
 from .benchmark import router as benchmark_router
 from .bot_approval import router as bot_approval_router
@@ -70,6 +71,7 @@ def create_app() -> FastAPI:
     app.include_router(online_eval_router)
     app.include_router(drift_router)
     app.include_router(incidents_router)
+    app.include_router(flywheel_router)
     app.include_router(documents_router)
     app.include_router(retrieval_router)
     app.include_router(evals_router)
