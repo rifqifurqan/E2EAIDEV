@@ -95,7 +95,7 @@ Rules for every cron tick:
 46. [x] [FR-P3] AI inventory with model cards/system cards. Completed as deterministic/offline governance inventory slice with safe model/system cards, owner/risk/status/approval metadata, audit, migration 0023, and API route; see progress_2026-10-05.txt.
 47. [x] [FR-P4] Approval workflow for high-risk bots. Completed as deterministic/offline bot approval workflow with request/decision records, inventory approval-state sync, safe audit metadata, migration 0024, and API routes; see progress_2026-10-05.txt.
 48. [x] [FR-F6] Air-gapped install bundle. Completed as deterministic/offline air-gap bundle planning slice with pinned image tarball commands, local model mirror plan, offline docs copy plan, floating-image guard, and CLI command; see progress_2026-10-05.txt.
-49. [FR-F10] Audit export to SIEM.
+49. [x] [FR-F10] Audit export to SIEM. Completed as deterministic/offline syslog/OpenTelemetry/webhook payload exporter with cursoring, secret-safe details handling, and API route; see progress_2026-10-05.txt.
 50. [FR-F17] Secret/certificate rotation.
 51. [FR-D8] Review owner/review date/expiry lifecycle.
 52. [FR-D10] Dataset/index lineage.

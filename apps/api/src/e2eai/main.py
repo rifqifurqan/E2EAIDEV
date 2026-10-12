@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from .ai_inventory import router as ai_inventory_router
+from .audit_export import router as audit_export_router
 from .auth import router as auth_router
 from .benchmark import router as benchmark_router
 from .bot_approval import router as bot_approval_router
@@ -38,6 +39,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="E2EAIDEV API", version="0.1.0")
     install(app)
     app.include_router(ai_inventory_router)
+    app.include_router(audit_export_router)
     app.include_router(auth_router)
     app.include_router(bot_approval_router)
     app.include_router(bot_router)

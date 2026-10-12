@@ -1775,3 +1775,15 @@ HOW TO RESUME
     `cd cli && uv run pytest -q tests/test_airgap.py` -> 3 passed.
     Adjacent regression: `cd cli && uv run pytest -q tests/test_airgap.py tests/test_upgrade.py tests/test_wizard.py tests/test_models.py` -> 38 passed, 1 skipped.
   - `PRD_CRON_BACKLOG.md` item 48 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Audit export to SIEM (FR-F10) (2026-10-12, cron):
+  - Claude Code was not retried after the same run's `error_max_turns`; Hermes continued manually for speed. Codex unused.
+  - Added `e2eai.audit_export` deterministic/offline exporter for syslog lines, OpenTelemetry log records, and webhook JSON payloads, cursoring by audit sequence.
+  - Added `POST /api/v1/audit/export` requiring admin scope and returning secret-safe payload pages.
+  - Exported events include hash-chain metadata and safe detail keys; raw detail values are never exported, and syslog omits sensitive key names such as password/token.
+  - TDD / RED evidence:
+    `cd apps/api && uv run pytest -q tests/test_audit_export_fr_f10.py` -> 2 failed (`ModuleNotFoundError: No module named 'e2eai.audit_export'` and route missing).
+  - GREEN verified:
+    `cd apps/api && uv run pytest -q tests/test_audit_export_fr_f10.py` -> 2 passed.
+    Adjacent regression/app import: `cd apps/api && uv run pytest -q tests/test_audit_export_fr_f10.py tests/test_bot_approval_fr_p4.py tests/test_ai_inventory_fr_p3.py tests/test_migration_static.py && uv run python -c "from e2eai.main import create_app; create_app(); print('app ok')"` -> 8 passed; app ok.
+  - `PRD_CRON_BACKLOG.md` item 49 marked done. Heavy full-stack gates intentionally skipped (speed-biased run).
