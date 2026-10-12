@@ -22,6 +22,21 @@ export function AdminScreen() {
       <h1 className="mb-4 text-2xl font-bold">{t.admin.title}</h1>
 
       <div className="grid gap-6 lg:grid-cols-2">
+        {/* Configuration-as-code export */}
+        <div className="rounded-lg border border-gray-200 p-4">
+          <h2 className="mb-3 text-lg font-semibold">{t.admin.configExport}</h2>
+          <p className="mb-3 text-sm text-gray-600">
+            {t.admin.configExportDescription}
+          </p>
+          <a
+            href="/api/v1/admin/config/export?format=yaml"
+            download="e2eai.yaml"
+            className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            {t.admin.exportConfiguration}
+          </a>
+        </div>
+
         {/* Offboarding */}
         <div className="rounded-lg border border-gray-200 p-4">
           <h2 className="mb-3 text-lg font-semibold">{t.admin.offboarding}</h2>
@@ -52,6 +67,7 @@ export function AdminScreen() {
             ))}
           </ul>
         </div>
+
       </div>
     </section>
   );

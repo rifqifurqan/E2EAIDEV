@@ -96,6 +96,9 @@ const id: Dictionary = {
     deactivateUser: "Nonaktifkan Pengguna",
     transferTo: "Transfer dokumen ke",
     runbooks: "Buku Panduan Operasional",
+    configExport: "Konfigurasi sebagai Kode",
+    configExportDescription: "Unduh ekspor YAML tanpa rahasia untuk review, backup, atau GitOps.",
+    exportConfiguration: "Ekspor konfigurasi",
     runbookLinks: {
       serviceDown: "Layanan Mati / Mulai Ulang",
       restoreBackup: "Pulihkan dari Cadangan",

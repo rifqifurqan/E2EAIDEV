@@ -29,6 +29,13 @@ describe("AdminScreen", () => {
     expect(screen.getByRole("link", { name: /leaked key/i })).toBeInTheDocument();
   });
 
+  it("renders configuration-as-code export link", () => {
+    renderAdmin();
+    const link = screen.getByRole("link", { name: /export configuration/i });
+    expect(link).toHaveAttribute("href", "/api/v1/admin/config/export?format=yaml");
+    expect(link).toHaveAttribute("download", "e2eai.yaml");
+  });
+
   it("renders in Indonesian", () => {
     renderAdmin("id");
     expect(screen.getByText(/penonaktifan pengguna/i)).toBeInTheDocument();

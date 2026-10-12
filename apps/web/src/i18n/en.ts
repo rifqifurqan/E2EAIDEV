@@ -94,6 +94,9 @@ const en = {
     deactivateUser: "Deactivate User",
     transferTo: "Transfer documents to",
     runbooks: "Operational Runbooks",
+    configExport: "Configuration as Code",
+    configExportDescription: "Download a secret-safe YAML export for review, backup, or GitOps.",
+    exportConfiguration: "Export configuration",
     runbookLinks: {
       serviceDown: "Service Down / Restart",
       restoreBackup: "Restore from Backup",
