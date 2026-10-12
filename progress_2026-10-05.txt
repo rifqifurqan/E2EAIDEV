@@ -1949,3 +1949,11 @@ HOW TO RESUME
   - Fixed `test_docs_fr_f22.py`: the `"sk-"` substring secret check caused false positives on the route path `/api/v1/bots/{bot_id}/risk-classification` ("risk" + "-" = "sk-"). Replaced substring checks with regex patterns requiring actual credential formats (`sk-[a-z0-9_-]{16,}` for OpenAI keys, `gho_[a-z0-9]+` for GitHub tokens).
   - Verified: `cd apps/api && uv run pytest -q tests/test_docs_fr_f22.py` -> 3 passed.
   - Commit: fed0c1b fix(docs): regenerate openapi.json and fix false-positive secret pattern in FR-F22 test — pushed to origin/main.
+
+- Structured-data questions over spreadsheets/CSV (FR-R10) (2026-10-13, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `e2eai.table_qa` (no DB, no migration): `parse_table` (CSV -> typed table; numeric columns inferred, blanks = None, limits 20k rows / 100 cols / 5M chars), `run_query` (structured query: filters eq/ne/lt/lte/gt/gte/contains, group_by, one aggregate sum/avg/min/max/count, sort, limit; executed by plain Python, never eval/exec/SQL; blanks ignored in sum/avg, non-numeric aggregate columns and unknown columns rejected), `compare_groups` (a vs b: difference, ratio, None ratio when divisor is 0). Results return the computed table and the source file name; cells starting with = + - @ are prefixed with ' so exported results cannot become spreadsheet formulas.
+  - Route: `POST /api/v1/data/table-query` (session or API key with `chat` scope).
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_table_qa_fr_r10.py` -> 8 failed (module missing).
+  - GREEN: same command -> 8 passed. Regenerated `docs/openapi.json` + EN/ID API reference (139 paths) via `scripts/generate_api_reference.py`. Adjacent: `uv run pytest -q tests/test_docs_fr_f22.py tests/test_table_qa_fr_r10.py tests/test_learning_paths_fr_e4.py tests/test_migration_static.py` -> 16 passed.
+  - Not done: XLSX parsing, natural-language question -> structured query translation via LLM, wiring into the chat pipeline/bot scope with document permissions, multi-table joins. Heavy full-stack gates intentionally skipped (speed-biased run).

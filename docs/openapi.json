@@ -15,6 +15,30 @@
         "title": "AccessRequestIn",
         "type": "object"
       },
+      "AggregateIn": {
+        "properties": {
+          "column": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column"
+          },
+          "op": {
+            "title": "Op",
+            "type": "string"
+          }
+        },
+        "required": [
+          "op"
+        ],
+        "title": "AggregateIn",
+        "type": "object"
+      },
       "ApiKeyCreateIn": {
         "properties": {
           "expires_at": {
@@ -1061,6 +1085,27 @@
           "rating"
         ],
         "title": "FeedbackIn",
+        "type": "object"
+      },
+      "FilterIn": {
+        "properties": {
+          "column": {
+            "title": "Column",
+            "type": "string"
+          },
+          "op": {
+            "title": "Op",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "required": [
+          "column",
+          "op"
+        ],
+        "title": "FilterIn",
         "type": "object"
       },
       "FinopsSpendIn": {
@@ -2687,6 +2732,69 @@
           "documents"
         ],
         "title": "SyncIn",
+        "type": "object"
+      },
+      "TableQueryIn": {
+        "properties": {
+          "aggregate": {
+            "$ref": "#/components/schemas/AggregateIn"
+          },
+          "csv_text": {
+            "minLength": 1,
+            "title": "Csv Text",
+            "type": "string"
+          },
+          "filters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FilterIn"
+            },
+            "title": "Filters",
+            "type": "array"
+          },
+          "group_by": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Group By",
+            "type": "array"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "sort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort"
+          },
+          "source": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "csv_text",
+          "source",
+          "aggregate"
+        ],
+        "title": "TableQueryIn",
         "type": "object"
       },
       "TeamIn": {
@@ -5141,6 +5249,50 @@
         "summary": "Sync Api",
         "tags": [
           "connectors"
+        ]
+      }
+    },
+    "/api/v1/data/table-query": {
+      "post": {
+        "description": "FR-R10: compute an answer over a CSV table; returns the computed table and the source file.",
+        "operationId": "table_query_api_api_v1_data_table_query_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TableQueryIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Table Query Api Api V1 Data Table Query Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Table Query Api",
+        "tags": [
+          "data"
         ]
       }
     },

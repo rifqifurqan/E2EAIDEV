@@ -6,8 +6,8 @@ Requirement: FR-F22 (P1 API reference).
 
 API title: E2EAIDEV API
 API version: 0.1.0
-Total paths: 138
-Total operations: 148
+Total paths: 139
+Total operations: 149
 
 ## How to regenerate
 
@@ -317,6 +317,14 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: Sync Api
 - Operation ID: `sync_api_api_v1_connectors_sync_post`
+- Response status codes: 200, 422
+
+### data
+
+#### POST /api/v1/data/table-query
+
+- Summary: Table Query Api
+- Operation ID: `table_query_api_api_v1_data_table_query_post`
 - Response status codes: 200, 422
 
 ### documents
