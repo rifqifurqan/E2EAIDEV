@@ -6,8 +6,8 @@ Requirement: FR-F22 (P1 API reference).
 
 API title: E2EAIDEV API
 API version: 0.1.0
-Total paths: 141
-Total operations: 151
+Total paths: 142
+Total operations: 152
 
 ## How to regenerate
 
@@ -755,6 +755,14 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: Scan Pickle Api
 - Operation ID: `scan_pickle_api_api_v1_model_security_scan_pickle_post`
+- Response status codes: 200, 422
+
+### models
+
+#### POST /api/v1/models/quantization/compare
+
+- Summary: Compare Api
+- Operation ID: `compare_api_api_v1_models_quantization_compare_post`
 - Response status codes: 200, 422
 
 ### notifications

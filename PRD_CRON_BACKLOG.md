@@ -116,7 +116,7 @@ Rules for every cron tick:
 67. [x] [FR-S8] Org-change-driven access updates from SCIM. Completed as `scim_sync.py`: SCIM-style users/groups applied to the org model (email match, department -> division by name, unknown department fails closed with a warning, group -> team membership mirrored exactly, `active=false` deprovisions via FR-F18 offboarding, OpenFGA tuples corrected with removals first, audit counts only) and admin-only `POST /api/v1/scim/sync`; see progress_2026-10-05.txt. A real SCIM 2.0 server surface (bearer-token `/Users` `/Groups` endpoints, PATCH ops) and IdP wiring remain follow-ups.
 
 ### I. P3 / long-horizon after P2
-68. [FR-M5] Quantization lab.
+68. [x] [FR-M5] Quantization lab. Completed as deterministic/offline `quantization_lab.py` (AWQ/GPTQ/GGUF/fp16 variants compared to a baseline on relative quality loss, speedup, and memory saving; memory estimated from params x bits when not measured; format -> serving-engine compatibility; constraint-based recommendation with rejection reasons) + `POST /api/v1/models/quantization/compare`; see progress_2026-10-05.txt. Running real quantization jobs and live measurement remain follow-ups.
 69. [FR-M6] Fine-tuning and distillation.
 70. [FR-R9] Advanced RAG: GraphRAG/multimodal/routing across knowledge bases.
 71. [x] [FR-R10] Structured-data questions over spreadsheets/CSV with computation. Completed as deterministic/offline `table_qa.py` (typed CSV parse, structured filter/group-by/aggregate/sort/limit and group comparison executed by plain code, no eval/SQL, formula-cell neutralisation, source file in result) + `POST /api/v1/data/table-query`; see progress_2026-10-05.txt. XLSX parsing and NL-to-query translation remain follow-ups.

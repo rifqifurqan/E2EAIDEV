@@ -2022,6 +2022,70 @@
         "title": "PromptVersionIn",
         "type": "object"
       },
+      "QuantCompareIn": {
+        "properties": {
+          "baseline_id": {
+            "title": "Baseline Id",
+            "type": "string"
+          },
+          "engine": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine"
+          },
+          "max_memory_gb": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Memory Gb"
+          },
+          "max_quality_loss": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Quality Loss"
+          },
+          "params_b": {
+            "title": "Params B",
+            "type": "number"
+          },
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/VariantIn"
+            },
+            "maxItems": 50,
+            "title": "Variants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "variants",
+          "baseline_id",
+          "params_b"
+        ],
+        "title": "QuantCompareIn",
+        "type": "object"
+      },
       "ReevalIn": {
         "properties": {
           "run_id": {
@@ -3228,6 +3292,53 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VariantIn": {
+        "properties": {
+          "bits": {
+            "title": "Bits",
+            "type": "integer"
+          },
+          "format": {
+            "maxLength": 20,
+            "title": "Format",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "memory_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Gb"
+          },
+          "quality": {
+            "title": "Quality",
+            "type": "number"
+          },
+          "tokens_per_s": {
+            "title": "Tokens Per S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "format",
+          "bits",
+          "quality",
+          "tokens_per_s"
+        ],
+        "title": "VariantIn",
         "type": "object"
       },
       "WorkflowIn": {
@@ -8714,6 +8825,50 @@
         "summary": "Scan Pickle Api",
         "tags": [
           "model-security"
+        ]
+      }
+    },
+    "/api/v1/models/quantization/compare": {
+      "post": {
+        "description": "FR-M5: compare quantized variants with a baseline; optionally recommend one under constraints.",
+        "operationId": "compare_api_api_v1_models_quantization_compare_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuantCompareIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Compare Api Api V1 Models Quantization Compare Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Compare Api",
+        "tags": [
+          "models"
         ]
       }
     },

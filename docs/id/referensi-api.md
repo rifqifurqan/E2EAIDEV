@@ -6,8 +6,8 @@ Requirement: FR-F22 (referensi API P1).
 
 Judul API: E2EAIDEV API
 Versi API: 0.1.0
-Total path: 141
-Total operasi: 151
+Total path: 142
+Total operasi: 152
 
 ## Cara generate ulang
 
@@ -755,6 +755,14 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 
 - Ringkasan: Scan Pickle Api
 - Operation ID: `scan_pickle_api_api_v1_model_security_scan_pickle_post`
+- Kode status respons: 200, 422
+
+### models
+
+#### POST /api/v1/models/quantization/compare
+
+- Ringkasan: Compare Api
+- Operation ID: `compare_api_api_v1_models_quantization_compare_post`
 - Kode status respons: 200, 422
 
 ### notifications

@@ -1965,3 +1965,11 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_agent_trajectory_fr_b5.py` -> 7 failed (module missing).
   - GREEN: same command -> 7 passed. Docs regenerated (141 OpenAPI paths expected) via `scripts/generate_api_reference.py`.
   - Not done: LangGraph adapter, running workflows against real MCP tools behind delegated identity (FR-X2/X3), persisted runs, LLM-planned workflows, parallel step execution. Heavy full-stack gates intentionally skipped (speed-biased run).
+
+- Quantization lab (FR-M5) (2026-10-13, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `e2eai.quantization_lab` (no DB, no migration): `estimate_memory_gb` (params x bits/8 x 1.1 overhead; bit widths 2/3/4/5/6/8/16), `compatible_engines` (awq/gptq/fp16 -> vllm/transformers; gguf -> ollama/llamacpp; unknown formats such as pickle rejected), `compare_variants` (1-50 variants, unique ids, quality in [0,1], baseline quality > 0; per-variant relative quality loss, speedup, memory saving vs baseline, `memory_estimated` flag), `recommend` (fastest accepted variant under max quality loss / memory / engine, with per-variant rejection reasons).
+  - Route: `POST /api/v1/models/quantization/compare` (scope `evals`; optional `max_quality_loss` adds a recommendation). Numbers and variant ids only.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_quantization_lab_fr_m5.py` -> 6 failed (module missing).
+  - GREEN: same command -> 6 passed. Docs regenerated via `scripts/generate_api_reference.py`.
+  - Not done: running real AWQ/GPTQ/GGUF quantization jobs, live quality/speed measurement through the benchmark runner (FR-T11), persisting comparisons. Heavy full-stack gates intentionally skipped (speed-biased run).
