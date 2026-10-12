@@ -21,6 +21,7 @@ from . import audit
 from .core.errors import AppError
 from .db import Chunk, Document, DocumentVersion
 from .documents import LocalObjectStorage, get_storage
+from .index_lineage import record_lineage
 from .pii import PiiDetector, PiiPolicy, mask_text, pii_counts, select_detector
 from .retrieval import Embedder, index_document_chunks
 from .scan import ScanPolicy, Scanner, select_scanner
@@ -161,7 +162,8 @@ async def ingest_version(
     await audit.record(session, "system:scan", "document.scan.clean", target, {"version_id": str(version_id)})
 
     try:
-        parsed = select_parser(version.mime).parse(data, mime=version.mime)
+        parser = select_parser(version.mime)
+        parsed = parser.parse(data, mime=version.mime)
     except AppError as exc:
         version.parse_status = "failed"
         await audit.record(session, "system:ingest", "document.parse.failed", target,
@@ -199,5 +201,10 @@ async def ingest_version(
     await session.commit()
 
     indexed = await index_document_chunks(session, embedder=embedder, document_id=version.document_id)
+    await record_lineage(
+        session, document_id=version.document_id, version_id=version_id,
+        parser=type(parser).__name__, chunker="structure-aware",
+        embedding_model=embedder.model, chunk_count=len(parsed),
+    )
     return {"status": "ready", "scan_status": "clean", "chunks": len(parsed), "indexed": indexed,
             "pii_findings": pii_total}

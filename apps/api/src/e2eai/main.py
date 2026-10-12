@@ -7,6 +7,7 @@ from .ai_inventory import router as ai_inventory_router
 from .audit_export import router as audit_export_router
 from .secret_rotation import router as secret_rotation_router
 from .doc_lifecycle import router as doc_lifecycle_router
+from .index_lineage import router as index_lineage_router
 from .auth import router as auth_router
 from .benchmark import router as benchmark_router
 from .bot_approval import router as bot_approval_router
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(config_export_router)
     app.include_router(doc_lifecycle_router)
+    app.include_router(index_lineage_router)
     app.include_router(documents_router)
     app.include_router(retrieval_router)
     app.include_router(evals_router)

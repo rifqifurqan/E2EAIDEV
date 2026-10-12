@@ -1804,3 +1804,12 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_doc_lifecycle_review_fr_d8.py` -> 3 failed (module/columns missing).
   - GREEN: same command -> 3 passed. Adjacent: `uv run pytest -q tests/test_doc_lifecycle_review_fr_d8.py tests/test_us_document_lifecycle.py tests/test_us_document_search_p1.py tests/test_us02_cited_answer.py tests/test_us01_us03_us04_documents.py tests/test_us_hybrid_search_p1.py tests/test_migration_static.py tests/test_documents_migration_static.py` -> 28 passed; `create_app()` ok.
   - Heavy full-stack gates intentionally skipped (speed-biased run). Scheduled review-reminder notifications remain a follow-up.
+
+- Dataset/index lineage (FR-D10) (2026-10-12, cron batch):
+  - Hermes worked manually for speed. Codex unused.
+  - Added `IndexLineage` ORM model and reversible migration `0026_index_lineage` (unique per version + embedding model). `ingest_version` now records parser class, chunker (`structure-aware`), embedding model and chunk count after indexing; re-ingesting the same version/model updates the row instead of duplicating, and re-indexing with a new embedding model adds a new lineage row.
+  - `e2eai.index_lineage`: `record_lineage`, `lineage_for_document`, `visible_lineage` (reuses the SQL `_visible_document_clause`, so restricted documents return nothing and leak no existence/title/content), `lineage_summary` (counts by embedding model/parser/chunker, no titles).
+  - Routes: `GET /api/v1/lineage` (documents scope, permission-filtered) and `GET /api/v1/lineage/summary` (admin scope + admin role).
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_index_lineage_fr_d10.py` -> 3 failed (module/model missing).
+  - GREEN: same command -> 3 passed. Adjacent: `uv run pytest -q tests/test_index_lineage_fr_d10.py tests/test_us_upload_ingest.py tests/test_us_document_lifecycle.py tests/test_doc_lifecycle_review_fr_d8.py tests/test_us_malware_scan.py tests/test_us_pii_redaction.py tests/test_us02_cited_answer.py tests/test_migration_static.py` -> 33 passed; `create_app()` ok.
+  - Eval-dataset lineage (dataset -> source documents) and lakeFS/DVC integration remain follow-ups. Heavy full-stack gates intentionally skipped (speed-biased run).

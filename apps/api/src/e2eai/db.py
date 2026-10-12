@@ -215,6 +215,24 @@ class ChunkEmbedding(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class IndexLineage(Base):
+    """FR-D10: one row per (document version, embedding model) index build.
+
+    Records the parser, chunker, and embedding model that produced the indexed chunks, so every
+    index version can be traced back to its sources. Metadata only: no titles, text, or vectors.
+    """
+    __tablename__ = "index_lineage"
+    __table_args__ = (UniqueConstraint("version_id", "embedding_model", name="index_lineage_version_model"),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("document_versions.id", ondelete="CASCADE"))
+    parser: Mapped[str] = mapped_column(String(80))
+    chunker: Mapped[str] = mapped_column(String(40))
+    embedding_model: Mapped[str] = mapped_column(String(160))
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class DocPrincipal(Base):
     """Read-index for permission-filtered retrieval (PRD T4). Stores the *granted principal*
     (user:/team:/division:/role:/org:), never expanded to individual users."""

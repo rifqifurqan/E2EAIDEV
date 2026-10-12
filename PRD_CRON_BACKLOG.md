@@ -98,7 +98,7 @@ Rules for every cron tick:
 49. [x] [FR-F10] Audit export to SIEM. Completed as deterministic/offline syslog/OpenTelemetry/webhook payload exporter with cursoring, secret-safe details handling, and API route; see progress_2026-10-05.txt.
 50. [x] [FR-F17] Secret/certificate rotation. Completed as deterministic/offline slice: API-key rotation with grace overlap, immediate emergency revoke (audited, no raw keys), project-charset secret generator, 14-day certificate expiry status, zero-downtime rotation plan, and 4 admin routes under `/api/v1/security`; see progress_2026-10-05.txt.
 51. [x] [FR-D8] Review owner/review date/expiry lifecycle. Completed: `documents.review_owner_id/review_at/expires_at` (migration 0025), expired documents excluded inside the SQL retrieval/search/visible-chunk filters, due-review report for review owners, mark-reviewed, and 3 routes; see progress_2026-10-05.txt.
-52. [FR-D10] Dataset/index lineage.
+52. [x] [FR-D10] Dataset/index lineage. Completed: `index_lineage` table (migration 0026) recording document version, parser, chunker, and embedding model per index build (written at ingest, idempotent), permission-filtered lineage view, admin summary, and 2 routes under `/api/v1/lineage`; see progress_2026-10-05.txt.
 53. [FR-D13] Legal hold completion for chats and retention interactions.
 54. [FR-M7] Model registry with lineage/eval scores/approval status.
 55. [FR-M8] Model file security: safetensors, pickle scanning, checksums/signatures.
