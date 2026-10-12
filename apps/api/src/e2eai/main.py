@@ -59,12 +59,14 @@ from .delegated_identity import router as delegated_identity_router
 from .system_registration import router as system_registration_router
 from .write_confirmation import router as write_confirmation_router
 from .core.errors import install
+from .core.http_hardening import HardeningMiddleware
 from .db import sessions
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="E2EAIDEV API", version="0.1.0")
     install(app)
+    app.add_middleware(HardeningMiddleware)
     app.include_router(ai_inventory_router)
     app.include_router(audit_export_router)
     app.include_router(secret_rotation_router)
