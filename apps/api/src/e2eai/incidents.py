@@ -15,12 +15,13 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
 from .auth import current_session, require_scope
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import AIIncident, Role, User, UserRole, get_session
 from .legal_hold import is_admin
 
@@ -196,6 +197,23 @@ async def record_postmortem(
     return inc
 
 
+async def list_incidents_page(
+    session: AsyncSession, *, status: str | None = None, limit: int | None = None, cursor: str | None = None,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Keyset-paginated incident list (NFR-20): newest first, ties broken by id. Caller enforces admin access."""
+    size = clamp_limit(limit)
+    stmt = select(AIIncident)
+    if status:
+        stmt = stmt.where(AIIncident.status == status)
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(AIIncident.created_at, AIIncident.id) < tuple_(ts, last_id))
+    stmt = stmt.order_by(AIIncident.created_at.desc(), AIIncident.id.desc()).limit(size + 1)
+    rows = list((await session.scalars(stmt)).all())
+    page, nxt = make_page(rows, size, lambda i: (i.created_at, i.id))
+    return [summarize(i) for i in page], nxt
+
+
 async def list_incidents(session: AsyncSession, *, status: str | None = None) -> list[dict[str, Any]]:
     stmt = select(AIIncident).order_by(AIIncident.created_at.desc()).limit(500)
     if status:
@@ -253,11 +271,13 @@ async def report_api(
 
 @router.get("")
 async def list_api(
-    status: str | None = None, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)
+    status: str | None = None, limit: int | None = None, cursor: str | None = None,
+    sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     require_scope(sess, "bots")
     await _require_admin(db, await _user(db, sess))
-    return {"incidents": await list_incidents(db, status=status)}
+    items, next_cursor = await list_incidents_page(db, status=status, limit=limit, cursor=cursor)
+    return {"incidents": items, "next_cursor": next_cursor}
 
 
 @router.post("/{incident_id}/transition")

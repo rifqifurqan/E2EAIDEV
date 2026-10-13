@@ -13,12 +13,13 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
 from .auth import current_session, require_scope
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import Notification, User, get_session
 
 SAFE_NOTIFICATION_KINDS: tuple[str, ...] = (
@@ -221,19 +222,36 @@ async def _current_user(db: AsyncSession, sess: dict) -> User:
     return user
 
 
+async def list_notifications_page(
+    session: AsyncSession, *, user: User, unread_only: bool = False,
+    limit: int | None = None, cursor: str | None = None,
+) -> tuple[list[Notification], str | None]:
+    """Keyset-paginated, owner-scoped notification list (NFR-20): newest first, ties broken by id."""
+    size = clamp_limit(limit)
+    stmt = select(Notification).where(Notification.user_id == user.id)
+    if unread_only:
+        stmt = stmt.where(Notification.read_at.is_(None))
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(Notification.created_at, Notification.id) < tuple_(ts, last_id))
+    stmt = stmt.order_by(Notification.created_at.desc(), Notification.id.desc()).limit(size + 1)
+    rows = list((await session.execute(stmt)).scalars().all())
+    return make_page(rows, size, lambda n: (n.created_at, n.id))
+
+
 @router.get("")
 async def list_my_notifications(
     unread_only: bool = False,
+    limit: int | None = None,
+    cursor: str | None = None,
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
 ) -> dict:
     require_scope(sess, "notifications")
     user = await _current_user(db, sess)
-    stmt = select(Notification).where(Notification.user_id == user.id)
-    if unread_only:
-        stmt = stmt.where(Notification.read_at.is_(None))
-    rows = (await db.execute(stmt.order_by(Notification.created_at.desc()))).scalars().all()
+    rows, next_cursor = await list_notifications_page(db, user=user, unread_only=unread_only, limit=limit, cursor=cursor)
     return {
+        "next_cursor": next_cursor,
         "notifications": [
             {
                 "id": str(n.id),
