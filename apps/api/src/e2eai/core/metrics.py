@@ -53,6 +53,12 @@ def render_prometheus(reg: MetricsRegistry = REGISTRY) -> str:
             lines.append(f'http_request_duration_seconds_bucket{{{base},le="+Inf"}} {total}')
             lines.append(f'http_request_duration_seconds_sum{{{base}}} {_fmt(round(reg.sums[(method, route)], 6))}')
             lines.append(f'http_request_duration_seconds_count{{{base}}} {total}')
+    from .resilience import breaker_states
+
+    lines += ["# HELP circuit_breaker_state Upstream circuit breaker: 0 closed, 1 half-open, 2 open.",
+              "# TYPE circuit_breaker_state gauge"]
+    for upstream, value in sorted(breaker_states().items()):
+        lines.append(f'circuit_breaker_state{{upstream="{upstream}"}} {value}')
     return "\n".join(lines) + "\n"
 
 

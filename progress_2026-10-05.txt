@@ -2240,3 +2240,9 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_circuit_breaker_nfr19.py` -> ImportError (`CircuitBreaker`). GREEN: 5 passed.
   - Adjacent: `uv run pytest -q tests/test_circuit_breaker_nfr19.py tests/test_resilient_http_nfr19.py tests/test_us02_cited_answer.py tests/test_us_chat_conversations.py tests/test_http_hardening_nfr.py` -> 24 passed; `uv run pytest -q -k "rerank or retrieval or embed or answer"` -> 70 passed. Heavy gates skipped per speed-biased instruction.
   - Not done: breaker for OpenFGA/Keycloak/MCP calls (OpenFGA must keep failing closed), breaker state in metrics, cross-process (Valkey) breaker state.
+
+- Circuit breaker state in Prometheus metrics (NFR-16, NFR-19) (2026-10-13, cron):
+  - Hermes worked manually. Codex unused.
+  - `breaker_for(key, name)` now records a short URL-free label; `breaker_states()` feeds a new `circuit_breaker_state{upstream="embeddings|rerank|chat"}` gauge (0 closed, 1 half-open, 2 open) in `render_prometheus`, so the admin-only `GET /api/v1/metrics` shows upstream outages. Labels never contain URLs, hosts or credentials.
+  - TDD / RED: new test in `tests/test_circuit_breaker_nfr19.py` -> TypeError (`name` kwarg). GREEN: `cd apps/api && uv run pytest -q tests/test_circuit_breaker_nfr19.py tests/test_metrics_nfr16.py tests/test_resilient_http_nfr19.py tests/test_us02_cited_answer.py tests/test_phase0_core.py` -> 22 passed; app ok. Heavy gates skipped.
+  - Not done: breaker for OpenFGA/Keycloak/MCP (OpenFGA must keep failing closed), cross-process breaker state.

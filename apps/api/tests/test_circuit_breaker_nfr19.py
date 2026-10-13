@@ -119,3 +119,19 @@ def test_success_closes_breaker_and_client_errors_do_not_trip_it():
 
 def test_circuit_open_is_distinct_exception():
     assert issubclass(CircuitOpen, Exception)
+
+
+def test_breaker_state_is_exposed_in_prometheus_without_urls():
+    from e2eai.core.metrics import MetricsRegistry, render_prometheus
+    from e2eai.core.resilience import breaker_for
+
+    reset_breakers()
+    cb = breaker_for("http://user:pw@gateway.internal:4000/v1/embeddings", name="embeddings")
+    for _ in range(cb.failure_threshold):
+        cb.record_failure()
+    breaker_for("http://gateway.internal:4000/rerank", name="rerank")
+    text = render_prometheus(MetricsRegistry())
+    assert 'circuit_breaker_state{upstream="embeddings"} 2' in text
+    assert 'circuit_breaker_state{upstream="rerank"} 0' in text
+    assert "gateway.internal" not in text and "pw@" not in text
+    reset_breakers()

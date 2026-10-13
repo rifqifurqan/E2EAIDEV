@@ -92,13 +92,29 @@ class CircuitBreaker:
 _BREAKERS: dict[str, CircuitBreaker] = {}
 
 
-def breaker_for(key: str) -> CircuitBreaker:
-    """Shared per-upstream breaker (key = base URL; never contains credentials)."""
+_NAMES: dict[str, str] = {}
+STATE_VALUE = {"closed": 0, "half_open": 1, "open": 2}
+
+
+def breaker_for(key: str, name: str | None = None) -> CircuitBreaker:
+    """Shared per-upstream breaker. ``name`` is the short, URL-free label used in metrics."""
+    if name:
+        _NAMES[key] = name
     return _BREAKERS.setdefault(key, CircuitBreaker())
+
+
+def breaker_states() -> dict[str, int]:
+    """Metric view: upstream label -> 0 closed / 1 half_open / 2 open. Labels never contain URLs."""
+    out: dict[str, int] = {}
+    for key, cb in _BREAKERS.items():
+        label = _NAMES.get(key, "unnamed")
+        out[label] = max(out.get(label, 0), STATE_VALUE[cb.state])
+    return out
 
 
 def reset_breakers() -> None:
     _BREAKERS.clear()
+    _NAMES.clear()
 
 
 RETRY_STATUS = frozenset({429, 502, 503, 504})

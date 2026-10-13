@@ -84,7 +84,7 @@ class TeiReranker:
         if not chunks:
             return []
         response = await post_json_with_retry(
-            self.client_factory, base_url=self.base_url, timeout=self.timeout, breaker=breaker_for(self.base_url + "/rerank"), path="/rerank",
+            self.client_factory, base_url=self.base_url, timeout=self.timeout, breaker=breaker_for(self.base_url + "/rerank", "rerank"), path="/rerank",
             headers={"Authorization": f"Bearer {self.api_key}"},
             json={
                 "model": self.model,
@@ -155,7 +155,7 @@ class LiteLLMEmbedder:
         if not texts:
             return []
         response = await post_json_with_retry(
-            self.client_factory, base_url=self.base_url, timeout=self.timeout, breaker=breaker_for(self.base_url + "/v1/embeddings"), path="/v1/embeddings",
+            self.client_factory, base_url=self.base_url, timeout=self.timeout, breaker=breaker_for(self.base_url + "/v1/embeddings", "embeddings"), path="/v1/embeddings",
             headers={"Authorization": f"Bearer {self.api_key}"},
             json={"model": self.model, "input": list(texts)},
         )
@@ -215,7 +215,7 @@ class LiteLLMAnswerGenerator:
     async def generate(self, question: str, chunks: list[dict], answer_language: str) -> str:
         system_prompt = build_answer_system_prompt(chunks, answer_language)
         response = await post_json_with_retry(
-            self.client_factory, base_url=self.base_url, timeout=self.timeout, breaker=breaker_for(self.base_url + "/v1/chat/completions"), path="/v1/chat/completions",
+            self.client_factory, base_url=self.base_url, timeout=self.timeout, breaker=breaker_for(self.base_url + "/v1/chat/completions", "chat"), path="/v1/chat/completions",
             headers={"Authorization": f"Bearer {self.api_key}"},
             json={
                 "model": self.model,
