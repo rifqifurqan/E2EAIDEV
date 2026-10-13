@@ -189,6 +189,8 @@ Rules for every cron tick:
 
 108. [x] [NFR-16/NFR-19] Circuit breaker state exposed as `circuit_breaker_state{upstream}` gauge on the admin Prometheus endpoint (URL-free labels); see progress_2026-10-05.txt.
 
+109. [x] [NFR-19/FR-F1] Bounded retry + clear 503 for Keycloak OIDC token/userinfo calls (token POST retried on connect errors only: single-use code). See progress_2026-10-05.txt.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.

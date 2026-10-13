@@ -2246,3 +2246,9 @@ HOW TO RESUME
   - `breaker_for(key, name)` now records a short URL-free label; `breaker_states()` feeds a new `circuit_breaker_state{upstream="embeddings|rerank|chat"}` gauge (0 closed, 1 half-open, 2 open) in `render_prometheus`, so the admin-only `GET /api/v1/metrics` shows upstream outages. Labels never contain URLs, hosts or credentials.
   - TDD / RED: new test in `tests/test_circuit_breaker_nfr19.py` -> TypeError (`name` kwarg). GREEN: `cd apps/api && uv run pytest -q tests/test_circuit_breaker_nfr19.py tests/test_metrics_nfr16.py tests/test_resilient_http_nfr19.py tests/test_us02_cited_answer.py tests/test_phase0_core.py` -> 22 passed; app ok. Heavy gates skipped.
   - Not done: breaker for OpenFGA/Keycloak/MCP (OpenFGA must keep failing closed), cross-process breaker state.
+
+- Bounded retry and clear 503 for Keycloak OIDC calls (NFR-19, FR-F1) (2026-10-13, cron):
+  - Hermes worked manually. Codex unused.
+  - `exchange_oidc_code_for_identity` now wraps the token POST in `with_retry` for connect errors only (the authorization code is single use, so a request that may have reached Keycloak is never replayed) and the userinfo GET for any transport error. Exhausted/unreachable IdP -> 503 `upstream-unavailable` "Identity provider unavailable"; no client secret, token or endpoint in the message. Keycloak 4xx rejections still return 401 and are not retried.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_oidc_resilience_nfr19.py` -> TypeError (new `retry_sleep` seam). GREEN: 5 passed. Adjacent: `uv run pytest -q tests/test_oidc_resilience_nfr19.py tests/test_auth.py tests/test_phase0_core.py` -> 17 passed. Heavy gates skipped.
+  - Not done: MCP client retry (no real transport exists yet), circuit breaker for Keycloak, live Keycloak outage drill.

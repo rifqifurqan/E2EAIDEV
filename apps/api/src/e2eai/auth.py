@@ -93,6 +93,11 @@ def oidc_provider_from_settings() -> OIDCProvider:
     )
 
 
+def _idp_unavailable() -> AppError:
+    return AppError(503, "Identity provider unavailable",
+                    "The sign-in service did not respond. Please try again shortly.", "upstream-unavailable")
+
+
 async def exchange_oidc_code_for_identity(
     http_client,
     provider: OIDCProvider,
@@ -100,6 +105,7 @@ async def exchange_oidc_code_for_identity(
     code: str,
     redirect_uri: str,
     code_verifier: str | None = None,
+    retry_sleep=None,
 ) -> OIDCIdentity:
     """Exchange an authorization code with Keycloak and validate it via userinfo.
 
@@ -118,11 +124,23 @@ async def exchange_oidc_code_for_identity(
         form["client_secret"] = provider.client_secret
     if code_verifier:
         form["code_verifier"] = code_verifier
-    token_response = await http_client.post(
-        provider.token_endpoint,
-        data=form,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-    )
+    from .core.resilience import RetryExhausted, with_retry
+
+    sleep_kw = {"sleep": retry_sleep} if retry_sleep else {}
+    try:
+        # The authorization code is single use: retry only when the request never reached Keycloak.
+        token_response = await with_retry(
+            lambda: http_client.post(
+                provider.token_endpoint,
+                data=form,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            ),
+            timeout=None, retry_on=(httpx.ConnectError, httpx.ConnectTimeout), **sleep_kw,
+        )
+    except httpx.TransportError:
+        raise _idp_unavailable() from None
+    except RetryExhausted:
+        raise _idp_unavailable() from None
     if token_response.status_code >= 400:
         raise AppError(401, "OIDC token exchange failed")
     token_payload = token_response.json()
@@ -130,10 +148,16 @@ async def exchange_oidc_code_for_identity(
     token_type = token_payload.get("token_type", "Bearer")
     if not access_token or token_type.lower() != "bearer":
         raise AppError(401, "OIDC token response is invalid")
-    userinfo_response = await http_client.get(
-        provider.userinfo_endpoint,
-        headers={"Authorization": f"Bearer {access_token}"},
-    )
+    try:
+        userinfo_response = await with_retry(
+            lambda: http_client.get(
+                provider.userinfo_endpoint,
+                headers={"Authorization": f"Bearer {access_token}"},
+            ),
+            timeout=None, retry_on=(httpx.TransportError,), **sleep_kw,
+        )
+    except (httpx.TransportError, RetryExhausted):
+        raise _idp_unavailable() from None
     if userinfo_response.status_code >= 400:
         raise AppError(401, "OIDC userinfo validation failed")
     userinfo = userinfo_response.json()
