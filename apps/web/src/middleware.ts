@@ -5,12 +5,17 @@ export function middleware(request: NextRequest) {
   const response = NextResponse.next();
 
   // CSP: restrict to self, inline styles (Tailwind), and the API origin.
-  // No external scripts, no eval, no cloud telemetry endpoints.
+  // No external scripts, no cloud telemetry endpoints. `unsafe-eval` is allowed ONLY in
+  // development because Next's dev bundles (eval source maps / React refresh) need it.
+  const scriptSrc =
+    process.env.NODE_ENV === "development"
+      ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+      : "script-src 'self' 'unsafe-inline'";
   response.headers.set(
     "Content-Security-Policy",
     [
       "default-src 'self'",
-      "script-src 'self'",
+      scriptSrc,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data:",
       "font-src 'self'",

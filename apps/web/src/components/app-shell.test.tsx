@@ -1,8 +1,17 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppShell } from "./app-shell";
 import { I18nProvider } from "@/i18n/context";
+
+const apiMock = vi.hoisted(() => ({
+  login: vi.fn(),
+  me: vi.fn(),
+}));
+
+vi.mock("@/lib/api-client", () => ({
+  api: apiMock,
+}));
 
 function renderShell(locale: "en" | "id" = "en") {
   return render(
@@ -15,6 +24,19 @@ function renderShell(locale: "en" | "id" = "en") {
 }
 
 describe("AppShell", () => {
+  beforeEach(() => {
+    apiMock.login.mockReset();
+    apiMock.me.mockReset();
+    apiMock.me.mockRejectedValue(new Error("not authenticated"));
+  });
+
+  it("restores the signed-in state on load when a session cookie is already valid", async () => {
+    apiMock.me.mockReset();
+    apiMock.me.mockResolvedValue({ user_id: "u1", email: "andi@demo.e2eai", display_name: "Andi" });
+    renderShell();
+    expect(await screen.findByText(/signed in as andi@demo\.e2eai/i)).toBeInTheDocument();
+  });
+
   it("renders lifecycle nav with all 7 stages in order", () => {
     renderShell();
     const nav = screen.getByRole("navigation", { name: /lifecycle/i });
@@ -96,5 +118,15 @@ describe("AppShell", () => {
   it("has banner landmark for header", () => {
     renderShell();
     expect(screen.getByRole("banner")).toBeInTheDocument();
+  });
+
+  it("lets a user sign in from the shell header", async () => {
+    apiMock.login.mockResolvedValueOnce({ user_id: "u1", csrf_token: "csrf" });
+    renderShell();
+    await userEvent.type(screen.getByLabelText(/email/i), "admin@local");
+    await userEvent.type(screen.getByLabelText(/password/i), "secret-password");
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    expect(apiMock.login).toHaveBeenCalledWith({ email: "admin@local", password: "secret-password" });
+    expect(await screen.findByText(/signed in/i)).toBeInTheDocument();
   });
 });

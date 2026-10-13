@@ -1,19 +1,64 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useI18n } from "@/i18n/context";
+import { api, type Document } from "@/lib/api-client";
 
 type DocView = "my" | "shared" | "team";
 
 export function DocumentsScreen() {
   const { t } = useI18n();
   const [activeView, setActiveView] = useState<DocView>("my");
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [sharePrincipal, setSharePrincipal] = useState("");
+  const [status, setStatus] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tabs: { key: DocView; label: string }[] = [
     { key: "my", label: t.documents.myDocuments },
     { key: "shared", label: t.documents.sharedWithMe },
     { key: "team", label: t.documents.myTeam },
   ];
+
+  const selectedDocument = documents.find((doc) => doc.document_id === selectedId) ?? documents[0];
+
+  async function handleUpload(file: File | undefined) {
+    if (!file) return;
+    setStatus("Uploading...");
+    try {
+      const doc = await api.uploadDocument(file);
+      setDocuments((items) => [doc, ...items]);
+      setSelectedId(doc.document_id);
+      setStatus("Upload complete");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Upload failed");
+    }
+  }
+
+  async function handleShare() {
+    if (!selectedDocument || !sharePrincipal.trim()) return;
+    setStatus("Sharing...");
+    try {
+      await api.shareDocument(selectedDocument.document_id, { principal: sharePrincipal.trim(), level: "viewer" });
+      setStatus(`Shared ${selectedDocument.title}`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Share failed");
+    }
+  }
+
+  async function handleRevoke() {
+    if (!selectedDocument) return;
+    setStatus("Revoking...");
+    try {
+      await api.trashDocument(selectedDocument.document_id);
+      setDocuments((items) => items.filter((doc) => doc.document_id !== selectedDocument.document_id));
+      setSelectedId("");
+      setStatus(`Revoked access to ${selectedDocument.title}`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Revoke failed");
+    }
+  }
 
   return (
     <section>
@@ -48,29 +93,69 @@ export function DocumentsScreen() {
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <button
           type="button"
+          onClick={() => fileInputRef.current?.click()}
           className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           {t.documents.upload}
         </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          aria-label={t.documents.upload}
+          className="sr-only"
+          onChange={(event) => void handleUpload(event.target.files?.[0])}
+        />
+        <label className="sr-only" htmlFor="share-principal">Share principal</label>
+        <input
+          id="share-principal"
+          aria-label="Share principal"
+          value={sharePrincipal}
+          onChange={(event) => setSharePrincipal(event.target.value)}
+          placeholder={t.documents.shareWith}
+          className="rounded border border-gray-300 px-3 py-2 text-sm"
+        />
         <button
           type="button"
-          className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          onClick={handleShare}
+          disabled={!selectedDocument || !sharePrincipal.trim()}
+          className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
         >
           {t.documents.share}
         </button>
         <button
           type="button"
-          className="rounded border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+          onClick={handleRevoke}
+          disabled={!selectedDocument}
+          className="rounded border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
         >
           {t.documents.revoke}
         </button>
       </div>
 
+      {status ? <p role="status" className="mb-3 text-sm text-gray-700">{status}</p> : null}
+
       <div className="rounded-lg border border-gray-200 p-8 text-center text-gray-500">
-        {t.documents.noDocuments}
+        {documents.length ? (
+          <ul className="space-y-2 text-left">
+            {documents.map((doc) => (
+              <li key={doc.document_id}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(doc.document_id)}
+                  className={`w-full rounded border px-3 py-2 text-left ${selectedDocument?.document_id === doc.document_id ? "border-blue-400 bg-blue-50" : "border-gray-200"}`}
+                >
+                  <span className="font-medium text-gray-900">{doc.title}</span>
+                  <span className="ml-2 text-xs text-gray-500">{doc.status}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          t.documents.noDocuments
+        )}
       </div>
     </section>
   );

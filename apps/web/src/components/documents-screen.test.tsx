@@ -1,7 +1,18 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { DocumentsScreen } from "./documents-screen";
 import { I18nProvider } from "@/i18n/context";
+
+const apiMock = vi.hoisted(() => ({
+  uploadDocument: vi.fn(),
+  shareDocument: vi.fn(),
+  trashDocument: vi.fn(),
+}));
+
+vi.mock("@/lib/api-client", () => ({
+  api: apiMock,
+}));
 
 function renderDocs(locale: "en" | "id" = "en") {
   return render(
@@ -12,6 +23,12 @@ function renderDocs(locale: "en" | "id" = "en") {
 }
 
 describe("DocumentsScreen", () => {
+  beforeEach(() => {
+    apiMock.uploadDocument.mockReset();
+    apiMock.shareDocument.mockReset();
+    apiMock.trashDocument.mockReset();
+  });
+
   it("renders document view tabs", () => {
     renderDocs();
     expect(screen.getByRole("tab", { name: /my documents/i })).toBeInTheDocument();
@@ -45,5 +62,27 @@ describe("DocumentsScreen", () => {
   it("has accessible heading", () => {
     renderDocs();
     expect(screen.getByRole("heading", { name: /documents/i })).toBeInTheDocument();
+  });
+
+  it("exposes a real file input and uploads the selected file", async () => {
+    apiMock.uploadDocument.mockResolvedValueOnce({ document_id: "doc1", title: "policy.pdf", status: "ready", sensitivity: "internal", parse_status: "parsed", scan_status: "clean" });
+    renderDocs();
+    const file = new File(["hello"], "policy.pdf", { type: "application/pdf" });
+    await userEvent.upload(screen.getByLabelText(/upload document/i), file);
+    expect(apiMock.uploadDocument).toHaveBeenCalledWith(file);
+    expect(await screen.findByText(/policy\.pdf/i)).toBeInTheDocument();
+  });
+
+  it("share and revoke actions call document APIs when a document exists", async () => {
+    apiMock.uploadDocument.mockResolvedValueOnce({ document_id: "doc1", title: "policy.pdf", status: "ready", sensitivity: "internal", parse_status: "parsed", scan_status: "clean" });
+    apiMock.shareDocument.mockResolvedValueOnce({ status: "ok" });
+    apiMock.trashDocument.mockResolvedValueOnce({ status: "trashed" });
+    renderDocs();
+    await userEvent.upload(screen.getByLabelText(/upload document/i), new File(["hello"], "policy.pdf", { type: "application/pdf" }));
+    await userEvent.type(screen.getByLabelText(/share principal/i), "user:andi");
+    await userEvent.click(screen.getByRole("button", { name: /^share$/i }));
+    expect(apiMock.shareDocument).toHaveBeenCalledWith("doc1", { principal: "user:andi", level: "viewer" });
+    await userEvent.click(screen.getByRole("button", { name: /revoke/i }));
+    expect(apiMock.trashDocument).toHaveBeenCalledWith("doc1");
   });
 });

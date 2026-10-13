@@ -1,5 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { ENDPOINTS } from "./api-client";
+import nextConfig from "../../next.config";
+import { middleware } from "../middleware";
+import { NextRequest } from "next/server";
 
 describe("API client endpoint paths", () => {
   it("health endpoints target /api/v1", () => {
@@ -52,6 +55,51 @@ describe("API client endpoint paths", () => {
 
   it("admin endpoints match backend routes", () => {
     expect(ENDPOINTS.deactivateUser("u1")).toBe("/users/u1/deactivate");
+  });
+
+  it("use-case intake and config export endpoints match backend routes", () => {
+    expect(ENDPOINTS.useCases).toBe("/plan/use-cases");
+    expect(ENDPOINTS.configExport("yaml")).toBe("/admin/config/export?format=yaml");
+  });
+});
+
+describe("Next runtime wiring", () => {
+  it("proxies /api/v1 requests to the local backend", async () => {
+    const rewritesFn = nextConfig.rewrites;
+    expect(rewritesFn).toBeTypeOf("function");
+    if (typeof rewritesFn !== "function") throw new Error("rewrites must be a function");
+    const rewrites = await rewritesFn();
+    expect(rewrites).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "/api/v1/:path*",
+          destination: "http://127.0.0.1:8000/api/v1/:path*",
+        }),
+      ]),
+    );
+  });
+
+  it("allows Next hydration scripts in CSP while keeping external scripts blocked", () => {
+    const req = new NextRequest("http://localhost:13000/");
+    const csp = middleware(req).headers.get("Content-Security-Policy") ?? "";
+    expect(csp).toContain("script-src");
+    expect(csp).toContain("'unsafe-inline'");
+    expect(csp).not.toContain("https:");
+    expect(csp).not.toContain("*");
+  });
+
+  it("allows unsafe-eval only in development (Next dev bundles need it), never in production", () => {
+    const req = new NextRequest("http://localhost:13000/");
+    const original = process.env.NODE_ENV;
+    try {
+      vi.stubEnv("NODE_ENV", "development");
+      expect(middleware(req).headers.get("Content-Security-Policy")).toContain("'unsafe-eval'");
+      vi.stubEnv("NODE_ENV", "production");
+      expect(middleware(req).headers.get("Content-Security-Policy")).not.toContain("'unsafe-eval'");
+    } finally {
+      vi.unstubAllEnvs();
+      expect(process.env.NODE_ENV).toBe(original);
+    }
   });
 });
 

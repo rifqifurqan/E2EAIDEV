@@ -2389,3 +2389,11 @@ HOW TO RESUME
     "pagination_nfr20 or idempotency_nfr20 or http_hardening_nfr"` -> 24 passed.
   - No new code committed this run: the backlog is complete and all remaining work is
     either deferred (external/permissions) or tracked as follow-ups under existing items.
+
+- Live-web remediation (2026-10-14, manual, after headed Playwright audit):
+  - Root causes: (1) CSP `script-src 'self'` blocked Next inline bootstrap; after allowing inline, dev bundles still failed on `unsafe-eval` (React never hydrated). Fixed: `'unsafe-inline'` always, `'unsafe-eval'` only when NODE_ENV=development. (2) web origin had no API proxy -> `next.config.ts` rewrites `/api/v1/:path*` to the local API. (3) Chat/Documents/Plan/login UI were static shells -> wired to `/auth/login`, `/me`, `/chat/ask`, `/documents` upload/share/trash, `/plan/use-cases`; login state restored on reload via `/me`.
+  - Live API quirk: `/chat/ask` returns citations as `{document, page, section}`; client type + UI now accept both shapes.
+  - Ops finding (not code): upload 500 was the stack's Ollama container `e2eai-ollama-1` being stopped (embeddings via LiteLLM). `docker start e2eai-ollama-1` fixed it.
+  - Tests (RED first): `cd apps/web && pnpm vitest run` -> 13 files / 84 passed; `pnpm run typecheck` ok; `pnpm lint` ok; `pnpm build` ok (added dev deps eslint-plugin-react-hooks, @next/eslint-plugin-next@15.5.27 which `next build` linting needed).
+  - Headed Playwright live flow (Chrome, headless=false): hydration, login, session persisted + restored on reload, Plan intake submit, document upload (real ingest + embed), share, chat answer with citation, admin export through web-origin proxy -> 9/9 PASS.
+  - Not covered: Data/Build/Test/Release/Operate/Improve remain mostly static stages; production deploy proxy target (rewrite is hardcoded to 127.0.0.1:8000).

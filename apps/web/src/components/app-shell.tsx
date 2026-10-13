@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useI18n } from "@/i18n/context";
 import type { Locale } from "@/i18n";
+import { api } from "@/lib/api-client";
 
 const LIFECYCLE_STAGES = [
   "plan",
@@ -33,6 +35,25 @@ const FEATURE_PATHS: Record<(typeof FEATURE_LINKS)[number], string> = {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { locale, t, setLocale } = useI18n();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authStatus, setAuthStatus] = useState("");
+
+  // Restore the signed-in state when a valid session cookie already exists (page reload / new route).
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .me()
+      .then((me) => {
+        if (!cancelled) setAuthStatus(`Signed in as ${me.email}`);
+      })
+      .catch(() => {
+        /* not signed in: leave the login form as is */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const lifecycleLabel = locale === "id" ? "Navigasi siklus hidup" : "Lifecycle navigation";
   const featuresLabel = t.nav.features;
@@ -45,20 +66,62 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         {t.app.skipToContent}
       </a>
-      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3">
         <div className="flex items-center gap-3">
           <span className="text-lg font-bold">{t.app.title}</span>
           <span className="hidden text-sm text-gray-500 sm:inline">
             {t.app.subtitle}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() => setLocale(locale === "en" ? "id" : "en" as Locale)}
-          className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
-        >
-          {t.lang.switch}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <form
+            className="flex flex-wrap items-center gap-2"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setAuthStatus("Signing in...");
+              try {
+                await api.login({ email, password });
+                setPassword("");
+                setAuthStatus(`Signed in as ${email}`);
+              } catch (error) {
+                setAuthStatus(error instanceof Error ? error.message : "Sign in failed");
+              }
+            }}
+          >
+            <label className="sr-only" htmlFor="login-email">Email</label>
+            <input
+              id="login-email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="Email"
+              className="w-40 rounded border border-gray-300 px-2 py-1 text-sm"
+            />
+            <label className="sr-only" htmlFor="login-password">Password</label>
+            <input
+              id="login-password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Password"
+              className="w-40 rounded border border-gray-300 px-2 py-1 text-sm"
+            />
+            <button
+              type="submit"
+              className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Sign in
+            </button>
+            {authStatus ? <span className="text-xs text-gray-600">{authStatus}</span> : null}
+          </form>
+          <button
+            type="button"
+            onClick={() => setLocale((locale === "en" ? "id" : "en") as Locale)}
+            className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
+          >
+            {t.lang.switch}
+          </button>
+        </div>
       </header>
 
       <nav aria-label={lifecycleLabel} className="border-b border-gray-100 bg-gray-50 px-4">

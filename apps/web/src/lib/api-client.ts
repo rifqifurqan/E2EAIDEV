@@ -36,9 +36,11 @@ export interface Conversation {
 }
 
 export interface Citation {
-  document_id: string;
-  version_id: string;
-  chunk_id: string;
+  /** Live /chat/ask returns the document display name; stored citations carry ids. */
+  document?: string;
+  document_id?: string;
+  version_id?: string;
+  chunk_id?: string;
   page: number | null;
   section: string | null;
 }
@@ -72,6 +74,19 @@ export interface Document {
 export interface ShareInput {
   principal: string;
   level: "viewer" | "editor" | "owner";
+}
+
+export interface UseCaseInput {
+  title: string;
+  business_owner?: string;
+  purpose: string;
+  risk_tier?: string;
+}
+
+export interface UseCaseResponse {
+  id: string;
+  title: string;
+  status: string;
 }
 
 export interface EvalDataset {
@@ -184,6 +199,9 @@ export const ENDPOINTS = {
   documentSensitivity: (id: string) => `/documents/${id}/sensitivity`,
   documentRestore: (id: string) => `/documents/${id}/restore`,
   visibleChunks: "/documents/visible-chunks",
+  useCases: "/plan/use-cases",
+  configExport: (format: "yaml" | "json" = "yaml") =>
+    `/admin/config/export?format=${format}`,
   evalDatasets: "/evals/datasets",
   evalRuns: "/evals/runs",
   bots: "/bots",
@@ -306,6 +324,25 @@ export const api = {
     }),
   visibleChunks: () =>
     apiFetch<{ chunks: unknown[] }>(ENDPOINTS.visibleChunks),
+
+  // Plan
+  createUseCase: (input: UseCaseInput) =>
+    apiFetch<UseCaseResponse>(ENDPOINTS.useCases, {
+      method: "POST",
+      body: {
+        title: input.title,
+        problem: input.purpose,
+        users: input.business_owner ? [input.business_owner] : ["business owner"],
+        success_metrics: {
+          task_success: "Defined during intake",
+          deflection: "Defined during intake",
+          time_saved: "Defined during intake",
+        },
+        data_sources: [],
+        systems_to_integrate: [],
+        risk_tier: input.risk_tier ?? "limited",
+      },
+    }),
 
   // Evals
   createDataset: (name: string, source: string, items: unknown[]) =>
