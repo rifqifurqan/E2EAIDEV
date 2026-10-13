@@ -8,19 +8,23 @@ entries written here carry counts and ids only.
 """
 
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import delete, func, select
+from pydantic import BaseModel
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
 from .auth import current_session, require_scope
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import (
     AccessRequest,
     ApiKey,
     Conversation,
+    DataSubjectRequest,
     Document,
     LocalCredential,
     Message,
@@ -47,6 +51,73 @@ async def _subject(session: AsyncSession, subject_id: uuid.UUID) -> User:
     if subject is None:
         raise AppError(404, "User not found")
     return subject
+
+
+DSR_KINDS = ("export", "erase")
+DSR_RESPONSE_DAYS = 30  # response deadline recorded on every request (UU PDP / GDPR-ready)
+
+
+def _request_view(req: DataSubjectRequest, now: datetime | None = None) -> dict[str, Any]:
+    now = now or datetime.now(UTC)
+    return {
+        "id": str(req.id), "subject_id": str(req.subject_id) if req.subject_id else None, "kind": req.kind,
+        "status": req.status, "received_at": _iso(req.received_at), "due_at": _iso(req.due_at),
+        "completed_at": _iso(req.completed_at),
+        "overdue": req.status == "open" and req.due_at < now,
+    }
+
+
+async def open_request(
+    session: AsyncSession, *, admin: User, subject_id: uuid.UUID, kind: str, received_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Record a data-subject request with its deadline. The ledger keeps ids and labels, never personal data."""
+    await _require_admin(session, admin)
+    if kind not in DSR_KINDS:
+        raise AppError(422, "Unknown request kind", "Use export or erase.")
+    subject = await _subject(session, subject_id)
+    received = received_at or datetime.now(UTC)
+    req = DataSubjectRequest(
+        subject_id=subject.id, kind=kind, status="open", received_at=received,
+        due_at=received + timedelta(days=DSR_RESPONSE_DAYS), opened_by=f"user:{admin.id}",
+    )
+    session.add(req)
+    await session.flush()
+    await audit.record(session, f"user:{admin.id}", "dsr.request_opened", f"user:{subject.id}", {
+        "request_id": str(req.id), "kind": kind})
+    await session.commit()
+    return _request_view(req)
+
+
+async def _complete_open_requests(session: AsyncSession, subject_id: uuid.UUID, kind: str) -> int:
+    rows = (await session.scalars(select(DataSubjectRequest).where(
+        DataSubjectRequest.subject_id == subject_id, DataSubjectRequest.kind == kind,
+        DataSubjectRequest.status == "open"))).all()
+    now = datetime.now(UTC)
+    for row in rows:
+        row.status, row.completed_at = "completed", now
+    return len(rows)
+
+
+async def list_requests_page(
+    session: AsyncSession, *, admin: User, status: str | None = None, overdue_only: bool = False,
+    limit: int | None = None, cursor: str | None = None,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Keyset-paginated request ledger, newest first. Admin check runs before the page (cursors are not authz)."""
+    await _require_admin(session, admin)
+    size = clamp_limit(limit)
+    stmt = select(DataSubjectRequest)
+    if status:
+        stmt = stmt.where(DataSubjectRequest.status == status)
+    if overdue_only:
+        stmt = stmt.where(DataSubjectRequest.status == "open", DataSubjectRequest.due_at < datetime.now(UTC))
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(DataSubjectRequest.created_at, DataSubjectRequest.id) < tuple_(ts, last_id))
+    stmt = stmt.order_by(DataSubjectRequest.created_at.desc(), DataSubjectRequest.id.desc()).limit(size + 1)
+    rows = list((await session.scalars(stmt)).all())
+    page, nxt = make_page(rows, size, lambda r: (r.created_at, r.id))
+    now = datetime.now(UTC)
+    return [_request_view(r, now) for r in page], nxt
 
 
 async def export_subject_data(session: AsyncSession, *, admin: User, subject_id: uuid.UUID) -> dict[str, Any]:
@@ -91,6 +162,7 @@ async def export_subject_data(session: AsyncSession, *, admin: User, subject_id:
         "messages": sum(len(c["messages"]) for c in conversations),
         "memories": len(memories), "notifications": len(notifications), "owned_documents": len(owned),
     })
+    await _complete_open_requests(session, subject.id, "export")
     await session.commit()
     return data
 
@@ -140,6 +212,7 @@ async def erase_subject_data(session: AsyncSession, *, admin: User, subject_id: 
     }
     await audit.record(session, f"user:{admin.id}", "dsr.erase", f"user:{subject.id}", {
         k: v for k, v in result.items() if isinstance(v, int)})
+    await _complete_open_requests(session, subject.id, "erase")
     await session.commit()
     return result
 
@@ -166,3 +239,26 @@ async def erase_api(user_id: uuid.UUID, sess: dict = Depends(current_session),
                     db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     require_scope(sess, "evals")
     return await erase_subject_data(db, admin=await _admin_user(db, sess), subject_id=user_id)
+
+
+class RequestIn(BaseModel):
+    subject_id: uuid.UUID
+    kind: str
+
+
+@router.post("/requests")
+async def open_request_api(body: RequestIn, sess: dict = Depends(current_session),
+                           db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    require_scope(sess, "evals")
+    return await open_request(db, admin=await _admin_user(db, sess), subject_id=body.subject_id, kind=body.kind)
+
+
+@router.get("/requests")
+async def list_requests_api(
+    status: str | None = None, overdue: bool = False, limit: int | None = None, cursor: str | None = None,
+    sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    require_scope(sess, "evals")
+    items, nxt = await list_requests_page(
+        db, admin=await _admin_user(db, sess), status=status, overdue_only=overdue, limit=limit, cursor=cursor)
+    return {"items": items, "next_cursor": nxt}

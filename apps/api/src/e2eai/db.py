@@ -727,6 +727,25 @@ class UserMemory(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class DataSubjectRequest(Base):
+    """NFR-10: ledger of data-subject requests (export/erase) with a response deadline. Ids and labels only."""
+    __tablename__ = "data_subject_requests"
+    __table_args__ = (
+        CheckConstraint("kind in ('export', 'erase')", name="dsr_kind"),
+        CheckConstraint("status in ('open', 'completed')", name="dsr_status"),
+        Index("dsr_created_idx", "created_at", "id"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    kind: Mapped[str] = mapped_column(String(8))
+    status: Mapped[str] = mapped_column(String(10), default="open")
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    opened_by: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class SystemGrant(Base):
     """FR-X4: principals (role/division) granted access to a registered system."""
     __tablename__ = "system_grants"
