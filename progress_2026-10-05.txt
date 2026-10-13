@@ -2150,3 +2150,8 @@ HOW TO RESUME
   - TDD / RED: `cd apps/web && npx vitest run src/lib/no-telemetry.test.ts` -> import failed (wrapper missing). GREEN: 2 passed. Smoke: `NEXT_TELEMETRY_DISABLED=0 node scripts/next-no-telemetry.mjs --version` -> Next.js v15.5.27, exit 0 (args/exit code forwarded). Full web suite: `npx vitest run` -> 12 files, 67 passed.
   - Not verified: that the wrapper's env actually suppresses traffic on the wire (no egress capture); a developer who runs `npx next ...` directly bypasses the wrapper (the host's saved `next telemetry` state is already disabled on this machine).
   - Still not done for NFR-12: Keycloak, SeaweedFS, OpenFGA, Valkey, Postgres opt-outs; live egress-block test.
+
+- UI timestamp helper (NFR-20) (2026-10-13, cron):
+  - The web UI had no timestamp formatting at all (the API returns UTC ISO strings). Added `apps/web/src/lib/time.ts`: `formatTimestamp(value, timeZone?, locale)` renders UTC in the user's zone, default Asia/Jakarta, EN/ID, offset-less strings treated as UTC, invalid zone falls back to the default, invalid/null input shows an em dash. Screens must call it instead of ad-hoc `toLocale*`; no screen renders timestamps yet, so nothing was rewired. Pairs with `GET /api/v1/me/preferences` (time_zone).
+  - TDD / RED: `cd apps/web && npx vitest run src/lib/time.test.ts` -> cannot find module `./time`. GREEN: 5 passed. Also removed an unused `@ts-expect-error` left in `no-telemetry.test.ts` that `tsc --noEmit` flagged. `npx tsc --noEmit` clean; full web suite `npx vitest run` -> 13 files, 72 passed.
+  - Not done: fetching the user's time zone in the app shell and passing it down; a settings UI to change it.

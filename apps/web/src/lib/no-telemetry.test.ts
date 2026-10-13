@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-// @ts-expect-error plain ESM script without type declarations
 import { buildEnv } from "../../scripts/next-no-telemetry.mjs";
 
 const root = resolve(__dirname, "../..");
