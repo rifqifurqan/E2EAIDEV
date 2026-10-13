@@ -44,8 +44,10 @@ export function EvalScreen() {
   const [runError, setRunError] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const firstDataset =
-    datasets.kind === "ready" && datasets.data.datasets.length > 0 ? datasets.data.datasets[0] : null;
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const datasetList = datasets.kind === "ready" ? datasets.data.datasets : [];
+  // Default to the newest dataset (the API lists newest first) unless the user picked another one.
+  const targetDataset = datasetList.find((dataset) => dataset.id === pickedId) ?? datasetList[0] ?? null;
 
   async function submitDataset(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,11 +77,11 @@ export function EvalScreen() {
   }
 
   async function runLatest() {
-    if (firstDataset === null) return;
+    if (targetDataset === null) return;
     setRunError(false);
     setBusy(true);
     try {
-      await api.runEval(firstDataset.id, "ragas.local");
+      await api.runEval(targetDataset.id, "ragas.local");
       setReloadKey((key) => key + 1);
     } catch {
       setRunError(true);
@@ -103,7 +105,7 @@ export function EvalScreen() {
         <button
           type="button"
           onClick={runLatest}
-          disabled={firstDataset === null || busy}
+          disabled={targetDataset === null || busy}
           className="rounded border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
         >
           {t.eval.runEval}
@@ -115,8 +117,22 @@ export function EvalScreen() {
           {t.eval.runFailed}
         </p>
       ) : null}
-      {firstDataset !== null ? (
-        <p className="mb-4 text-xs text-gray-500">{`${t.eval.runTarget}: ${firstDataset.name}`}</p>
+      {targetDataset !== null ? (
+        <label htmlFor="eval-target" className="mb-4 block text-sm">
+          <span className="mr-2">{t.eval.runTarget}</span>
+          <select
+            id="eval-target"
+            value={targetDataset.id}
+            onChange={(event) => setPickedId(event.target.value)}
+            className="rounded border border-gray-300 px-2 py-1 text-sm"
+          >
+            {datasetList.map((dataset) => (
+              <option key={dataset.id} value={dataset.id}>
+                {`${dataset.name} (v${dataset.version})`}
+              </option>
+            ))}
+          </select>
+        </label>
       ) : null}
 
       {formOpen ? (

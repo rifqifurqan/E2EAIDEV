@@ -241,4 +241,43 @@ describe("EvalScreen", () => {
     await user.click(screen.getByRole("button", { name: /dataset baru/i }));
     expect(screen.getByLabelText(/nama dataset/i)).toBeInTheDocument();
   });
+  const twoDatasets = {
+    datasets: [
+      { id: "d1", name: "newest-set", version: 2, source: "manual", item_count: 3, created_at: null },
+      { id: "d2", name: "older-set", version: 1, source: "manual", item_count: 5, created_at: null },
+    ],
+    next_cursor: null,
+  };
+
+  it("runs the newest dataset by default when several exist", async () => {
+    const user = userEvent.setup();
+    apiMock.listEvalDatasets.mockResolvedValue(twoDatasets);
+    apiMock.runEval.mockResolvedValue({ id: "r1", adapter: "ragas.local", metrics: {} });
+    renderEval();
+    await screen.findByLabelText(/evaluation target/i);
+    await user.click(screen.getByRole("button", { name: /run evaluation/i }));
+    await waitFor(() => expect(apiMock.runEval).toHaveBeenCalledWith("d1", "ragas.local"));
+  });
+
+  it("lets the user pick which dataset to run", async () => {
+    const user = userEvent.setup();
+    apiMock.listEvalDatasets.mockResolvedValue(twoDatasets);
+    apiMock.runEval.mockResolvedValue({ id: "r2", adapter: "ragas.local", metrics: {} });
+    renderEval();
+    await user.selectOptions(await screen.findByLabelText(/evaluation target/i), "d2");
+    await user.click(screen.getByRole("button", { name: /run evaluation/i }));
+    await waitFor(() => expect(apiMock.runEval).toHaveBeenCalledWith("d2", "ragas.local"));
+  });
+
+  it("does not show the target picker when there are no datasets", async () => {
+    renderEval();
+    await screen.findByText(/no datasets yet/i);
+    expect(screen.queryByLabelText(/evaluation target/i)).not.toBeInTheDocument();
+  });
+
+  it("labels the target picker in Indonesian", async () => {
+    apiMock.listEvalDatasets.mockResolvedValue(twoDatasets);
+    renderEval("id");
+    expect(await screen.findByLabelText(/target evaluasi/i)).toBeInTheDocument();
+  });
 });
