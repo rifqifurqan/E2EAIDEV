@@ -6,8 +6,8 @@ Requirement: FR-F22 (referensi API P1).
 
 Judul API: E2EAIDEV API
 Versi API: 0.1.0
-Total path: 156
-Total operasi: 168
+Total path: 158
+Total operasi: 170
 
 ## Cara generate ulang
 
@@ -967,6 +967,20 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 
 - Ringkasan: Create Use Case Intake Api
 - Operation ID: `create_use_case_intake_api_api_v1_plan_use_cases_post`
+- Kode status respons: 200, 422
+
+### preferences
+
+#### GET /api/v1/me/preferences
+
+- Ringkasan: Get Preferences
+- Operation ID: `get_preferences_api_v1_me_preferences_get`
+- Kode status respons: 200
+
+#### PUT /api/v1/me/preferences/time-zone
+
+- Ringkasan: Put Time Zone
+- Operation ID: `put_time_zone_api_v1_me_preferences_time_zone_put`
 - Kode status respons: 200, 422
 
 ### privacy

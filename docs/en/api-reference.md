@@ -6,8 +6,8 @@ Requirement: FR-F22 (P1 API reference).
 
 API title: E2EAIDEV API
 API version: 0.1.0
-Total paths: 156
-Total operations: 168
+Total paths: 158
+Total operations: 170
 
 ## How to regenerate
 
@@ -967,6 +967,20 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: Create Use Case Intake Api
 - Operation ID: `create_use_case_intake_api_api_v1_plan_use_cases_post`
+- Response status codes: 200, 422
+
+### preferences
+
+#### GET /api/v1/me/preferences
+
+- Summary: Get Preferences
+- Operation ID: `get_preferences_api_v1_me_preferences_get`
+- Response status codes: 200
+
+#### PUT /api/v1/me/preferences/time-zone
+
+- Summary: Put Time Zone
+- Operation ID: `put_time_zone_api_v1_me_preferences_time_zone_put`
 - Response status codes: 200, 422
 
 ### privacy
