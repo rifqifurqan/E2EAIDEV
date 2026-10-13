@@ -14,7 +14,7 @@ from typing import Any, Protocol
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import and_, case, delete, exists, func, literal, or_, select
+from sqlalchemy import and_, case, delete, exists, func, literal, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
@@ -22,6 +22,7 @@ from .auth import current_session, require_scope
 from .authz import principals
 from .core.config import get_settings, repo_root
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import AccessRequest, Chunk, DocPrincipal, Document, DocumentVersion, Folder, FolderPrincipal, Notification, User
 from .db import get_session
 from .share_policy import SENSITIVITIES, SharePolicy, share_block_reason
@@ -613,6 +614,97 @@ async def search_documents(
     ]
 
 
+async def search_documents_page(
+    session: AsyncSession,
+    *,
+    user: User,
+    query: str,
+    sensitivity: str | None = None,
+    status: str | None = None,
+    view: str = "all",
+    limit: int | None = None,
+    cursor: str | None = None,
+) -> tuple[list[dict], str | None]:
+    """Cursor-paginated variant of permission-filtered document search (NFR-20, FR-S10)."""
+    query = query.strip()
+    if not query:
+        return [], None
+    user_principals = await principals(session, user)
+    principal_list = sorted(user_principals)
+    if not principal_list:
+        return [], None
+
+    like_pattern = f"%{query}%"
+    title_match = Document.title.ilike(like_pattern)
+    content_match = exists().where(
+        Chunk.document_id == Document.id,
+        Chunk.version_id == Document.current_version_id,
+        Chunk.text.ilike(like_pattern),
+    )
+    effective_status = status or "active"
+    filters = [
+        Document.status == effective_status,
+        or_(Document.expires_at.is_(None), Document.expires_at > func.now()),
+        _visible_document_clause(principal_list),
+        or_(title_match, content_match),
+    ]
+    if sensitivity:
+        filters.append(Document.sensitivity == sensitivity)
+    if view == "my_documents":
+        filters.append(Document.owner_id == user.id)
+    elif view == "shared_with_me":
+        direct_user = f"user:{user.id}"
+        filters.extend([
+            Document.owner_id != user.id,
+            or_(
+                exists().where(DocPrincipal.document_id == Document.id, DocPrincipal.principal == direct_user),
+                exists().where(FolderPrincipal.folder_id == Document.folder_id, FolderPrincipal.principal == direct_user),
+            ),
+        ])
+    elif view == "my_team":
+        teams = sorted(p for p in user_principals if p.startswith("team:"))
+        if not teams:
+            return [], None
+        filters.append(or_(
+            exists().where(DocPrincipal.document_id == Document.id, DocPrincipal.principal.in_(teams)),
+            exists().where(FolderPrincipal.folder_id == Document.folder_id, FolderPrincipal.principal.in_(teams)),
+        ))
+    elif view not in ("all", "everything"):
+        raise AppError(400, "Invalid document view")
+
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        filters.append(tuple_(Document.created_at, Document.id) < tuple_(ts, last_id))
+    size = clamp_limit(limit)
+    match_kind_expr = case((title_match, literal("title")), else_=literal("content"))
+    rows = (await session.execute(
+        select(
+            Document.id,
+            Document.title,
+            Document.sensitivity,
+            Document.status,
+            Document.owner_id,
+            Document.created_at,
+            match_kind_expr.label("match_kind"),
+        )
+        .where(*filters)
+        .order_by(Document.created_at.desc(), Document.id.desc())
+        .limit(size + 1)
+    )).all()
+    items, next_cursor = make_page(rows, size, lambda r: (r.created_at, r.id))
+    return [
+        {
+            "document_id": str(row.id),
+            "title": row.title,
+            "sensitivity": row.sensitivity,
+            "status": row.status,
+            "owner_id": str(row.owner_id),
+            "match_kind": row.match_kind,
+        }
+        for row in items
+    ], next_cursor
+
+
 async def list_notifications(session: AsyncSession, *, user: User, unread_only: bool = False) -> list[Notification]:
     stmt = select(Notification).where(Notification.user_id == user.id)
     if unread_only:
@@ -884,6 +976,8 @@ async def search_documents_api(
     q: str = "",
     sensitivity: str | None = None,
     view: str = "all",
+    limit: int | None = None,
+    cursor: str | None = None,
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
 ) -> dict:
@@ -895,8 +989,10 @@ async def search_documents_api(
     user = await _current_user(db, sess)
     policy = await get_effective_policy(db, user=user)
     await enforce_request_quota(redis_client(), user_id=sess["user_id"], endpoint="search", policy=policy)
-    results = await search_documents(db, user=user, query=q, sensitivity=sensitivity, view=view)
-    return {"results": results}
+    results, next_cursor = await search_documents_page(
+        db, user=user, query=q, sensitivity=sensitivity, view=view, limit=limit, cursor=cursor
+    )
+    return {"results": results, "next_cursor": next_cursor}
 
 
 @router.get("/documents/visible-chunks")

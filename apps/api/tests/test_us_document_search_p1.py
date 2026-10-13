@@ -34,6 +34,7 @@ from e2eai.documents import (
     create_seeded_document,
     revoke_document,
     search_documents,
+    search_documents_page,
     share_document,
     share_folder,
     trash_document,
@@ -128,6 +129,43 @@ def test_shared_user_finds_shared_document():
             assert len(results) == 1
             assert results[0]["document_id"] == str(doc.id)
             assert results[0]["title"] == "Shared Roadmap"
+
+    _migrate()
+    asyncio.run(run())
+
+
+def test_document_search_supports_permission_scoped_cursor_pagination():
+    """NFR-20 + FR-S10: cursor pagination does not widen document search permissions."""
+    async def run():
+        async with sessions()() as session:
+            await _reset(session)
+            owner, andi, budi = await _users(session)
+            authz = RecordingAuthz()
+            for suffix in ("A", "B", "C"):
+                doc = await create_seeded_document(
+                    session, owner=owner, title=f"Paged Search {suffix}", text="pager keyword"
+                )
+                await share_document(session, authz, actor=owner, document_id=doc.id,
+                                     principal=f"user:{andi.id}", level="viewer")
+            hidden = await create_seeded_document(
+                session, owner=owner, title="Paged Search Hidden", text="pager keyword hidden"
+            )
+
+            page1, cursor = await search_documents_page(session, user=andi, query="Paged Search", limit=2)
+            assert len(page1) == 2
+            assert cursor
+
+            page2, next_cursor = await search_documents_page(
+                session, user=andi, query="Paged Search", limit=2, cursor=cursor
+            )
+            assert len(page2) == 1
+            assert next_cursor is None
+            titles = {r["title"] for r in page1 + page2}
+            assert titles == {"Paged Search A", "Paged Search B", "Paged Search C"}
+            assert len({r["document_id"] for r in page1 + page2}) == 3
+
+            budi_page, budi_cursor = await search_documents_page(session, user=budi, query="Paged Search", limit=2)
+            assert budi_page == [] and budi_cursor is None
 
     _migrate()
     asyncio.run(run())

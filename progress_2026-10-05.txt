@@ -2183,3 +2183,10 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_user_memory_fr_b2.py::test_chat_pipeline_uses_opted_in_long_term_memory_as_uncited_context` -> failed because no memory context reached the generator. GREEN: same -> 1 passed.
   - Adjacent: `cd apps/api && uv run pytest -q tests/test_user_memory_fr_b2.py tests/test_us_chat_conversations.py tests/test_us02_cited_answer.py tests/test_us_semantic_prompt_cache_p1.py` -> 17 passed. Heavy gates skipped.
   - Not done: UI controls beyond the API, automatic memory extraction from conversations, persisted semantic-cache invalidation on memory changes (cache currently skipped for memory-augmented answers).
+
+- Cursor pagination on document search (NFR-20, FR-S10) (2026-10-13, cron):
+  - Added `search_documents_page`: same permission-filtered predicates as document search, then keyset pagination over `(documents.created_at, documents.id)` with the shared opaque cursor helper. The cursor is not an authorization token; user principals/view/sensitivity filters are still applied before every page.
+  - `GET /api/v1/documents/search` now accepts `limit` and `cursor` and returns `next_cursor` while keeping safe metadata-only result fields.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_us_document_search_p1.py::test_document_search_supports_permission_scoped_cursor_pagination` -> ImportError (`search_documents_page`). GREEN: same -> 1 passed.
+  - Adjacent: `cd apps/api && uv run pytest -q tests/test_us_document_search_p1.py tests/test_pagination_nfr20.py tests/test_pagination_lists_nfr20.py tests/test_docs_fr_f22.py` -> 21 passed. Heavy gates skipped.
+  - Not done: cursor pagination on flywheel, ai-inventory, model-registry, and legal-hold list endpoints.
