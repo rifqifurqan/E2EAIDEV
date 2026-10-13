@@ -7,7 +7,7 @@ Requirement: FR-F22 (P1 API reference).
 API title: E2EAIDEV API
 API version: 0.1.0
 Total paths: 163
-Total operations: 177
+Total operations: 178
 
 ## How to regenerate
 
@@ -505,6 +505,12 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: Run Retrieval Metrics Api
 - Operation ID: `run_retrieval_metrics_api_api_v1_evals_retrieval_metrics_post`
+- Response status codes: 200, 422
+
+#### GET /api/v1/evals/runs
+
+- Summary: List Runs Api
+- Operation ID: `list_runs_api_api_v1_evals_runs_get`
 - Response status codes: 200, 422
 
 #### POST /api/v1/evals/runs

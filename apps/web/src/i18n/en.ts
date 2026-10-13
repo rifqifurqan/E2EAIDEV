@@ -74,6 +74,9 @@ const en = {
     comparison: "Run Comparison",
     noDatasets: "No datasets yet.",
     noRuns: "No evaluation runs yet.",
+    runsLoading: "Loading...",
+    runsAdminOnly: "Eval runs are available to administrators only.",
+    runsLoadFailed: "Could not load data.",
   },
   bots: {
     title: "Bot Release",

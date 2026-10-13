@@ -2415,3 +2415,9 @@ HOW TO RESUME
   - TDD / RED: `pnpm vitest run src/components/bot-release-screen.test.tsx` -> 4 failed. GREEN: full web suite `pnpm vitest run` -> 17 files / 107 passed; `pnpm run typecheck` ok; `pnpm lint` ok. API untouched; build and live browser run skipped.
   - Not done: request/decide actions, load-more via `next_cursor`, Test stage (EvalScreen) still static, bundles/grants/scope panels still static.
 
+- Eval runs list API + Test web stage live data (FR-T2, NFR-20) (2026-10-14, cron):
+  - Hermes worked manually. Codex unused. New `eval_lab.list_runs_page` (admin-only, keyset-paginated, newest first; returns id/dataset_id/adapter/status/metrics/created_at only, `item_results` never exposed) + `GET /api/v1/evals/runs`. `EvalScreen` lists runs via `api.listEvalRuns` (403/401 -> admin-only notice, other failures generic error, empty state, EN/ID). API reference regenerated with `generate_api_reference.py` only (163 paths; no new path count change beyond GET on /runs) - `generate_docs.py` NOT run.
+  - TDD / RED: `uv run pytest -q tests/test_eval_runs_list_fr_t2.py` -> ImportError (list_runs_page missing); web `pnpm vitest run src/components/eval-screen.test.tsx` -> 2 failed. GREEN: both pass.
+  - Adjacent: `uv run pytest -q tests/test_eval_runs_list_fr_t2.py tests/test_us_eval_lab_p0.py tests/test_us_evaluator_transparency_p1.py tests/test_online_eval_fr_o3.py tests/test_docs_fr_f22.py tests/test_audit_columns_nfr20.py` -> 17 passed; `scripts/validate_docs.py` PASS; web `pnpm vitest run` -> 17 files / 111 passed; `pnpm run typecheck` ok; `pnpm lint` ok. Heavy gates skipped.
+  - Not done: datasets list, run-eval/new-dataset actions, load-more via `next_cursor`, permission-leak summary still static.
+

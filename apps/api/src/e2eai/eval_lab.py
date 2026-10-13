@@ -19,11 +19,12 @@ from typing import Protocol
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import current_session, require_scope
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import EvalDataset, EvalRun, User, get_session
 from .retrieval import Embedder, LiteLLMEmbedder, answer_question
 
@@ -877,6 +878,35 @@ async def _current_user(db: AsyncSession, sess: dict) -> User:
     return user
 
 
+async def list_runs_page(
+    session: AsyncSession, *, actor: User, limit: int | None = None, cursor: str | None = None,
+) -> tuple[list[dict], str | None]:
+    """FR-T2/NFR-20: admin-only keyset-paginated eval run summaries (newest first); item results are never returned."""
+    from .legal_hold import is_admin
+
+    if actor.status != "active" or not await is_admin(session, actor):
+        raise AppError(403, "Not allowed")
+    size = clamp_limit(limit)
+    stmt = select(EvalRun)
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(EvalRun.created_at, EvalRun.id) < tuple_(ts, last_id))
+    stmt = stmt.order_by(EvalRun.created_at.desc(), EvalRun.id.desc()).limit(size + 1)
+    rows = list((await session.scalars(stmt)).all())
+    page, nxt = make_page(rows, size, lambda r: (r.created_at, r.id))
+    return [
+        {
+            "id": str(r.id),
+            "dataset_id": str(r.dataset_id) if r.dataset_id else None,
+            "adapter": r.adapter,
+            "status": r.status,
+            "metrics": r.metrics,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in page
+    ], nxt
+
+
 class DatasetIn(BaseModel):
     name: str
     source: str = "manual"
@@ -1043,6 +1073,20 @@ async def compare_runs_api(
         "metrics": report_run.metrics,
         "report": report_run.item_results[0],
     }
+
+
+@router.get("/runs")
+async def list_runs_api(
+    limit: int | None = None,
+    cursor: str | None = None,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """FR-T2/NFR-20: list eval run summaries for admins (cursor-paginated)."""
+    require_scope(sess, "evals")
+    user = await _current_user(db, sess)
+    runs, next_cursor = await list_runs_page(db, actor=user, limit=limit, cursor=cursor)
+    return {"runs": runs, "next_cursor": next_cursor}
 
 
 @router.post("/runs")

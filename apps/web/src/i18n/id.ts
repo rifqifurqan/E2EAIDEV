@@ -76,6 +76,9 @@ const id: Dictionary = {
     comparison: "Perbandingan Eksekusi",
     noDatasets: "Belum ada dataset.",
     noRuns: "Belum ada eksekusi evaluasi.",
+    runsLoading: "Memuat...",
+    runsAdminOnly: "Eksekusi evaluasi hanya tersedia untuk administrator.",
+    runsLoadFailed: "Gagal memuat data.",
   },
   bots: {
     title: "Rilis Bot",

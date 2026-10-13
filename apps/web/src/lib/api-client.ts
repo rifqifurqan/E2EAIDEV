@@ -201,6 +201,20 @@ export interface BotApprovalList {
   next_cursor: string | null;
 }
 
+export interface EvalRunSummary {
+  id: string;
+  dataset_id: string | null;
+  adapter: string;
+  status: string;
+  metrics: Record<string, unknown>;
+  created_at: string | null;
+}
+
+export interface EvalRunList {
+  runs: EvalRunSummary[];
+  next_cursor: string | null;
+}
+
 // ─── Fetch helper ───────────────────────────────────────────────────────
 
 export class ApiError extends Error {
@@ -478,6 +492,9 @@ export const api = {
   listModels: () => apiFetch<ModelVersionList>(ENDPOINTS.modelRegistry),
 
   // Release (scope enforced by the server)
+  // Test (admin-only on the server)
+  listEvalRuns: () => apiFetch<EvalRunList>(ENDPOINTS.evalRuns),
+
   listBotApprovals: () => apiFetch<BotApprovalList>(ENDPOINTS.botApprovals),
 
   // Admin
