@@ -267,6 +267,8 @@ Rules for every cron tick:
 
 147. [x] [FR-P4/FR-RL2] Release stage request-approval form (bot id UUID + optional rationale) via `POST /governance/bot-approvals`, list refresh, generic EN/ID errors. Web suite 224 passed; see progress_2026-10-05.txt.
 
+148. [x] [FR-I1] Improve stage re-eval and release linking actions for flywheel items via `POST /improve/flywheel/{id}/reeval` and `/release`, list refresh, generic EN/ID errors. Web suite 231 passed; see progress_2026-10-05.txt.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.

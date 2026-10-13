@@ -214,6 +214,11 @@ const id: Dictionary = {
     exported: "Mengekspor",
     exportedTo: "item ke",
     exportFailed: "Gagal mengekspor item yang diterima.",
+    evalRunId: "ID hasil evaluasi",
+    linkReeval: "Tautkan evaluasi ulang",
+    releaseRef: "Referensi rilis",
+    linkRelease: "Tautkan rilis",
+    linkFailed: "Gagal menautkan item.",
   },
   whyItMatters: {
     title: "Mengapa Penting di Perusahaan",

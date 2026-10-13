@@ -212,6 +212,11 @@ const en = {
     exported: "Exported",
     exportedTo: "items to",
     exportFailed: "Could not export the accepted items.",
+    evalRunId: "Eval run ID",
+    linkReeval: "Link re-evaluation",
+    releaseRef: "Release reference",
+    linkRelease: "Link release",
+    linkFailed: "Could not link the item.",
   },
   whyItMatters: {
     title: "Why It Matters in Enterprise",

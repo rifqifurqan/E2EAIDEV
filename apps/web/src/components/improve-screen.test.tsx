@@ -8,6 +8,8 @@ const apiMock = vi.hoisted(() => ({
   listFlywheel: vi.fn(),
   triageFlywheelItem: vi.fn(),
   exportFlywheel: vi.fn(),
+  linkFlywheelReeval: vi.fn(),
+  linkFlywheelRelease: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -28,6 +30,8 @@ describe("ImproveScreen", () => {
     apiMock.listFlywheel.mockReset();
     apiMock.triageFlywheelItem.mockReset();
     apiMock.exportFlywheel.mockReset();
+    apiMock.linkFlywheelReeval.mockReset();
+    apiMock.linkFlywheelRelease.mockReset();
   });
 
   it("shows status counts and queue items from the live flywheel API", async () => {
@@ -189,5 +193,69 @@ describe("ImproveScreen", () => {
     apiMock.listFlywheel.mockResolvedValue(withAccepted(1));
     renderImprove("id");
     expect(await screen.findByRole("button", { name: /ekspor item yang diterima/i })).toBeInTheDocument();
+  });
+
+  const RUN_ID = "3f2c8a52-1b7e-4c1d-9a55-0d2f6a9b7c11";
+  function queueWith(status: string) {
+    return {
+      by_status: { [status]: 1 },
+      by_source: {},
+      items: [{ id: "x1", source: "thumbs_down", status, question: "Leave policy?", correction: "20 days", reason: null, target: "eval" }],
+      next_cursor: null,
+    };
+  }
+
+  it("links a re-evaluation run to an exported item and reloads", async () => {
+    const user = userEvent.setup();
+    apiMock.listFlywheel.mockResolvedValue(queueWith("exported"));
+    apiMock.linkFlywheelReeval.mockResolvedValue({});
+    renderImprove();
+    await screen.findByText("Leave policy?");
+    const button = screen.getByRole("button", { name: /link re-evaluation/i });
+    expect(button).toBeDisabled();
+    await user.type(screen.getByLabelText(/eval run id/i), RUN_ID);
+    await user.click(button);
+    await waitFor(() => expect(apiMock.linkFlywheelReeval).toHaveBeenCalledWith("x1", RUN_ID));
+    await waitFor(() => expect(apiMock.listFlywheel).toHaveBeenCalledTimes(2));
+  });
+
+  it("links a release reference to a re-evaluated item, required non-empty", async () => {
+    const user = userEvent.setup();
+    apiMock.listFlywheel.mockResolvedValue(queueWith("reevaluated"));
+    apiMock.linkFlywheelRelease.mockResolvedValue({});
+    renderImprove();
+    await screen.findByText("Leave policy?");
+    const button = screen.getByRole("button", { name: /link release/i });
+    expect(button).toBeDisabled();
+    await user.type(screen.getByLabelText(/release reference/i), "bot-hr@v7");
+    await user.click(button);
+    await waitFor(() => expect(apiMock.linkFlywheelRelease).toHaveBeenCalledWith("x1", "bot-hr@v7"));
+  });
+
+  it("offers no link controls on queued or released items", async () => {
+    apiMock.listFlywheel.mockResolvedValue(queueWith("released"));
+    renderImprove();
+    await screen.findByText("Leave policy?");
+    expect(screen.queryByRole("button", { name: /link re-evaluation/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /link release/i })).not.toBeInTheDocument();
+  });
+
+  it("shows a generic error without server text when linking fails", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.listFlywheel.mockResolvedValue(queueWith("exported"));
+    apiMock.linkFlywheelReeval.mockRejectedValue(new ApiError(404, "Eval run not found", "stack detail"));
+    renderImprove();
+    await screen.findByText("Leave policy?");
+    await user.type(screen.getByLabelText(/eval run id/i), RUN_ID);
+    await user.click(screen.getByRole("button", { name: /link re-evaluation/i }));
+    expect(await screen.findByText(/could not link the item/i)).toBeInTheDocument();
+    expect(screen.queryByText(/stack detail/i)).not.toBeInTheDocument();
+  });
+
+  it("labels the link controls in Indonesian", async () => {
+    apiMock.listFlywheel.mockResolvedValue(queueWith("exported"));
+    renderImprove("id");
+    expect(await screen.findByRole("button", { name: /tautkan evaluasi ulang/i })).toBeInTheDocument();
   });
 });

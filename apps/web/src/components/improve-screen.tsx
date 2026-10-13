@@ -6,6 +6,47 @@ import { api } from "@/lib/api-client";
 import { useAdminData } from "@/lib/use-admin-data";
 import { WhyItMattersPanel } from "./why-it-matters-panel";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function LinkControls({
+  item,
+  busy,
+  onLink,
+}: {
+  item: { id: string; status: string };
+  busy: boolean;
+  onLink: (action: () => Promise<unknown>) => void;
+}) {
+  const { t } = useI18n();
+  const [value, setValue] = useState("");
+  const isReeval = item.status === "exported";
+  const trimmed = value.trim();
+  const valid = isReeval ? UUID_RE.test(trimmed) : trimmed !== "";
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+      <label htmlFor={`link-${item.id}`}>
+        <span className="mr-1">{isReeval ? t.improve.evalRunId : t.improve.releaseRef}</span>
+        <input
+          id={`link-${item.id}`}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          className="rounded border border-gray-300 px-2 py-0.5 font-mono text-xs"
+        />
+      </label>
+      <button
+        type="button"
+        disabled={busy || !valid}
+        onClick={() =>
+          onLink(() => (isReeval ? api.linkFlywheelReeval(item.id, trimmed) : api.linkFlywheelRelease(item.id, trimmed)))
+        }
+        className="rounded border border-blue-400 px-2 py-0.5 text-xs text-blue-700 disabled:opacity-50"
+      >
+        {isReeval ? t.improve.linkReeval : t.improve.linkRelease}
+      </button>
+    </div>
+  );
+}
+
 export function ImproveScreen() {
   const { t } = useI18n();
   const [reloadKey, setReloadKey] = useState(0);
@@ -30,6 +71,21 @@ export function ImproveScreen() {
       setExportFailed(true);
     } finally {
       setExportBusy(false);
+      setReloadKey((key) => key + 1);
+    }
+  }
+
+  const [linkFailed, setLinkFailed] = useState(false);
+
+  async function link(id: string, action: () => Promise<unknown>) {
+    setLinkFailed(false);
+    setBusyId(id);
+    try {
+      await action();
+    } catch {
+      setLinkFailed(true);
+    } finally {
+      setBusyId(null);
       setReloadKey((key) => key + 1);
     }
   }
@@ -117,6 +173,11 @@ export function ImproveScreen() {
               {t.improve.triageFailed}
             </p>
           ) : null}
+          {linkFailed ? (
+            <p role="alert" className="mb-2 rounded border border-red-300 bg-red-50 p-3 text-sm">
+              {t.improve.linkFailed}
+            </p>
+          ) : null}
           {state.data.items.length === 0 ? (
             <p className="text-sm text-gray-500">{t.improve.noItems}</p>
           ) : (
@@ -152,6 +213,9 @@ export function ImproveScreen() {
                         {t.improve.dismiss}
                       </button>
                     </span>
+                  ) : null}
+                  {item.status === "exported" || item.status === "reevaluated" ? (
+                    <LinkControls item={item} busy={busyId === item.id} onLink={(action) => link(item.id, action)} />
                   ) : null}
                 </li>
               ))}

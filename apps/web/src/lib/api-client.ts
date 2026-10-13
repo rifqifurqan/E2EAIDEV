@@ -341,6 +341,8 @@ export const ENDPOINTS = {
   flywheel: "/improve/flywheel",
   flywheelExport: "/improve/flywheel/export",
   flywheelTriage: (itemId: string) => `/improve/flywheel/${itemId}/triage`,
+  flywheelReeval: (itemId: string) => `/improve/flywheel/${itemId}/reeval`,
+  flywheelRelease: (itemId: string) => `/improve/flywheel/${itemId}/release`,
   dueReviews: "/documents/reviews/due",
   documentReviewed: (documentId: string) => `/documents/${documentId}/lifecycle/reviewed`,
   modelRegistry: "/model-registry",
@@ -544,6 +546,10 @@ export const api = {
       method: "POST",
       body: target === undefined ? { decision } : { decision, target },
     }),
+  linkFlywheelReeval: (itemId: string, runId: string) =>
+    apiFetch<FlywheelItem>(ENDPOINTS.flywheelReeval(itemId), { method: "POST", body: { run_id: runId } }),
+  linkFlywheelRelease: (itemId: string, releaseRef: string) =>
+    apiFetch<FlywheelItem>(ENDPOINTS.flywheelRelease(itemId), { method: "POST", body: { release_ref: releaseRef } }),
 
   // Data / Build (signed-in users; scope enforced by the server)
   listDueReviews: () => apiFetch<DueReviewList>(ENDPOINTS.dueReviews),
