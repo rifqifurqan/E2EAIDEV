@@ -160,6 +160,11 @@ const id: Dictionary = {
     reject: "Tolak",
     needsScore: "Perlu skor evaluasi sebelum disetujui.",
     decisionFailed: "Gagal mencatat keputusan.",
+    modelName: "Nama model",
+    version: "Versi",
+    parentVersion: "Versi induk (opsional)",
+    register: "Daftarkan versi",
+    registerFailed: "Gagal mendaftarkan versi model.",
   },
   operate: {
     incidentsTitle: "Insiden AI",

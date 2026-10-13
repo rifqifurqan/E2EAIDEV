@@ -158,6 +158,11 @@ const en = {
     reject: "Reject",
     needsScore: "Needs an eval score before approval.",
     decisionFailed: "Could not record the decision.",
+    modelName: "Model name",
+    version: "Version",
+    parentVersion: "Parent version (optional)",
+    register: "Register version",
+    registerFailed: "Could not register the model version.",
   },
   operate: {
     incidentsTitle: "AI Incidents",

@@ -543,6 +543,11 @@ export const api = {
       body: { next_review_in_days: nextReviewInDays },
     }),
   listModels: () => apiFetch<ModelVersionList>(ENDPOINTS.modelRegistry),
+  registerModel: (name: string, version: string, parentVersion?: string) =>
+    apiFetch<ModelVersion>(ENDPOINTS.modelRegistry, {
+      method: "POST",
+      body: parentVersion === undefined ? { name, version } : { name, version, parent_version: parentVersion },
+    }),
   decideModel: (name: string, version: string, decision: "approved" | "rejected") =>
     apiFetch<ModelVersion>(ENDPOINTS.modelDecision(name, version), {
       method: "POST",

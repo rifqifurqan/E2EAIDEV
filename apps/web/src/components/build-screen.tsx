@@ -64,6 +64,28 @@ export function BuildScreen() {
   const { t } = useI18n();
   const [reloadKey, setReloadKey] = useState(0);
   const state = useAdminData(() => api.listModels(), reloadKey);
+  const [name, setName] = useState("");
+  const [version, setVersion] = useState("");
+  const [parent, setParent] = useState("");
+  const [regBusy, setRegBusy] = useState(false);
+  const [regFailed, setRegFailed] = useState(false);
+
+  async function register(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setRegFailed(false);
+    setRegBusy(true);
+    try {
+      await api.registerModel(name.trim(), version.trim(), parent.trim() === "" ? undefined : parent.trim());
+      setName("");
+      setVersion("");
+      setParent("");
+    } catch {
+      setRegFailed(true);
+    } finally {
+      setRegBusy(false);
+      setReloadKey((key) => key + 1);
+    }
+  }
 
   return (
     <section>
@@ -79,6 +101,49 @@ export function BuildScreen() {
         <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm">
           {t.build.loadFailed}
         </p>
+      ) : null}
+      {state.kind === "ready" ? (
+        <form onSubmit={register} className="mb-4 flex flex-wrap items-end gap-3 rounded border border-gray-200 p-3 text-sm">
+          <label htmlFor="model-name">
+            <span className="mr-1">{t.build.modelName}</span>
+            <input
+              id="model-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="rounded border border-gray-300 px-2 py-1 text-sm"
+            />
+          </label>
+          <label htmlFor="model-version">
+            <span className="mr-1">{t.build.version}</span>
+            <input
+              id="model-version"
+              value={version}
+              onChange={(event) => setVersion(event.target.value)}
+              className="rounded border border-gray-300 px-2 py-1 text-sm"
+            />
+          </label>
+          <label htmlFor="model-parent">
+            <span className="mr-1">{t.build.parentVersion}</span>
+            <input
+              id="model-parent"
+              value={parent}
+              onChange={(event) => setParent(event.target.value)}
+              className="rounded border border-gray-300 px-2 py-1 text-sm"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={regBusy || name.trim() === "" || version.trim() === ""}
+            className="rounded border border-blue-400 px-3 py-1 text-sm text-blue-700 disabled:opacity-50"
+          >
+            {t.build.register}
+          </button>
+          {regFailed ? (
+            <p role="alert" className="w-full text-sm text-red-700">
+              {t.build.registerFailed}
+            </p>
+          ) : null}
+        </form>
       ) : null}
       {state.kind === "ready" ? (
         state.data.models.length === 0 ? (

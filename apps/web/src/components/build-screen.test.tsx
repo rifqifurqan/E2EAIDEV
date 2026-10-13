@@ -7,6 +7,7 @@ import { I18nProvider } from "@/i18n/context";
 const apiMock = vi.hoisted(() => ({
   listModels: vi.fn(),
   decideModel: vi.fn(),
+  registerModel: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -26,6 +27,7 @@ describe("BuildScreen", () => {
   beforeEach(() => {
     apiMock.listModels.mockReset();
     apiMock.decideModel.mockReset();
+    apiMock.registerModel.mockReset();
   });
 
   it("lists registered model versions with approval status", async () => {
@@ -122,5 +124,58 @@ describe("BuildScreen", () => {
     renderBuild("id");
     expect(await screen.findByRole("button", { name: /^setujui$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^tolak$/i })).toBeInTheDocument();
+  });
+  it("registers a model version with an optional parent and reloads the list", async () => {
+    const user = userEvent.setup();
+    apiMock.listModels.mockResolvedValue({ models: [], next_cursor: null });
+    apiMock.registerModel.mockResolvedValue({});
+    renderBuild();
+    await screen.findByText(/no model versions registered yet/i);
+    apiMock.listModels.mockResolvedValue(models("pending", {}));
+    await user.type(screen.getByLabelText(/model name/i), "support-llm");
+    await user.type(screen.getByLabelText(/^version$/i), "v3");
+    await user.type(screen.getByLabelText(/parent version/i), "v2");
+    await user.click(screen.getByRole("button", { name: /register version/i }));
+    await waitFor(() => expect(apiMock.registerModel).toHaveBeenCalledWith("support-llm", "v3", "v2"));
+    expect(await screen.findByText("support-llm")).toBeInTheDocument();
+  });
+
+  it("omits the parent version when left blank", async () => {
+    const user = userEvent.setup();
+    apiMock.listModels.mockResolvedValue({ models: [], next_cursor: null });
+    apiMock.registerModel.mockResolvedValue({});
+    renderBuild();
+    await screen.findByText(/no model versions registered yet/i);
+    await user.type(screen.getByLabelText(/model name/i), "m");
+    await user.type(screen.getByLabelText(/^version$/i), "v1");
+    await user.click(screen.getByRole("button", { name: /register version/i }));
+    await waitFor(() => expect(apiMock.registerModel).toHaveBeenCalledWith("m", "v1", undefined));
+  });
+
+  it("disables register until name and version are entered", async () => {
+    apiMock.listModels.mockResolvedValue({ models: [], next_cursor: null });
+    renderBuild();
+    await screen.findByText(/no model versions registered yet/i);
+    expect(screen.getByRole("button", { name: /register version/i })).toBeDisabled();
+  });
+
+  it("shows a generic error without server text when registration fails", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.listModels.mockResolvedValue({ models: [], next_cursor: null });
+    apiMock.registerModel.mockRejectedValue(new ApiError(409, "Model version already registered", "internal detail"));
+    renderBuild();
+    await screen.findByText(/no model versions registered yet/i);
+    await user.type(screen.getByLabelText(/model name/i), "m");
+    await user.type(screen.getByLabelText(/^version$/i), "v1");
+    await user.click(screen.getByRole("button", { name: /register version/i }));
+    expect(await screen.findByText(/could not register the model version/i)).toBeInTheDocument();
+    expect(screen.queryByText(/internal detail/i)).not.toBeInTheDocument();
+  });
+
+  it("labels the register form in Indonesian", async () => {
+    apiMock.listModels.mockResolvedValue({ models: [], next_cursor: null });
+    renderBuild("id");
+    expect(await screen.findByRole("button", { name: /daftarkan versi/i })).toBeInTheDocument();
   });
 });
