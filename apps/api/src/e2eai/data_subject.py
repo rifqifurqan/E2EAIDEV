@@ -29,7 +29,9 @@ from .db import (
     LocalCredential,
     Message,
     Notification,
+    Role,
     User,
+    UserRole,
     UserMemory,
     UserMemorySetting,
     get_session,
@@ -118,6 +120,42 @@ async def list_requests_page(
     page, nxt = make_page(rows, size, lambda r: (r.created_at, r.id))
     now = datetime.now(UTC)
     return [_request_view(r, now) for r in page], nxt
+
+
+async def send_deadline_reminders(
+    session: AsyncSession, *, admin: User, within_days: int = 5, now: datetime | None = None,
+) -> dict[str, Any]:
+    """Remind every active admin about open requests that are due soon or overdue (NFR-10).
+
+    One reminder per request per state (due_soon, then overdue), tracked in ``last_reminder`` so re-running is
+    idempotent. Notification details carry request id, kind, due date and overdue flag only: no names or emails.
+    """
+    await _require_admin(session, admin)
+    now = now or datetime.now(UTC)
+    horizon = now + timedelta(days=max(0, within_days))
+    rows = (await session.scalars(select(DataSubjectRequest).where(
+        DataSubjectRequest.status == "open", DataSubjectRequest.due_at <= horizon,
+    ).order_by(DataSubjectRequest.due_at, DataSubjectRequest.id))).all()
+    admins = (await session.scalars(
+        select(User).join(UserRole, UserRole.user_id == User.id).join(Role, Role.id == UserRole.role_id)
+        .where(Role.name == "admin", User.status == "active").distinct()
+    )).all()
+    reminded: list[str] = []
+    for req in rows:
+        state = "overdue" if req.due_at < now else "due_soon"
+        if req.last_reminder == state:
+            continue
+        for recipient in admins:
+            session.add(Notification(user_id=recipient.id, kind="dsr.deadline", details={
+                "request_id": str(req.id), "request_kind": req.kind, "due_at": _iso(req.due_at),
+                "overdue": state == "overdue",
+            }))
+        req.last_reminder = state
+        reminded.append(str(req.id))
+        await audit.record(session, f"user:{admin.id}", "dsr.reminder_sent", f"dsr:{req.id}", {
+            "state": state, "recipients": len(admins)})
+    await session.commit()
+    return {"reminded": reminded, "recipients": len(admins)}
 
 
 async def export_subject_data(session: AsyncSession, *, admin: User, subject_id: uuid.UUID) -> dict[str, Any]:
@@ -262,3 +300,10 @@ async def list_requests_api(
     items, nxt = await list_requests_page(
         db, admin=await _admin_user(db, sess), status=status, overdue_only=overdue, limit=limit, cursor=cursor)
     return {"items": items, "next_cursor": nxt}
+
+
+@router.post("/requests/remind")
+async def remind_api(within_days: int = 5, sess: dict = Depends(current_session),
+                     db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    require_scope(sess, "evals")
+    return await send_deadline_reminders(db, admin=await _admin_user(db, sess), within_days=within_days)

@@ -11354,6 +11354,51 @@
         ]
       }
     },
+    "/api/v1/privacy/requests/remind": {
+      "post": {
+        "operationId": "remind_api_api_v1_privacy_requests_remind_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "within_days",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "title": "Within Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Remind Api Api V1 Privacy Requests Remind Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remind Api",
+        "tags": [
+          "privacy"
+        ]
+      }
+    },
     "/api/v1/privacy/subjects/{user_id}/erase": {
       "post": {
         "operationId": "erase_api_api_v1_privacy_subjects__user_id__erase_post",

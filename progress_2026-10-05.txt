@@ -2279,3 +2279,10 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_dsr_ledger_nfr10.py` -> 3 failed (model/functions missing). GREEN: 3 passed (test setup clears legal holds left in the shared DB by other tests).
   - Adjacent: `uv run pytest -q tests/test_dsr_ledger_nfr10.py tests/test_data_subject_nfr10.py tests/test_legal_hold_fr_d13.py tests/test_no_plaintext_credentials_nfr7.py` -> 16 passed; app ok; `generate_api_reference.py` regenerated (159 paths), `test_docs_fr_f22.py` 3 passed, `validate_docs.py` PASS. Heavy gates skipped.
   - Not done: erasure of traces/vectors, self-service requests, reminder notification before the deadline.
+
+- Data-subject request deadline reminders (NFR-10, FR-F11) (2026-10-13, cron):
+  - Hermes worked manually. Codex unused. Closes the "reminder before the deadline" follow-up of the DSR ledger.
+  - Added `send_deadline_reminders` (admin-only): open requests due within `within_days` (default 5) or overdue produce one in-app `dsr.deadline` notification per active admin; `data_subject_requests.last_reminder` (migration 0034) makes it idempotent per state (due_soon, then overdue once). Details are request id, kind, due date and overdue flag only (no names/emails). Completed requests are never reminded. `dsr.deadline` added to `SAFE_NOTIFICATION_KINDS`; route `POST /api/v1/privacy/requests/remind`; audited `dsr.reminder_sent` with state + recipient count.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_dsr_reminders_nfr10.py` -> 2 failed (function/route missing). GREEN: 2 passed (the test derives expected recipients from the DB because other tests grant extra admins).
+  - Adjacent: `uv run pytest -q tests/test_dsr_reminders_nfr10.py tests/test_dsr_ledger_nfr10.py tests/test_data_subject_nfr10.py tests/test_us_notifications_fr_f11.py tests/test_no_plaintext_credentials_nfr7.py` -> 17 passed; app ok; API reference regenerated, `test_docs_fr_f22.py` 3 passed, `validate_docs.py` PASS. Heavy gates skipped.
+  - Not done: scheduler that calls the reminder endpoint daily (needs the worker/beat), email delivery (P2).

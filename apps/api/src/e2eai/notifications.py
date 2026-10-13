@@ -30,6 +30,7 @@ SAFE_NOTIFICATION_KINDS: tuple[str, ...] = (
     "incident.raised",
     "slo.alert.fired",
     "finops.budget.alert.fired",
+    "dsr.deadline",
 )
 
 
