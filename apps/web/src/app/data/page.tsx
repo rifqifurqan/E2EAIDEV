@@ -1,5 +1,5 @@
-import { StagePlaceholder } from "@/components/stage-placeholder";
+import { DataScreen } from "@/components/data-screen";
 
 export default function DataPage() {
-  return <StagePlaceholder stage="data" />;
+  return <DataScreen />;
 }

@@ -114,6 +114,21 @@ const id: Dictionary = {
     divisions: "Divisi",
     teams: "Tim",
   },
+  data: {
+    title: "Dokumen yang jatuh tempo ditinjau",
+    noItems: "Tidak ada dokumen yang jatuh tempo untuk ditinjau.",
+    overdueDays: "hari terlambat",
+    loading: "Memuat...",
+    signIn: "Silakan masuk untuk melihat antrean tinjauan Anda.",
+    loadFailed: "Tidak dapat memuat data.",
+  },
+  build: {
+    title: "Registri model",
+    noItems: "Belum ada versi model yang terdaftar.",
+    loading: "Memuat...",
+    signIn: "Silakan masuk untuk melihat registri model.",
+    loadFailed: "Tidak dapat memuat data.",
+  },
   operate: {
     incidentsTitle: "Insiden AI",
     noIncidents: "Tidak ada insiden AI terbuka.",

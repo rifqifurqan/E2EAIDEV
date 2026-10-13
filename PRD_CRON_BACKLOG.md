@@ -229,6 +229,8 @@ Rules for every cron tick:
 
 128. [x] [FR-O8/FR-I1] Operate and Improve web stages show live data. Completed: `OperateScreen` (AI incidents list) and `ImproveScreen` (flywheel status counts + triage queue) call the admin APIs, map 401/403 to an admin-only notice, EN/ID; web suite 93 passed; see progress_2026-10-05.txt. Follow-up: triage/transition actions, load-more via `next_cursor`, Data/Build stage screens.
 
+129. [x] [FR-D8/FR-B1] Data and Build web stages show live data. Completed: `DataScreen` (documents due for review from `GET /api/v1/documents/reviews/due`) and `BuildScreen` (model registry versions + approval status from `GET /api/v1/model-registry`), 401 -> sign-in notice, other failures -> generic error, EN/ID; web suite 103 passed; see progress_2026-10-05.txt. Follow-up: register/approve actions, load-more via `next_cursor`.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.

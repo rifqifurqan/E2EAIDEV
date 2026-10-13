@@ -112,6 +112,21 @@ const en = {
     divisions: "Divisions",
     teams: "Teams",
   },
+  data: {
+    title: "Documents due for review",
+    noItems: "No documents are due for review.",
+    overdueDays: "days overdue",
+    loading: "Loading...",
+    signIn: "Please sign in to see your review queue.",
+    loadFailed: "Could not load data.",
+  },
+  build: {
+    title: "Model registry",
+    noItems: "No model versions registered yet.",
+    loading: "Loading...",
+    signIn: "Please sign in to see the model registry.",
+    loadFailed: "Could not load data.",
+  },
   operate: {
     incidentsTitle: "AI Incidents",
     noIncidents: "No open AI incidents.",

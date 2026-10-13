@@ -1,5 +1,5 @@
-import { StagePlaceholder } from "@/components/stage-placeholder";
+import { BuildScreen } from "@/components/build-screen";
 
 export default function BuildPage() {
-  return <StagePlaceholder stage="build" />;
+  return <BuildScreen />;
 }

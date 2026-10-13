@@ -119,3 +119,10 @@ describe("Operate and Improve endpoints", () => {
     expect(ENDPOINTS.flywheel).toBe("/improve/flywheel");
   });
 });
+
+describe("Data and Build endpoints", () => {
+  it("match backend routes", () => {
+    expect(ENDPOINTS.dueReviews).toBe("/documents/reviews/due");
+    expect(ENDPOINTS.modelRegistry).toBe("/model-registry");
+  });
+});

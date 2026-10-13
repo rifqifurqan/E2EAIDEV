@@ -154,6 +154,34 @@ export interface IncidentList {
   next_cursor: string | null;
 }
 
+export interface DueReview {
+  document_id: string;
+  title: string;
+  review_at: string;
+  overdue_days: number;
+  expires_at: string | null;
+}
+
+export interface DueReviewList {
+  reviews: DueReview[];
+  next_cursor: string | null;
+}
+
+export interface ModelVersion {
+  name: string;
+  version: string;
+  parent_version: string | null;
+  lineage: Record<string, unknown>;
+  eval_scores: Record<string, number>;
+  approval_status: string;
+  approved_by: string | null;
+}
+
+export interface ModelVersionList {
+  models: ModelVersion[];
+  next_cursor: string | null;
+}
+
 // ─── Fetch helper ───────────────────────────────────────────────────────
 
 export class ApiError extends Error {
@@ -244,6 +272,8 @@ export const ENDPOINTS = {
   deactivateUser: (userId: string) => `/users/${userId}/deactivate`,
   incidents: "/incidents",
   flywheel: "/improve/flywheel",
+  dueReviews: "/documents/reviews/due",
+  modelRegistry: "/model-registry",
 } as const;
 
 // ─── Client functions ───────────────────────────────────────────────────
@@ -422,6 +452,10 @@ export const api = {
   // Operate / Improve (admin-only on the server)
   listIncidents: () => apiFetch<IncidentList>(ENDPOINTS.incidents),
   listFlywheel: () => apiFetch<FlywheelQueue>(ENDPOINTS.flywheel),
+
+  // Data / Build (signed-in users; scope enforced by the server)
+  listDueReviews: () => apiFetch<DueReviewList>(ENDPOINTS.dueReviews),
+  listModels: () => apiFetch<ModelVersionList>(ENDPOINTS.modelRegistry),
 
   // Admin
   deactivateUser: (userId: string, input: DeactivateInput) =>
