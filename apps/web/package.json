@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 13000",
-    "build": "next build",
-    "start": "next start --port 13000",
+    "dev": "node scripts/next-no-telemetry.mjs dev --port 13000",
+    "build": "node scripts/next-no-telemetry.mjs build",
+    "start": "node scripts/next-no-telemetry.mjs start --port 13000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
