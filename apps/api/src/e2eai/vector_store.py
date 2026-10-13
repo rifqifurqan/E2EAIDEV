@@ -100,9 +100,9 @@ class QdrantVectorStore:
     """Qdrant REST adapter (P1). Payload holds ids only; the permission filter is part of the search request."""
 
     base_url: str
-    api_key: str
+    api_key: str = field(repr=False)
     collection: str
-    dims: int
+    dims: int = 0  # 0 = take the size from the first upserted vector
     timeout: float = 30.0
     client_factory: Callable[..., Any] = httpx.AsyncClient
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
@@ -141,16 +141,19 @@ class QdrantVectorStore:
             raise AppError(502, "Search index rejected the request", "", "upstream-error")
         return response.json()
 
-    async def _ensure_collection(self) -> None:
+    async def _ensure_collection(self, size: int | None = None) -> None:
         if not self._ready:
+            dims = self.dims or size
+            if not dims:
+                return  # nothing indexed yet: there is no collection to touch
             await self._call("PUT", f"/collections/{self.collection}",
-                             {"vectors": {"size": self.dims, "distance": "Cosine"}})
+                             {"vectors": {"size": dims, "distance": "Cosine"}})
             self._ready = True
 
     async def upsert(self, points: Sequence[VectorPoint]) -> None:
         if not points:
             return
-        await self._ensure_collection()
+        await self._ensure_collection(len(points[0].vector))
         await self._call("PUT", f"/collections/{self.collection}/points?wait=true", {"points": [
             {"id": p.chunk_id, "vector": [float(x) for x in p.vector],
              "payload": {"chunk_id": p.chunk_id, "document_id": p.document_id}}
@@ -178,6 +181,26 @@ class QdrantVectorStore:
             VectorHit(str(h["payload"]["chunk_id"]), str(h["payload"]["document_id"]), float(h["score"]))
             for h in data.get("result", [])
         ]
+
+
+_CONFIGURED: dict[tuple[str, str, str], VectorStore] = {}
+
+
+def configured_vector_store(settings: Any = None) -> VectorStore | None:
+    """The store chosen by `components.vector_store` (None = pgvector, served by SQL). Adapters are cached per
+    endpoint so the circuit breaker and collection state are shared across requests."""
+    from .core.config import get_settings
+
+    settings = settings or get_settings()
+    if settings.vector_store == "pgvector":
+        return None
+    key = (settings.vector_store, settings.qdrant_url, "e2eai_chunks")
+    if key not in _CONFIGURED:
+        store = make_vector_store(settings.vector_store, base_url=settings.qdrant_url,
+                                  api_key=settings.qdrant_api_key, collection="e2eai_chunks")
+        assert store is not None
+        _CONFIGURED[key] = store
+    return _CONFIGURED[key]
 
 
 def make_vector_store(name: str, **kwargs: Any) -> VectorStore | None:

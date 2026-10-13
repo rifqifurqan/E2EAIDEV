@@ -23,6 +23,7 @@ from .db import Chunk, Document, DocumentVersion
 from .documents import ObjectStorage, get_storage
 from .index_lineage import record_lineage
 from .pii import PiiDetector, PiiPolicy, mask_text, pii_counts, select_detector
+from .retrieval import _UNSET as _UNSET_STORE
 from .retrieval import Embedder, index_document_chunks
 from .scan import ScanPolicy, Scanner, select_scanner
 
@@ -121,7 +122,7 @@ async def ingest_version(
     policy: ScanPolicy | None = None,
     pii_detector: PiiDetector | None = None,
     pii_policy: PiiPolicy | None = None,
-    vector_store=None,
+    vector_store=_UNSET_STORE,
 ) -> dict:
     """Scan, then parse the stored object for one version, (re)write chunks, index embeddings, set status.
 

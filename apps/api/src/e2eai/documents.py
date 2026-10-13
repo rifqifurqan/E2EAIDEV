@@ -388,9 +388,12 @@ async def restore_document(
     await session.commit()
 
 
+_UNSET_STORE: object = object()  # "use components.vector_store"; an explicit None forces SQL-only
+
+
 async def purge_document(
     session: AsyncSession, authz, *, actor: User, document_id: uuid.UUID, storage: ObjectStorage | None = None,
-    vector_store=None,
+    vector_store=_UNSET_STORE,
 ) -> None:
     """Permanently delete derived content and the stored object (FR-D9). Legal hold blocks it (FR-D13).
 
@@ -398,6 +401,10 @@ async def purge_document(
     The document row survives as a `purged` tombstone (so citations in old chats resolve to a gone-doc,
     not a dangling id). Content-addressed objects are only unlinked when no other version still refers
     to them."""
+    if vector_store is _UNSET_STORE:
+        from .vector_store import configured_vector_store
+
+        vector_store = configured_vector_store()
     doc = await _load_document(session, document_id)
     if doc.legal_hold:
         raise AppError(409, "Legal hold blocks purge", "This document is under legal hold and cannot be permanently deleted.")

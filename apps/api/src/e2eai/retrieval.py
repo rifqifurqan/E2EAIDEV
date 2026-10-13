@@ -32,7 +32,10 @@ from .db import Chunk, ChunkEmbedding, DocPrincipal, Document, FolderPrincipal, 
 from .guardrails import PromptGuardPolicy, PromptInjectionDetector, select_prompt_detector
 from .language import detect_language
 from .semantic_cache import CacheContext, SemanticPromptCache
+from . import vector_store as _vs
 from .vector_store import VectorPoint, VectorQuery, VectorStore
+
+_UNSET: Any = object()  # "use components.vector_store"; an explicit None forces SQL-only
 
 
 # ---------------------------------------------------------------------------
@@ -235,13 +238,16 @@ class LiteLLMAnswerGenerator:
 
 
 async def index_document_chunks(
-    session: AsyncSession, *, embedder: Embedder, document_id: uuid.UUID, vector_store: VectorStore | None = None
+    session: AsyncSession, *, embedder: Embedder, document_id: uuid.UUID, vector_store: VectorStore | None = _UNSET
 ) -> int:
     """Embed all current chunks for one document once, independent of shares (FR-C1).
 
     With an external ``vector_store`` (FR-R3) the vectors are also written there (ids only, no text). The pgvector
-    rows stay as the source of truth that the SQL permission re-check joins against.
+    rows stay as the source of truth that the SQL permission re-check joins against. By default the store comes
+    from `components.vector_store`.
     """
+    if vector_store is _UNSET:
+        vector_store = _vs.configured_vector_store()
     rows = (
         await session.execute(
             select(Chunk)
@@ -285,7 +291,7 @@ async def retrieve_relevant_chunks(
     scoped_document_ids: Sequence[uuid.UUID] | None = None,
     scoped_folder_ids: Sequence[uuid.UUID] | None = None,
     mode: str = "dense",
-    vector_store: VectorStore | None = None,
+    vector_store: VectorStore | None = _UNSET,
 ) -> list[dict]:
     """Rank indexed chunks by vector distance after SQL-level permission and scope filtering (FR-C2/FR-C3).
 
@@ -297,6 +303,8 @@ async def retrieve_relevant_chunks(
     """
     if mode not in ("dense", "hybrid"):
         raise AppError(400, "Invalid retrieval mode")
+    if vector_store is _UNSET:  # configured store serves dense queries; hybrid (Postgres sparse pool) stays on SQL
+        vector_store = _vs.configured_vector_store() if mode == "dense" else None
     if vector_store is not None and mode != "dense":
         raise AppError(400, "Hybrid retrieval is not available with an external vector store")
     principal_list = sorted(set(user_principals))

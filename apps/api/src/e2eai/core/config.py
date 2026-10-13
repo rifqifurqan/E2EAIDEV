@@ -96,6 +96,8 @@ class Settings:
     session_idle_hours: int = 8  # NFR-18
     vector_store: str = "pgvector"  # FR-R3
     job_engine: str = "celery"  # FR-F20
+    qdrant_url: str = "http://127.0.0.1:16333"  # FR-R3 (only used when components.vector_store = qdrant)
+    qdrant_api_key: str = ""
 
 
 @lru_cache
@@ -128,6 +130,8 @@ def get_settings() -> Settings:
         auth_provider=components["auth"],
         vector_store=components["vector_store"],
         job_engine=components["job_engine"],
+        qdrant_url=cfg.get("qdrant", {}).get("url", "http://127.0.0.1:16333"),
+        qdrant_api_key=e.get("QDRANT_API_KEY", ""),
         oidc_authorization_endpoint=oidc_cfg.get("authorization_endpoint", ""),
         oidc_token_endpoint=oidc_cfg.get("token_endpoint", ""),
         oidc_userinfo_endpoint=oidc_cfg.get("userinfo_endpoint", ""),
