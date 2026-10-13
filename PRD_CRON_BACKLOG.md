@@ -150,6 +150,8 @@ Rules for every cron tick:
 
 88. [x] [NFR-17] License report before install. Completed as `licenses.py`, shown by `e2eai init` before files are written, plus `e2eai licenses`; tool licenses need upstream re-verification. Deferred to owner: repo LICENSE file (Apache 2.0 proposed). Follow-up: dependency license scan, SBOM (NFR-9).
 
+89. [x] [NFR-9] SBOM and supply-chain checks. Completed as `supply_chain.py` + `e2eai sbom` (CycloneDX 1.5, fails on unpinned image or unhashed package; real locks verified). Follow-up (deferred with CI/workflow scope): vulnerability scanning in CI, signed artifacts, web (npm) dependencies.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.

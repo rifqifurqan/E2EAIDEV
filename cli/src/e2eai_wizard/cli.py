@@ -8,7 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import airgap, backup, detect, generate, licenses, models, upgrade
+from . import airgap, backup, detect, generate, licenses, models, supply_chain, upgrade
 from .services import BY_NAME, SECRETS, SERVICES, USERS, enabled_services, owner_enabled
 
 app = typer.Typer(add_completion=False, help=__doc__, no_args_is_help=True)
@@ -367,3 +367,31 @@ def licenses_cmd() -> None:
     catalog = models.load_catalog(_find_root(Path.cwd()))
     rows = licenses.catalog_license_report(catalog)
     out.print(licenses.render_license_report(rows), markup=False, highlight=False, soft_wrap=True)
+
+
+@app.command("sbom")
+def sbom_cmd(
+    output: Path = typer.Option(Path("sbom.cdx.json"), help="Where to write the CycloneDX SBOM."),
+    version: str = typer.Option("0.1.0", help="Release version recorded in the SBOM."),
+    versions_lock: Path | None = typer.Option(None, help="Image pins file (default: deploy/versions.lock)."),
+) -> None:
+    """Write a CycloneDX SBOM and fail if an image is not digest-pinned or a package has no hash (NFR-9)."""
+    root = _find_root(Path.cwd())
+    lock_path = versions_lock or root / "deploy" / "versions.lock"
+    images = supply_chain.parse_versions_lock(lock_path.read_text(encoding="utf-8"))
+    packages: list[dict] = []
+    for rel in ("apps/api/uv.lock", "cli/uv.lock"):
+        lock = root / rel
+        if lock.exists():
+            packages += supply_chain.parse_uv_lock(lock.read_text(encoding="utf-8"))
+    pinned = supply_chain.check_images_pinned(images)
+    hashed = supply_chain.check_lock_hashes(packages)
+    if not pinned["ok"] or not hashed["ok"]:
+        if pinned["unpinned"]:
+            out.print("Images not pinned by digest: " + ", ".join(pinned["unpinned"]), markup=False, highlight=False)
+        if hashed["missing"]:
+            out.print("Packages without a hash: " + ", ".join(hashed["missing"]), markup=False, highlight=False)
+        raise typer.Exit(1)
+    sbom = supply_chain.build_sbom(version=version, python_packages=packages, images=images)
+    output.write_text(json.dumps(sbom, indent=2, sort_keys=True) + chr(10), encoding="utf-8")
+    out.print(f"SBOM written: {output} ({len(sbom['components'])} components)", markup=False, highlight=False)
