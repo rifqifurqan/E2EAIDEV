@@ -27,6 +27,8 @@ class PromptGuardPolicy:
     enabled: bool = True
     block_suspicious_context: bool = True
     detector: str = "local"
+    # NFR-19: a mandatory guard that is unavailable blocks the bot; an optional one degrades (answer without it).
+    mandatory: bool = True
 
     @classmethod
     def from_settings(cls) -> "PromptGuardPolicy":
@@ -39,6 +41,7 @@ class PromptGuardPolicy:
                 enabled=bool(raw.get("enabled", True)),
                 block_suspicious_context=bool(raw.get("block_suspicious_context", True)),
                 detector=str(raw.get("detector", "local")),
+                mandatory=bool(raw.get("mandatory", True)),
             )
         except FileNotFoundError:
             return cls()

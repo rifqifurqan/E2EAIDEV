@@ -501,9 +501,24 @@ async def answer_question(
     blocked_count = 0
     blocked_reasons: set[str] = set()
     prompt_guard_active = prompt_policy.enabled and prompt_policy.block_suspicious_context
+    guard_degraded = False
     for chunk in chunks:
         if prompt_guard_active:
-            detection = prompt_detector.detect(chunk["text"])
+            try:
+                detection = prompt_detector.detect(chunk["text"])
+            except Exception as exc:  # noqa: BLE001 - any detector failure is an outage (NFR-19)
+                if prompt_policy.mandatory:
+                    raise AppError(503, "Safety check unavailable",
+                                   "A required safety check could not run, so this bot cannot answer right now.",
+                                   "guardrail-unavailable") from None
+                # Optional guard: degrade this feature only; chat keeps working and the gap is audited.
+                prompt_guard_active = False
+                guard_degraded = True
+                await audit.record(session, f"user:{user.id}", "retrieval.guardrail.degraded",
+                                   "retrieval:visible_chunks",
+                                   {"guardrail": "prompt_guard", "reason": "detector_unavailable"})
+                safe_chunks.append(chunk)
+                continue
             if detection.blocked:
                 blocked_count += 1
                 blocked_reasons.update(detection.reasons)
@@ -554,8 +569,9 @@ async def answer_question(
             prompt_guard_active=prompt_guard_active,
             blocked_count=blocked_count,
             blocked_reasons=blocked_reasons,
+            guard_degraded=guard_degraded,
         )
-    if semantic_cache is not None and active_cache_context is not None:
+    if semantic_cache is not None and active_cache_context is not None and not guard_degraded:
         semantic_cache.put(cache_lookup_question, active_cache_context, result)
         result["cache"] = {
             "hit": False,
@@ -575,6 +591,7 @@ def _build_explainability(
     blocked_count: int,
     blocked_reasons: set[str],
     reranker_model: str | None = None,
+    guard_degraded: bool = False,
 ) -> dict:
     """Build FR-O11 'Why this answer?' metadata from permission-filtered results.
 
@@ -617,6 +634,7 @@ def _build_explainability(
             "prompt_guard_enabled": prompt_guard_active,
             "chunks_blocked": blocked_count,
             "block_reasons": sorted(blocked_reasons),
+            "degraded": guard_degraded,
         },
     }
 
