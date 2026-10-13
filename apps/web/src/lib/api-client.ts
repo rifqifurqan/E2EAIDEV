@@ -328,6 +328,7 @@ export const ENDPOINTS = {
   flywheel: "/improve/flywheel",
   flywheelTriage: (itemId: string) => `/improve/flywheel/${itemId}/triage`,
   dueReviews: "/documents/reviews/due",
+  documentReviewed: (documentId: string) => `/documents/${documentId}/lifecycle/reviewed`,
   modelRegistry: "/model-registry",
   botApprovals: "/governance/bot-approvals",
   botApprovalDecision: (approvalId: string) => `/governance/bot-approvals/${approvalId}/decisions`,
@@ -519,6 +520,11 @@ export const api = {
 
   // Data / Build (signed-in users; scope enforced by the server)
   listDueReviews: () => apiFetch<DueReviewList>(ENDPOINTS.dueReviews),
+  markReviewed: (documentId: string, nextReviewInDays: number) =>
+    apiFetch<{ status: string; review_at: string }>(ENDPOINTS.documentReviewed(documentId), {
+      method: "POST",
+      body: { next_review_in_days: nextReviewInDays },
+    }),
   listModels: () => apiFetch<ModelVersionList>(ENDPOINTS.modelRegistry),
 
   // Release (scope enforced by the server)

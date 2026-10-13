@@ -143,6 +143,10 @@ const en = {
     loading: "Loading...",
     signIn: "Please sign in to see your review queue.",
     loadFailed: "Could not load data.",
+    nextReviewIn: "Next review in",
+    days: "days",
+    markReviewed: "Mark reviewed",
+    reviewFailed: "Could not mark the document as reviewed.",
   },
   build: {
     title: "Model registry",

@@ -145,6 +145,10 @@ const id: Dictionary = {
     loading: "Memuat...",
     signIn: "Silakan masuk untuk melihat antrean tinjauan Anda.",
     loadFailed: "Tidak dapat memuat data.",
+    nextReviewIn: "Tinjau berikutnya dalam",
+    days: "hari",
+    markReviewed: "Tandai sudah ditinjau",
+    reviewFailed: "Gagal menandai dokumen sebagai ditinjau.",
   },
   build: {
     title: "Registri model",
