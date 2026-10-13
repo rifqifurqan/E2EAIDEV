@@ -37,7 +37,6 @@ export function useLoadMore<T>(
     } finally {
       setBusy(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursor, base, current.extra, fetchPage]);
 
   return {

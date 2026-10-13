@@ -6,6 +6,7 @@ import { I18nProvider } from "@/i18n/context";
 
 const apiMock = vi.hoisted(() => ({
   listFlywheel: vi.fn(),
+  listFlywheelPage: vi.fn(),
   triageFlywheelItem: vi.fn(),
   exportFlywheel: vi.fn(),
   linkFlywheelReeval: vi.fn(),
@@ -28,6 +29,7 @@ function renderImprove(locale: "en" | "id" = "en") {
 describe("ImproveScreen", () => {
   beforeEach(() => {
     apiMock.listFlywheel.mockReset();
+    apiMock.listFlywheelPage.mockReset();
     apiMock.triageFlywheelItem.mockReset();
     apiMock.exportFlywheel.mockReset();
     apiMock.linkFlywheelReeval.mockReset();
@@ -257,5 +259,19 @@ describe("ImproveScreen", () => {
     apiMock.listFlywheel.mockResolvedValue(queueWith("exported"));
     renderImprove("id");
     expect(await screen.findByRole("button", { name: /tautkan evaluasi ulang/i })).toBeInTheDocument();
+  });
+
+  it("loads more queue items with the next cursor and keeps the status counts", async () => {
+    const user = userEvent.setup();
+    const it1 = (id: string, q: string) => ({ id, source: "thumbs_down", status: "queued", question: q, correction: null, reason: null, target: null });
+    apiMock.listFlywheel.mockResolvedValue({ by_status: { queued: 2 }, by_source: {}, items: [it1("q1", "Question one")], next_cursor: "cur-2" });
+    apiMock.listFlywheelPage.mockResolvedValue({ by_status: { queued: 2 }, by_source: {}, items: [it1("q2", "Question two")], next_cursor: null });
+    renderImprove();
+    await screen.findByText("Question one");
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    expect(await screen.findByText("Question two")).toBeInTheDocument();
+    expect(apiMock.listFlywheelPage).toHaveBeenCalledWith("cur-2");
+    expect(screen.getByText("Question one")).toBeInTheDocument();
+    expect(screen.getByText(/queued: 2/i)).toBeInTheDocument();
   });
 });

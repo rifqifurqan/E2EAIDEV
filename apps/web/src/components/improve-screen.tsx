@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useI18n } from "@/i18n/context";
 import { api } from "@/lib/api-client";
 import { useAdminData } from "@/lib/use-admin-data";
+import { useLoadMore } from "@/lib/use-load-more";
+import { LoadMore } from "./load-more";
 import { WhyItMattersPanel } from "./why-it-matters-panel";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -51,6 +53,11 @@ export function ImproveScreen() {
   const { t } = useI18n();
   const [reloadKey, setReloadKey] = useState(0);
   const state = useAdminData(() => api.listFlywheel(), reloadKey);
+  const more = useLoadMore(
+    state.kind === "ready" ? state.data.items : undefined,
+    state.kind === "ready" ? state.data.next_cursor : null,
+    api.listFlywheelPage,
+  );
   const [busyId, setBusyId] = useState<string | null>(null);
   const [triageFailed, setTriageFailed] = useState(false);
   const [exportName, setExportName] = useState("");
@@ -178,11 +185,11 @@ export function ImproveScreen() {
               {t.improve.linkFailed}
             </p>
           ) : null}
-          {state.data.items.length === 0 ? (
+          {more.items.length === 0 ? (
             <p className="text-sm text-gray-500">{t.improve.noItems}</p>
           ) : (
             <ul className="space-y-2 text-sm">
-              {state.data.items.map((item) => (
+              {more.items.map((item) => (
                 <li key={item.id} className="rounded border border-gray-200 p-2">
                   <span className="mr-2 font-mono text-xs text-gray-500">{item.status}</span>
                   <span>{item.question}</span>
@@ -221,6 +228,7 @@ export function ImproveScreen() {
               ))}
             </ul>
           )}
+          <LoadMore hasMore={more.hasMore} busy={more.busy} failed={more.failed} onLoadMore={more.loadMore} />
         </div>
       ) : null}
       <WhyItMattersPanel stage="improve" />

@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useI18n } from "@/i18n/context";
 import { api, type ModelVersion } from "@/lib/api-client";
 import { useAdminData } from "@/lib/use-admin-data";
+import { useLoadMore } from "@/lib/use-load-more";
+import { LoadMore } from "./load-more";
 import { WhyItMattersPanel } from "./why-it-matters-panel";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -109,6 +111,14 @@ export function BuildScreen() {
   const { t } = useI18n();
   const [reloadKey, setReloadKey] = useState(0);
   const state = useAdminData(() => api.listModels(), reloadKey);
+  const more = useLoadMore(
+    state.kind === "ready" ? state.data.models : undefined,
+    state.kind === "ready" ? state.data.next_cursor : null,
+    async (cursor: string) => {
+      const page = await api.listModelsPage(cursor);
+      return { items: page.models, next_cursor: page.next_cursor };
+    },
+  );
   const [name, setName] = useState("");
   const [version, setVersion] = useState("");
   const [parent, setParent] = useState("");
@@ -191,11 +201,11 @@ export function BuildScreen() {
         </form>
       ) : null}
       {state.kind === "ready" ? (
-        state.data.models.length === 0 ? (
+        more.items.length === 0 ? (
           <p className="text-sm text-gray-500">{t.build.noItems}</p>
         ) : (
           <ul className="space-y-2 text-sm">
-            {state.data.models.map((model) => (
+            {more.items.map((model) => (
               <ModelRow
                 key={`${model.name}@${model.version}`}
                 model={model}
@@ -205,6 +215,9 @@ export function BuildScreen() {
           </ul>
         )
       ) : null}
+        {state.kind === "ready" ? (
+          <LoadMore hasMore={more.hasMore} busy={more.busy} failed={more.failed} onLoadMore={more.loadMore} />
+        ) : null}
       <WhyItMattersPanel stage="build" />
     </section>
   );

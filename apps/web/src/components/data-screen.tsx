@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useI18n } from "@/i18n/context";
 import { api, type DueReview } from "@/lib/api-client";
 import { useAdminData } from "@/lib/use-admin-data";
+import { useLoadMore } from "@/lib/use-load-more";
+import { LoadMore } from "./load-more";
 import { WhyItMattersPanel } from "./why-it-matters-panel";
 
 const INTERVALS = [30, 90, 180, 365];
@@ -68,6 +70,14 @@ export function DataScreen() {
   const { t } = useI18n();
   const [reloadKey, setReloadKey] = useState(0);
   const state = useAdminData(() => api.listDueReviews(), reloadKey);
+  const more = useLoadMore(
+    state.kind === "ready" ? state.data.reviews : undefined,
+    state.kind === "ready" ? state.data.next_cursor : null,
+    async (cursor: string) => {
+      const page = await api.listDueReviewsPage(cursor);
+      return { items: page.reviews, next_cursor: page.next_cursor };
+    },
+  );
 
   return (
     <section>
@@ -85,16 +95,19 @@ export function DataScreen() {
         </p>
       ) : null}
       {state.kind === "ready" ? (
-        state.data.reviews.length === 0 ? (
+        more.items.length === 0 ? (
           <p className="text-sm text-gray-500">{t.data.noItems}</p>
         ) : (
           <ul className="space-y-2 text-sm">
-            {state.data.reviews.map((review) => (
+            {more.items.map((review) => (
               <ReviewRow key={review.document_id} review={review} onDone={() => setReloadKey((key) => key + 1)} />
             ))}
           </ul>
         )
       ) : null}
+        {state.kind === "ready" ? (
+          <LoadMore hasMore={more.hasMore} busy={more.busy} failed={more.failed} onLoadMore={more.loadMore} />
+        ) : null}
       <WhyItMattersPanel stage="data" />
     </section>
   );

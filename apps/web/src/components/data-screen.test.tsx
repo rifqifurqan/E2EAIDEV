@@ -6,6 +6,7 @@ import { I18nProvider } from "@/i18n/context";
 
 const apiMock = vi.hoisted(() => ({
   listDueReviews: vi.fn(),
+  listDueReviewsPage: vi.fn(),
   markReviewed: vi.fn(),
 }));
 
@@ -25,6 +26,7 @@ function renderData(locale: "en" | "id" = "en") {
 describe("DataScreen", () => {
   beforeEach(() => {
     apiMock.listDueReviews.mockReset();
+    apiMock.listDueReviewsPage.mockReset();
     apiMock.markReviewed.mockReset();
   });
 
@@ -116,5 +118,19 @@ describe("DataScreen", () => {
     apiMock.listDueReviews.mockResolvedValue(due("d1"));
     renderData("id");
     expect(await screen.findByRole("button", { name: /tandai sudah ditinjau/i })).toBeInTheDocument();
+  });
+
+  it("loads more due reviews with the next cursor", async () => {
+    const user = userEvent.setup();
+    const row = (id: string, title: string) => ({ document_id: id, title, review_at: "2026-09-01T00:00:00+00:00", overdue_days: 1, expires_at: null });
+    apiMock.listDueReviews.mockResolvedValue({ reviews: [row("d1", "Doc page one")], next_cursor: "cur-2" });
+    apiMock.listDueReviewsPage.mockResolvedValue({ reviews: [row("d2", "Doc page two")], next_cursor: null });
+    renderData();
+    await screen.findByText("Doc page one");
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    expect(await screen.findByText("Doc page two")).toBeInTheDocument();
+    expect(apiMock.listDueReviewsPage).toHaveBeenCalledWith("cur-2");
+    expect(screen.getByText("Doc page one")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /load more/i })).not.toBeInTheDocument();
   });
 });

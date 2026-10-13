@@ -6,6 +6,7 @@ import { I18nProvider } from "@/i18n/context";
 
 const apiMock = vi.hoisted(() => ({
   listBotApprovals: vi.fn(),
+  listBotApprovalsPage: vi.fn(),
   decideBotApproval: vi.fn(),
   requestBotApproval: vi.fn(),
 }));
@@ -26,6 +27,7 @@ function renderBots(locale: "en" | "id" = "en") {
 describe("BotReleaseScreen", () => {
   beforeEach(() => {
     apiMock.listBotApprovals.mockReset();
+    apiMock.listBotApprovalsPage.mockReset();
     apiMock.listBotApprovals.mockResolvedValue({ items: [], next_cursor: null });
     apiMock.decideBotApproval.mockReset();
     apiMock.requestBotApproval.mockReset();
@@ -209,5 +211,17 @@ describe("BotReleaseScreen", () => {
   it("labels the request form in Indonesian", async () => {
     renderBots("id");
     expect(await screen.findByRole("button", { name: /minta persetujuan/i })).toBeInTheDocument();
+  });
+
+  it("loads more approval requests with the next cursor", async () => {
+    const user = userEvent.setup();
+    apiMock.listBotApprovals.mockResolvedValue({ items: [{ ...approval("m1", "approved"), approval_type: "type_page_one" }], next_cursor: "cur-2" });
+    apiMock.listBotApprovalsPage.mockResolvedValue({ items: [{ ...approval("m2", "approved"), approval_type: "type_page_two" }], next_cursor: null });
+    renderBots();
+    await screen.findByText("type_page_one");
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    expect(await screen.findByText("type_page_two")).toBeInTheDocument();
+    expect(apiMock.listBotApprovalsPage).toHaveBeenCalledWith("cur-2");
+    expect(screen.getByText("type_page_one")).toBeInTheDocument();
   });
 });

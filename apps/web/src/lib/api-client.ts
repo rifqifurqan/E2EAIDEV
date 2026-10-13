@@ -538,6 +538,8 @@ export const api = {
   transitionIncident: (incidentId: string, input: IncidentTransition) =>
     apiFetch<AiIncident>(ENDPOINTS.incidentTransition(incidentId), { method: "POST", body: input }),
   listFlywheel: () => apiFetch<FlywheelQueue>(ENDPOINTS.flywheel),
+  listFlywheelPage: (cursor: string) =>
+    apiFetch<FlywheelQueue>(`${ENDPOINTS.flywheel}?cursor=${encodeURIComponent(cursor)}`),
   exportFlywheel: (target: "eval" | "finetune", name: string) =>
     apiFetch<{ dataset_id: string; name: string; version: number; items: number }>(ENDPOINTS.flywheelExport, {
       method: "POST",
@@ -555,12 +557,16 @@ export const api = {
 
   // Data / Build (signed-in users; scope enforced by the server)
   listDueReviews: () => apiFetch<DueReviewList>(ENDPOINTS.dueReviews),
+  listDueReviewsPage: (cursor: string) =>
+    apiFetch<DueReviewList>(`${ENDPOINTS.dueReviews}?cursor=${encodeURIComponent(cursor)}`),
   markReviewed: (documentId: string, nextReviewInDays: number) =>
     apiFetch<{ status: string; review_at: string }>(ENDPOINTS.documentReviewed(documentId), {
       method: "POST",
       body: { next_review_in_days: nextReviewInDays },
     }),
   listModels: () => apiFetch<ModelVersionList>(ENDPOINTS.modelRegistry),
+  listModelsPage: (cursor: string) =>
+    apiFetch<ModelVersionList>(`${ENDPOINTS.modelRegistry}?cursor=${encodeURIComponent(cursor)}`),
   registerModel: (name: string, version: string, parentVersion?: string) =>
     apiFetch<ModelVersion>(ENDPOINTS.modelRegistry, {
       method: "POST",
@@ -583,6 +589,8 @@ export const api = {
   listEvalRuns: () => apiFetch<EvalRunList>(ENDPOINTS.evalRuns),
 
   listBotApprovals: () => apiFetch<BotApprovalList>(ENDPOINTS.botApprovals),
+  listBotApprovalsPage: (cursor: string) =>
+    apiFetch<BotApprovalList>(`${ENDPOINTS.botApprovals}?cursor=${encodeURIComponent(cursor)}`),
   requestBotApproval: (botId: string, rationale?: string) =>
     apiFetch<BotApproval>(ENDPOINTS.botApprovals, {
       method: "POST",

@@ -6,6 +6,7 @@ import { I18nProvider } from "@/i18n/context";
 
 const apiMock = vi.hoisted(() => ({
   listModels: vi.fn(),
+  listModelsPage: vi.fn(),
   decideModel: vi.fn(),
   registerModel: vi.fn(),
   attachEvalRun: vi.fn(),
@@ -27,6 +28,7 @@ function renderBuild(locale: "en" | "id" = "en") {
 describe("BuildScreen", () => {
   beforeEach(() => {
     apiMock.listModels.mockReset();
+    apiMock.listModelsPage.mockReset();
     apiMock.decideModel.mockReset();
     apiMock.registerModel.mockReset();
     apiMock.attachEvalRun.mockReset();
@@ -236,5 +238,19 @@ describe("BuildScreen", () => {
     renderBuild("id");
     await screen.findAllByText("support-llm");
     expect(screen.getAllByRole("button", { name: /lampirkan hasil evaluasi/i })).toHaveLength(1);
+  });
+
+  it("loads more model versions with the next cursor", async () => {
+    const user = userEvent.setup();
+    const m = (name: string) => ({ name, version: "v1", parent_version: null, lineage: {}, eval_scores: {}, approval_status: "approved", approved_by: null });
+    apiMock.listModels.mockResolvedValue({ models: [m("model-one")], next_cursor: "cur-2" });
+    apiMock.listModelsPage.mockResolvedValue({ models: [m("model-two")], next_cursor: null });
+    renderBuild();
+    await screen.findByText("model-one");
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    expect(await screen.findByText("model-two")).toBeInTheDocument();
+    expect(apiMock.listModelsPage).toHaveBeenCalledWith("cur-2");
+    expect(screen.getByText("model-one")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /load more/i })).not.toBeInTheDocument();
   });
 });

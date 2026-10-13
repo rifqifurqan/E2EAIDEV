@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useI18n } from "@/i18n/context";
 import { api } from "@/lib/api-client";
 import { useAdminData } from "@/lib/use-admin-data";
+import { useLoadMore } from "@/lib/use-load-more";
+import { LoadMore } from "./load-more";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -11,6 +13,11 @@ export function BotReleaseScreen() {
   const { t } = useI18n();
   const [reloadKey, setReloadKey] = useState(0);
   const approvals = useAdminData(() => api.listBotApprovals(), reloadKey);
+  const more = useLoadMore(
+    approvals.kind === "ready" ? approvals.data.items : undefined,
+    approvals.kind === "ready" ? approvals.data.next_cursor : null,
+    api.listBotApprovalsPage,
+  );
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [decisionFailed, setDecisionFailed] = useState(false);
 
@@ -144,11 +151,11 @@ export function BotReleaseScreen() {
           </p>
         ) : null}
         {approvals.kind === "ready" ? (
-          approvals.data.items.length === 0 ? (
+          more.items.length === 0 ? (
             <p className="text-sm text-gray-500">{t.bots.approvalsEmpty}</p>
           ) : (
             <ul className="space-y-2 text-sm">
-              {approvals.data.items.map((approval) => (
+              {more.items.map((approval) => (
                 <li key={approval.id} className="rounded border border-gray-200 p-2">
                   <span className="mr-2">{approval.approval_type}</span>
                   <span className="mr-2 text-xs text-gray-500">{`${t.bots.risk}: ${approval.risk_tier}`}</span>
@@ -177,6 +184,9 @@ export function BotReleaseScreen() {
               ))}
             </ul>
           )
+        ) : null}
+        {approvals.kind === "ready" ? (
+          <LoadMore hasMore={more.hasMore} busy={more.busy} failed={more.failed} onLoadMore={more.loadMore} />
         ) : null}
       </div>
     </section>
