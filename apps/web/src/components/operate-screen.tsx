@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useI18n } from "@/i18n/context";
-import { api, type AiIncident, type IncidentTransition } from "@/lib/api-client";
+import { api, type AiIncident, type IncidentTransition, type ReportIncidentInput } from "@/lib/api-client";
 import { useAdminData } from "@/lib/use-admin-data";
 import { AdminScreen } from "./admin-screen";
 import { WhyItMattersPanel } from "./why-it-matters-panel";
@@ -132,6 +132,85 @@ function IncidentRow({ incident, onTransition }: { incident: AiIncident; onTrans
   );
 }
 
+const SEVERITIES = ["sev1", "sev2", "sev3", "sev4"] as const;
+
+function ReportIncidentForm({ onDone }: { onDone: () => void }) {
+  const { t } = useI18n();
+  const [title, setTitle] = useState("");
+  const [severity, setSeverity] = useState<(typeof SEVERITIES)[number]>("sev3");
+  const [description, setDescription] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFailed(false);
+    setBusy(true);
+    try {
+      const body: ReportIncidentInput = { title: title.trim(), severity };
+      if (description.trim() !== "") body.description = description.trim();
+      await api.reportIncident(body);
+      setTitle("");
+      setDescription("");
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+      onDone();
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mb-4 flex flex-wrap items-end gap-3 rounded border border-gray-200 p-3 text-sm">
+      <label htmlFor="incident-title">
+        <span className="mr-1">{t.operate.reportTitle}</span>
+        <input
+          id="incident-title"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          className="rounded border border-gray-300 px-2 py-1 text-sm"
+        />
+      </label>
+      <label htmlFor="incident-severity">
+        <span className="mr-1">{t.operate.reportSeverity}</span>
+        <select
+          id="incident-severity"
+          value={severity}
+          onChange={(event) => setSeverity(event.target.value as (typeof SEVERITIES)[number])}
+          className="rounded border border-gray-300 px-2 py-1 text-sm"
+        >
+          {SEVERITIES.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label htmlFor="incident-description">
+        <span className="mr-1">{t.operate.reportDescription}</span>
+        <input
+          id="incident-description"
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          className="rounded border border-gray-300 px-2 py-1 text-sm"
+        />
+      </label>
+      <button
+        type="submit"
+        disabled={busy || title.trim() === ""}
+        className="rounded border border-blue-400 px-3 py-1 text-sm text-blue-700 disabled:opacity-50"
+      >
+        {t.operate.reportSubmit}
+      </button>
+      {failed ? (
+        <p role="alert" className="w-full text-sm text-red-700">
+          {t.operate.reportFailed}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
 export function OperateScreen() {
   const { t } = useI18n();
   const [reloadKey, setReloadKey] = useState(0);
@@ -144,6 +223,7 @@ export function OperateScreen() {
         <h2 id="ai-incidents-heading" className="mb-3 text-lg font-semibold">
           {t.operate.incidentsTitle}
         </h2>
+        <ReportIncidentForm onDone={() => setReloadKey((key) => key + 1)} />
         {state.kind === "loading" ? <p>{t.operate.loading}</p> : null}
         {state.kind === "forbidden" ? (
           <p role="alert" className="rounded border border-yellow-300 bg-yellow-50 p-3 text-sm">

@@ -180,6 +180,11 @@ const id: Dictionary = {
     pmRootCause: "Akar masalah",
     pmRecord: "Catat pasca-insiden",
     pmFailed: "Gagal menyimpan catatan pasca-insiden.",
+    reportTitle: "Judul insiden",
+    reportSeverity: "Tingkat keparahan",
+    reportDescription: "Deskripsi (opsional)",
+    reportSubmit: "Laporkan insiden",
+    reportFailed: "Gagal melaporkan insiden.",
   },
   improve: {
     title: "Flywheel Umpan Balik",

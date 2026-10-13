@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { OperateScreen } from "./operate-screen";
 import { I18nProvider } from "@/i18n/context";
@@ -8,6 +8,7 @@ const apiMock = vi.hoisted(() => ({
   listIncidents: vi.fn(),
   transitionIncident: vi.fn(),
   recordPostmortem: vi.fn(),
+  reportIncident: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -28,6 +29,7 @@ describe("OperateScreen", () => {
     apiMock.listIncidents.mockReset();
     apiMock.transitionIncident.mockReset();
     apiMock.recordPostmortem.mockReset();
+    apiMock.reportIncident.mockReset();
   });
 
   it("lists AI incidents with severity and status next to the admin tools", async () => {
@@ -39,8 +41,9 @@ describe("OperateScreen", () => {
     });
     renderOperate();
     expect(await screen.findByText("Wrong salary answer")).toBeInTheDocument();
-    expect(screen.getByText(/sev2/i)).toBeInTheDocument();
-    expect(screen.getByText(/triaged/i)).toBeInTheDocument();
+    const row = screen.getByText("Wrong salary answer").closest("li") as HTMLElement;
+    expect(within(row).getByText(/sev2/i)).toBeInTheDocument();
+    expect(within(row).getByText(/^triaged$/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /export configuration/i })).toBeInTheDocument();
   });
 
@@ -199,5 +202,66 @@ describe("OperateScreen", () => {
     apiMock.listIncidents.mockResolvedValue(released(null));
     renderOperate("id");
     expect(await screen.findByRole("button", { name: /catat pasca-insiden/i })).toBeInTheDocument();
+  });
+  it("reports a new incident with a severity and reloads the list", async () => {
+    const user = userEvent.setup();
+    apiMock.listIncidents.mockResolvedValue({ incidents: [], next_cursor: null });
+    apiMock.reportIncident.mockResolvedValue({});
+    renderOperate();
+    await screen.findByText(/no open ai incidents/i);
+    apiMock.listIncidents.mockResolvedValue(list("reported"));
+    await user.type(screen.getByLabelText(/incident title/i), "Wrong salary answer");
+    await user.selectOptions(screen.getByLabelText(/severity/i), "sev2");
+    await user.type(screen.getByLabelText(/^description/i), "Bot quoted last year's table");
+    await user.click(screen.getByRole("button", { name: /report incident/i }));
+    await waitFor(() =>
+      expect(apiMock.reportIncident).toHaveBeenCalledWith({
+        title: "Wrong salary answer",
+        severity: "sev2",
+        description: "Bot quoted last year's table",
+      }),
+    );
+    expect(await screen.findByText("Wrong salary answer")).toBeInTheDocument();
+  });
+
+  it("disables report until a title is entered and defaults to sev3", async () => {
+    const user = userEvent.setup();
+    apiMock.listIncidents.mockResolvedValue({ incidents: [], next_cursor: null });
+    apiMock.reportIncident.mockResolvedValue({});
+    renderOperate();
+    await screen.findByText(/no open ai incidents/i);
+    const submit = screen.getByRole("button", { name: /report incident/i });
+    expect(submit).toBeDisabled();
+    await user.type(screen.getByLabelText(/incident title/i), "Leak?");
+    await user.click(submit);
+    await waitFor(() =>
+      expect(apiMock.reportIncident).toHaveBeenCalledWith({ title: "Leak?", severity: "sev3" }),
+    );
+  });
+
+  it("still offers the report form to non-admins when the list is forbidden", async () => {
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.listIncidents.mockRejectedValue(new ApiError(403, "Forbidden"));
+    renderOperate();
+    expect(await screen.findByRole("button", { name: /report incident/i })).toBeInTheDocument();
+  });
+
+  it("shows a generic error without server text when reporting fails", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.listIncidents.mockResolvedValue({ incidents: [], next_cursor: null });
+    apiMock.reportIncident.mockRejectedValue(new ApiError(400, "Severity must be one of", "internal detail"));
+    renderOperate();
+    await screen.findByText(/no open ai incidents/i);
+    await user.type(screen.getByLabelText(/incident title/i), "x");
+    await user.click(screen.getByRole("button", { name: /report incident/i }));
+    expect(await screen.findByText(/could not report the incident/i)).toBeInTheDocument();
+    expect(screen.queryByText(/internal detail/i)).not.toBeInTheDocument();
+  });
+
+  it("labels the report form in Indonesian", async () => {
+    apiMock.listIncidents.mockResolvedValue({ incidents: [], next_cursor: null });
+    renderOperate("id");
+    expect(await screen.findByRole("button", { name: /laporkan insiden/i })).toBeInTheDocument();
   });
 });

@@ -178,6 +178,11 @@ const en = {
     pmRootCause: "Root cause",
     pmRecord: "Record post-incident",
     pmFailed: "Could not save the post-incident record.",
+    reportTitle: "Incident title",
+    reportSeverity: "Severity",
+    reportDescription: "Description (optional)",
+    reportSubmit: "Report incident",
+    reportFailed: "Could not report the incident.",
   },
   improve: {
     title: "Feedback Flywheel",

@@ -150,6 +150,12 @@ export interface AiIncident {
   postmortem?: Record<string, unknown> | null;
 }
 
+export interface ReportIncidentInput {
+  title: string;
+  severity: "sev1" | "sev2" | "sev3" | "sev4";
+  description?: string;
+}
+
 export interface PostmortemInput {
   summary: string;
   root_cause: string;
@@ -519,6 +525,8 @@ export const api = {
 
   // Operate / Improve (admin-only on the server)
   listIncidents: () => apiFetch<IncidentList>(ENDPOINTS.incidents),
+  reportIncident: (input: ReportIncidentInput) =>
+    apiFetch<AiIncident>(ENDPOINTS.incidents, { method: "POST", body: input }),
   recordPostmortem: (incidentId: string, input: PostmortemInput) =>
     apiFetch<AiIncident>(ENDPOINTS.incidentPostmortem(incidentId), { method: "POST", body: input }),
   transitionIncident: (incidentId: string, input: IncidentTransition) =>
