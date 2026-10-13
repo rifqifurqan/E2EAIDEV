@@ -437,6 +437,7 @@ async def answer_question(
     retrieval_query: str | None = None,
     semantic_cache: SemanticPromptCache | None = None,
     cache_context: CacheContext | None = None,
+    memory_context: Sequence[str] | None = None,
 ) -> dict:
     """Answer from permission-filtered chunks, treating retrieved context as untrusted (FR-C8).
 
@@ -455,10 +456,26 @@ async def answer_question(
     # FR-R6: retrieval (and generation) may use a conversation-aware rewritten query; the language
     # is still detected from the user's original question only.
     effective_query = retrieval_query or question
+    memory_chunks = [
+        {
+            "source": "user_memory",
+            "document": "User memory",
+            "text": text,
+            "page": None,
+            "section": "long-term memory",
+            "score": 0.0,
+        }
+        for text in (memory_context or [])
+        if str(text).strip()
+    ]
     principal_set = await principals(session, user)
     cache_lookup_question = f"{question}\n{effective_query}" if retrieval_query else question
+    # Long-term memory is mutable and opt-in. Until persisted cache invalidation is wired to
+    # memory.add/delete/disable events, skip semantic cache for memory-augmented answers so a stale
+    # answer cannot survive an opt-out or deletion.
+    cache_allowed = semantic_cache is not None and not memory_chunks
     active_cache_context = cache_context
-    if semantic_cache is not None and active_cache_context is None:
+    if cache_allowed and active_cache_context is None:
         answer_model = getattr(answer_generator, "model", None) if answer_generator is not None else None
         active_cache_context = CacheContext(
             principals=principal_set,
@@ -468,7 +485,8 @@ async def answer_question(
             scope=scope,
             document_id=str(document_id) if document_id else None,
         )
-    if semantic_cache is not None and active_cache_context is not None:
+    if cache_allowed and active_cache_context is not None:
+        assert semantic_cache is not None
         cached = semantic_cache.get(cache_lookup_question, active_cache_context)
         if cached is not None:
             await audit.record(
@@ -537,6 +555,34 @@ async def answer_question(
     if reranker is not None and safe_chunks:
         reranker_model = reranker.model
         safe_chunks = await reranker.rerank(effective_query, safe_chunks, top_k=len(safe_chunks))
+    if memory_chunks:
+        # FR-B2: user memory is private to the asking user and treated as untrusted context. It goes
+        # through the same prompt-injection guard as retrieved document text, but never creates a
+        # document citation and never widens retrieval permissions. Add it after reranking so memory
+        # is not sent to external rerankers.
+        for chunk in reversed(memory_chunks):
+            if prompt_guard_active:
+                try:
+                    detection = prompt_detector.detect(chunk["text"])
+                except Exception:  # noqa: BLE001 - same outage policy as retrieved context
+                    if prompt_policy.mandatory:
+                        raise AppError(503, "Safety check unavailable",
+                                       "A required safety check could not run, so this bot cannot answer right now.",
+                                       "guardrail-unavailable") from None
+                    prompt_guard_active = False
+                    guard_degraded = True
+                    await audit.record(session, f"user:{user.id}", "memory.guardrail.degraded",
+                                       "memory:context",
+                                       {"guardrail": "prompt_guard", "reason": "detector_unavailable"})
+                    safe_chunks.insert(0, chunk)
+                    continue
+                if detection.blocked:
+                    blocked_count += 1
+                    blocked_reasons.update(detection.reasons)
+                    await audit.record(session, f"user:{user.id}", "memory.context.blocked", "memory:context",
+                                       {"reasons": list(detection.reasons), "reason_count": len(detection.reasons)})
+                    continue
+            safe_chunks.insert(0, chunk)
     answer_lang = detect_language(question)
     if not safe_chunks:
         answer_text = (
@@ -547,18 +593,21 @@ async def answer_question(
         await audit.record(session, f"user:{user.id}", "chat.answer.no_context", "retrieval:visible_chunks", {})
         citations: list[dict] = []
     else:
+        top_doc = next((c for c in safe_chunks if c.get("source") != "user_memory"), None)
         if answer_generator is not None:
             answer_text = await answer_generator.generate(effective_query, safe_chunks, answer_lang)
         else:
-            answer_text = safe_chunks[0]["text"]
-        top = safe_chunks[0]
-        await audit.record(session, f"user:{user.id}", "chat.answer", "retrieval:visible_chunks", {"citations": 1})
-        citations = [{"document": top["document"], "page": top["page"], "section": top["section"]}]
+            answer_text = (top_doc or safe_chunks[0])["text"]
+        await audit.record(session, f"user:{user.id}", "chat.answer", "retrieval:visible_chunks",
+                           {"citations": 1 if top_doc else 0, "memory_count": len(memory_chunks)})
+        citations = ([{"document": top_doc["document"], "page": top_doc["page"], "section": top_doc["section"]}]
+                     if top_doc else [])
     result: dict[str, Any] = {
         "answer": answer_text,
         "answer_language": answer_lang,
         "citations": citations,
     }
+    result["memory"] = {"used": bool(memory_chunks), "count": len(memory_chunks)}
     if include_explainability:
         result["explainability"] = _build_explainability(
             chunks=chunks,
@@ -571,7 +620,8 @@ async def answer_question(
             blocked_reasons=blocked_reasons,
             guard_degraded=guard_degraded,
         )
-    if semantic_cache is not None and active_cache_context is not None and not guard_degraded:
+    if cache_allowed and active_cache_context is not None and not guard_degraded:
+        assert semantic_cache is not None
         semantic_cache.put(cache_lookup_question, active_cache_context, result)
         result["cache"] = {
             "hit": False,

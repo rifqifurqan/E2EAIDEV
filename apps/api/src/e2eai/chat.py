@@ -127,6 +127,12 @@ async def send_message(
         )).scalars().all()
         rewrite_result = rewrite_query(question, list(reversed(prior_rows)))
 
+    # FR-B2: long-term memory is opt-in and user-private. Recall only after the conversation owner
+    # check and pass it as uncited, untrusted context to the answer path.
+    from .user_memory import recall_context
+
+    memory_context = await recall_context(session, user=user)
+
     # Store user message
     user_msg = Message(conversation_id=conv.id, role="user", content=question)
     session.add(user_msg)
@@ -136,7 +142,8 @@ async def send_message(
     result = await answer_question(session, embedder=embedder, user=user, question=question,
                                    answer_generator=answer_generator, scope=scope, document_id=document_id,
                                    include_explainability=include_explainability,
-                                   retrieval_query=rewrite_result.rewritten if rewrite_result and rewrite_result.applied else None)
+                                   retrieval_query=rewrite_result.rewritten if rewrite_result and rewrite_result.applied else None,
+                                   memory_context=memory_context)
     result["query_rewrite"] = (rewrite_result.as_dict() if rewrite_result
                                else {"applied": False, "reason": "disabled"})
 

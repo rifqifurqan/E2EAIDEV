@@ -136,6 +136,57 @@ def test_recall_context_respects_opt_out_and_limit():
     asyncio.run(run())
 
 
+def test_chat_pipeline_uses_opted_in_long_term_memory_as_uncited_context():
+    async def run():
+        from e2eai.chat import create_conversation, send_message
+        from e2eai.db import UserMemory, UserMemorySetting, sessions
+        from e2eai.user_memory import remember, set_enabled
+
+        class FakeEmbedder:
+            model = "fake-embedding-v1"
+
+            async def embed(self, texts):
+                return [[1.0, 0.0] for _ in texts]
+
+        class RecordingGenerator:
+            def __init__(self):
+                self.chunks = []
+
+            async def generate(self, question, chunks, answer_language):
+                self.chunks = chunks
+                memory = next(c for c in chunks if c.get("source") == "user_memory")
+                return f"remembered: {memory['text']}"
+
+        async with sessions()() as session:
+            await session.execute(delete(UserMemory))
+            await session.execute(delete(UserMemorySetting))
+            await session.commit()
+            andi, _ = await _people(session)
+            await set_enabled(session, user=andi, enabled=True)
+            await remember(session, user=andi, text="Andi prefers concise bullet answers")
+            conv = await create_conversation(session, user=andi, title="Memory chat")
+            generator = RecordingGenerator()
+
+            result = await send_message(
+                session,
+                user=andi,
+                conversation_id=conv.id,
+                question="How should you answer me?",
+                embedder=FakeEmbedder(),
+                answer_generator=generator,
+                scope="this_document",
+            )
+
+            assert result["answer"] == "remembered: Andi prefers concise bullet answers"
+            assert result["citations"] == []  # memory context is not a document/source citation
+            assert result["memory"] == {"used": True, "count": 1}
+            assert generator.chunks[0]["source"] == "user_memory"
+            assert generator.chunks[0]["document"] == "User memory"
+
+    _migrate()
+    asyncio.run(run())
+
+
 def test_memory_routes_are_wired():
     from e2eai.main import app
 
