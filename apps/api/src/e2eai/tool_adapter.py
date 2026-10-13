@@ -115,3 +115,34 @@ def check_registry_contract(registry: ToolAdapterRegistry) -> None:
     """Assert every registered adapter passes the contract and names are unique."""
     for registered in registry.all():
         check_adapter_contract(registered.adapter)
+
+
+async def run_tool_safely(registry: ToolAdapterRegistry, name: str, input: dict, *, timeout: float = 60.0) -> dict:
+    """Run a Lab tool so that its failure degrades only its own feature (NFR-19).
+
+    Never raises into the caller (chat stays up): a missing tool is ``unavailable``; a tool error,
+    timeout or open circuit breaker is ``degraded`` with a short reason code. Exception text, hosts and
+    keys are never copied into the result. Each tool has its own breaker (label ``lab:<name>``), so one
+    broken tool cannot block another. Guardrails marked mandatory are handled elsewhere and still block.
+    """
+    import asyncio
+
+    from .core.resilience import breaker_for
+
+    tool = registry.get(name)
+    if tool is None:
+        return {"status": "unavailable", "tool": name, "reason": "tool_not_installed"}
+    breaker = breaker_for(f"lab-tool:{name}", f"lab:{name}")
+    if not breaker.allow():
+        return {"status": "degraded", "tool": name, "reason": "tool_circuit_open",
+                "retry_after": breaker.retry_after()}
+    try:
+        result = await asyncio.wait_for(tool.run(input), timeout=timeout)
+    except TimeoutError:
+        breaker.record_failure()
+        return {"status": "degraded", "tool": name, "reason": "tool_timeout"}
+    except Exception:  # noqa: BLE001 - a Lab tool must never take the caller down; details are dropped
+        breaker.record_failure()
+        return {"status": "degraded", "tool": name, "reason": "tool_error"}
+    breaker.record_success()
+    return {"status": "ok", "tool": name, "result": result}

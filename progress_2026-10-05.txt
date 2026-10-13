@@ -2307,3 +2307,10 @@ HOW TO RESUME
   - TDD / RED: `cd cli && uv run pytest -q tests/test_no_telemetry_nfr12.py` -> 2 failed (KeyError for both vars). GREEN: 6 passed (includes a new check that every published port starts with `${BIND_ADDRESS}`).
   - Adjacent: `uv run pytest -q tests/test_no_telemetry_nfr12.py tests/test_profiles.py tests/test_airgap.py tests/test_supply_chain_nfr9.py tests/test_wizard.py tests/test_backup_nfr6.py` -> 60 passed, 1 skipped. Compose not restarted live. Heavy gates skipped.
   - Not done: live egress-block verification; Keycloak/Postgres/Valkey/SeaweedFS have no verified telemetry settings to add (re-check on version bumps).
+
+- Lab tools degrade instead of taking chat down (NFR-19, FR-F8) (2026-10-13, cron):
+  - Hermes worked manually. Codex unused. Covers the "Lab tools" part of the NFR-19 rule (VLM was done earlier; guardrail `mandatory` already existed).
+  - Added `tool_adapter.run_tool_safely(registry, name, input, timeout=60)`: unknown tool -> `unavailable/tool_not_installed`; adapter exception -> `degraded/tool_error`; `asyncio.wait_for` timeout -> `degraded/tool_timeout`; after 5 consecutive failures the per-tool breaker (`breaker_for("lab-tool:<name>", "lab:<name>")`) opens -> `degraded/tool_circuit_open` + `retry_after` without calling the tool; success closes it. Results carry reason codes only (no exception text, host, key). One broken tool does not affect another.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_lab_tool_degrade_nfr19.py` -> collection ImportError. GREEN: 6 passed.
+  - Adjacent: `uv run pytest -q tests/test_lab_tool_degrade_nfr19.py tests/test_us_tool_adapter_p1.py tests/test_circuit_breaker_nfr19.py tests/test_metrics_nfr16.py` -> 26 passed. Heavy gates skipped.
+  - Not done: routing the existing eval-lab runners through `run_tool_safely` (no real container-backed adapters exist yet); Langfuse opt-in tool.
