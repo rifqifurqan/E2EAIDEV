@@ -166,6 +166,8 @@ Rules for every cron tick:
 
 96. [x] [NFR-19] Guardrail outage: mandatory guard blocks with 503, optional guard degrades (audited, not cached). Completed in `guardrails.py` + `retrieval.py`; see progress_2026-10-05.txt. Follow-up: per-bot mandatory flag; same rule for VLM/Langfuse/Lab tools.
 
+97. [x] [NFR-7] No plaintext credentials in the database: schema allowlist guard + live scan against `.env` secret values (`tests/test_no_plaintext_credentials_nfr7.py`); see progress_2026-10-05.txt. Follow-up: encryption at rest / TLS (deployment).
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.
