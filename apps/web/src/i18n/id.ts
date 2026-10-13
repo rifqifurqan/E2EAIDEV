@@ -84,6 +84,13 @@ const id: Dictionary = {
     runsLoadFailed: "Gagal memuat data.",
     noLeakRun: "Belum ada eksekusi uji kebocoran izin. Jalankan suite kebocoran izin untuk melihat hasil.",
     leakProbes: "Probe",
+    datasetName: "Nama dataset",
+    datasetItems: "Item (array JSON)",
+    createDataset: "Buat dataset",
+    itemsInvalid: "Item harus berupa array JSON dengan minimal satu item.",
+    createFailed: "Gagal membuat dataset.",
+    runFailed: "Gagal menjalankan evaluasi.",
+    runTarget: "Target evaluasi",
   },
   bots: {
     title: "Rilis Bot",

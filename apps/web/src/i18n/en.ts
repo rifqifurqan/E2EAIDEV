@@ -82,6 +82,13 @@ const en = {
     runsLoadFailed: "Could not load data.",
     noLeakRun: "No permission-leak run yet. Run the permission-leak suite to see results.",
     leakProbes: "Probes",
+    datasetName: "Dataset name",
+    datasetItems: "Items (JSON array)",
+    createDataset: "Create dataset",
+    itemsInvalid: "Items must be a JSON array with at least one item.",
+    createFailed: "Could not create the dataset.",
+    runFailed: "Could not run the evaluation.",
+    runTarget: "Evaluation target",
   },
   bots: {
     title: "Bot Release",

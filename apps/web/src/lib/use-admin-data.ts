@@ -10,7 +10,7 @@ export type LoadState<T> =
   | { kind: "error" };
 
 /** Loads admin-scoped data once; maps 401/403 to "forbidden" so screens never crash. */
-export function useAdminData<T>(load: () => Promise<T>): LoadState<T> {
+export function useAdminData<T>(load: () => Promise<T>, reloadKey = 0): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ kind: "loading" });
   useEffect(() => {
     let cancelled = false;
@@ -28,6 +28,6 @@ export function useAdminData<T>(load: () => Promise<T>): LoadState<T> {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reloadKey]);
   return state;
 }

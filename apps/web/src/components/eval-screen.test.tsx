@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { EvalScreen } from "./eval-screen";
 import { I18nProvider } from "@/i18n/context";
 
 const apiMock = vi.hoisted(() => ({
   listEvalRuns: vi.fn(),
   listEvalDatasets: vi.fn(),
+  createDataset: vi.fn(),
+  runEval: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -21,12 +24,19 @@ function renderEval(locale: "en" | "id" = "en") {
   );
 }
 
+function fireJson(el: HTMLElement, value: string) {
+  // user.type treats "{" / "[" as special key syntax; set the value directly instead.
+  fireEvent.change(el, { target: { value } });
+}
+
 describe("EvalScreen", () => {
   beforeEach(() => {
     apiMock.listEvalRuns.mockReset();
     apiMock.listEvalRuns.mockResolvedValue({ runs: [], next_cursor: null });
     apiMock.listEvalDatasets.mockReset();
     apiMock.listEvalDatasets.mockResolvedValue({ datasets: [], next_cursor: null });
+    apiMock.createDataset.mockReset();
+    apiMock.runEval.mockReset();
   });
 
   it("lists datasets with version, source and item count", async () => {
@@ -153,5 +163,82 @@ describe("EvalScreen", () => {
   it("shows the no-leak-run notice in Indonesian", async () => {
     renderEval("id");
     expect(await screen.findByText(/belum ada eksekusi uji kebocoran izin/i)).toBeInTheDocument();
+  });
+  it("creates a dataset from the form and refreshes the list", async () => {
+    const user = userEvent.setup();
+    apiMock.createDataset.mockResolvedValue({ id: "d9", name: "smoke", version: 1, items: 1 });
+    renderEval();
+    await screen.findByText(/no datasets yet/i);
+    apiMock.listEvalDatasets.mockResolvedValue({
+      datasets: [{ id: "d9", name: "smoke", version: 1, source: "manual", item_count: 1, created_at: null }],
+      next_cursor: null,
+    });
+    await user.click(screen.getByRole("button", { name: /new dataset/i }));
+    await user.type(screen.getByLabelText(/dataset name/i), "smoke");
+    fireJson(screen.getByLabelText(/items \(json array\)/i), '[{"question":"q","expected_answer":"a","answer":"a"}]');
+    await user.click(screen.getByRole("button", { name: /create dataset/i }));
+    await waitFor(() =>
+      expect(apiMock.createDataset).toHaveBeenCalledWith("smoke", "manual", [
+        { question: "q", expected_answer: "a", answer: "a" },
+      ]),
+    );
+    expect(await screen.findByText(/v1 · manual · 1/)).toBeInTheDocument();
+  });
+
+  it("rejects invalid dataset JSON without calling the API", async () => {
+    const user = userEvent.setup();
+    renderEval();
+    await user.click(screen.getByRole("button", { name: /new dataset/i }));
+    await user.type(screen.getByLabelText(/dataset name/i), "bad");
+    fireJson(screen.getByLabelText(/items \(json array\)/i), "{not json");
+    await user.click(screen.getByRole("button", { name: /create dataset/i }));
+    expect(await screen.findByText(/items must be a json array/i)).toBeInTheDocument();
+    expect(apiMock.createDataset).not.toHaveBeenCalled();
+  });
+
+  it("runs an evaluation on the selected dataset and refreshes runs", async () => {
+    const user = userEvent.setup();
+    apiMock.listEvalDatasets.mockResolvedValue({
+      datasets: [{ id: "d1", name: "permission-smoke", version: 2, source: "synthetic", item_count: 14, created_at: null }],
+      next_cursor: null,
+    });
+    apiMock.runEval.mockResolvedValue({ id: "r7", adapter: "ragas.local", metrics: {} });
+    renderEval();
+    await screen.findByText("permission-smoke");
+    apiMock.listEvalRuns.mockResolvedValue({
+      runs: [{ id: "r7", dataset_id: "d1", adapter: "ragas.local", status: "completed", metrics: { answer_correctness: 1 }, created_at: null }],
+      next_cursor: null,
+    });
+    await user.click(screen.getByRole("button", { name: /run evaluation/i }));
+    await waitFor(() => expect(apiMock.runEval).toHaveBeenCalledWith("d1", "ragas.local"));
+    expect(await screen.findByText(/answer_correctness: 1/)).toBeInTheDocument();
+  });
+
+  it("disables run evaluation when there are no datasets", async () => {
+    renderEval();
+    await screen.findByText(/no datasets yet/i);
+    expect(screen.getByRole("button", { name: /run evaluation/i })).toBeDisabled();
+  });
+
+  it("shows a generic error when running the evaluation fails", async () => {
+    const user = userEvent.setup();
+    apiMock.listEvalDatasets.mockResolvedValue({
+      datasets: [{ id: "d1", name: "x", version: 1, source: "manual", item_count: 1, created_at: null }],
+      next_cursor: null,
+    });
+    apiMock.runEval.mockRejectedValue(new Error("boom: internal stack"));
+    renderEval();
+    await screen.findByText("x");
+    await user.click(screen.getByRole("button", { name: /run evaluation/i }));
+    const alert = await screen.findByText(/could not run the evaluation/i);
+    expect(alert).toBeInTheDocument();
+    expect(screen.queryByText(/internal stack/i)).not.toBeInTheDocument();
+  });
+
+  it("labels the dataset form in Indonesian", async () => {
+    const user = userEvent.setup();
+    renderEval("id");
+    await user.click(screen.getByRole("button", { name: /dataset baru/i }));
+    expect(screen.getByLabelText(/nama dataset/i)).toBeInTheDocument();
   });
 });

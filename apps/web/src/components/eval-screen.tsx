@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useI18n } from "@/i18n/context";
 import { api, type EvalRunSummary } from "@/lib/api-client";
 import { useAdminData } from "@/lib/use-admin-data";
@@ -33,8 +34,59 @@ function LeakSummary({ runs }: { runs: EvalRunSummary[] }) {
 
 export function EvalScreen() {
   const { t } = useI18n();
-  const runs = useAdminData(() => api.listEvalRuns());
-  const datasets = useAdminData(() => api.listEvalDatasets());
+  const [reloadKey, setReloadKey] = useState(0);
+  const runs = useAdminData(() => api.listEvalRuns(), reloadKey);
+  const datasets = useAdminData(() => api.listEvalDatasets(), reloadKey);
+  const [formOpen, setFormOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [itemsText, setItemsText] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [runError, setRunError] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const firstDataset =
+    datasets.kind === "ready" && datasets.data.datasets.length > 0 ? datasets.data.datasets[0] : null;
+
+  async function submitDataset(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    let items: unknown;
+    try {
+      items = JSON.parse(itemsText);
+    } catch {
+      items = null;
+    }
+    if (!Array.isArray(items) || items.length === 0) {
+      setFormError(t.eval.itemsInvalid);
+      return;
+    }
+    setFormError(null);
+    setBusy(true);
+    try {
+      await api.createDataset(name.trim(), "manual", items);
+      setName("");
+      setItemsText("");
+      setFormOpen(false);
+      setReloadKey((key) => key + 1);
+    } catch {
+      setFormError(t.eval.createFailed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runLatest() {
+    if (firstDataset === null) return;
+    setRunError(false);
+    setBusy(true);
+    try {
+      await api.runEval(firstDataset.id, "ragas.local");
+      setReloadKey((key) => key + 1);
+    } catch {
+      setRunError(true);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <section>
@@ -43,17 +95,67 @@ export function EvalScreen() {
       <div className="mb-4 flex flex-wrap gap-2">
         <button
           type="button"
+          onClick={() => setFormOpen((open) => !open)}
           className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           {t.eval.newDataset}
         </button>
         <button
           type="button"
-          className="rounded border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+          onClick={runLatest}
+          disabled={firstDataset === null || busy}
+          className="rounded border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
         >
           {t.eval.runEval}
         </button>
       </div>
+
+      {runError ? (
+        <p role="alert" className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-sm">
+          {t.eval.runFailed}
+        </p>
+      ) : null}
+      {firstDataset !== null ? (
+        <p className="mb-4 text-xs text-gray-500">{`${t.eval.runTarget}: ${firstDataset.name}`}</p>
+      ) : null}
+
+      {formOpen ? (
+        <form onSubmit={submitDataset} className="mb-6 rounded-lg border border-gray-200 p-4">
+          <label className="block text-sm font-medium" htmlFor="dataset-name">
+            {t.eval.datasetName}
+            <input
+              id="dataset-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+              className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="mt-3 block text-sm font-medium" htmlFor="dataset-items">
+            {t.eval.datasetItems}
+            <textarea
+              id="dataset-items"
+              value={itemsText}
+              onChange={(event) => setItemsText(event.target.value)}
+              required
+              rows={5}
+              className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs"
+            />
+          </label>
+          {formError !== null ? (
+            <p role="alert" className="mt-2 text-sm text-red-700">
+              {formError}
+            </p>
+          ) : null}
+          <button
+            type="submit"
+            disabled={busy}
+            className="mt-3 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {t.eval.createDataset}
+          </button>
+        </form>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Datasets */}
