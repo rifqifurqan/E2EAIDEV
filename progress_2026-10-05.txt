@@ -2516,3 +2516,7 @@ HOW TO RESUME
   - Hermes worked manually. Codex unused. The shared `useLoadMore` hook + `LoadMore` control now cover the Improve flywheel queue (`listFlywheelPage`, status counts stay from the first page), Build model registry (`listModelsPage`), Data due reviews (`listDueReviewsPage`) and Release bot approvals (`listBotApprovalsPage`); each appends the next page via `next_cursor` and hides the button at the end. Removed an unused eslint-disable in the hook.
   - TDD / RED: one new load-more test per screen -> 4 failed (no button). GREEN: full web suite `pnpm vitest run` -> 19 files / 244 passed; `pnpm run typecheck` ok; `pnpm lint` ok. API untouched; build and live browser run skipped.
   - Not done: load-more on Test-stage eval runs/datasets lists (two lists in one screen).
+
+- Load-more on Test-stage eval runs and datasets (NFR-20/FR-T2) (2026-10-14, cron):
+  - Hermes worked manually. Codex unused. `EvalScreen` uses two independent `useLoadMore` instances (`listEvalRunsPage`, `listEvalDatasetsPage`), each with its own button inside its own panel, so paging one list never calls the other endpoint. Load-more is now on every cursor-paginated list screen in the web app (incidents, flywheel, model registry, due reviews, bot approvals, eval runs, eval datasets). The permission-leak summary still reads the loaded run pages.
+  - TDD / RED: two new eval-screen tests -> 2 failed (no button). GREEN: full web suite `pnpm vitest run` -> 19 files / 246 passed; `pnpm run typecheck` ok; `pnpm lint` ok; `pnpm build` ok. API untouched; live browser run skipped.

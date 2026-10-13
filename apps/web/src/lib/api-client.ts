@@ -586,7 +586,11 @@ export const api = {
   // Release (scope enforced by the server)
   // Test (admin-only on the server)
   listEvalDatasets: () => apiFetch<EvalDatasetList>(ENDPOINTS.evalDatasets),
+  listEvalDatasetsPage: (cursor: string) =>
+    apiFetch<EvalDatasetList>(`${ENDPOINTS.evalDatasets}?cursor=${encodeURIComponent(cursor)}`),
   listEvalRuns: () => apiFetch<EvalRunList>(ENDPOINTS.evalRuns),
+  listEvalRunsPage: (cursor: string) =>
+    apiFetch<EvalRunList>(`${ENDPOINTS.evalRuns}?cursor=${encodeURIComponent(cursor)}`),
 
   listBotApprovals: () => apiFetch<BotApprovalList>(ENDPOINTS.botApprovals),
   listBotApprovalsPage: (cursor: string) =>

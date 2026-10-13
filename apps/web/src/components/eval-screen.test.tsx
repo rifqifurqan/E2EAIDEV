@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EvalScreen } from "./eval-screen";
 import { I18nProvider } from "@/i18n/context";
@@ -7,6 +7,8 @@ import { I18nProvider } from "@/i18n/context";
 const apiMock = vi.hoisted(() => ({
   listEvalRuns: vi.fn(),
   listEvalDatasets: vi.fn(),
+  listEvalRunsPage: vi.fn(),
+  listEvalDatasetsPage: vi.fn(),
   createDataset: vi.fn(),
   runEval: vi.fn(),
 }));
@@ -35,6 +37,8 @@ describe("EvalScreen", () => {
     apiMock.listEvalRuns.mockResolvedValue({ runs: [], next_cursor: null });
     apiMock.listEvalDatasets.mockReset();
     apiMock.listEvalDatasets.mockResolvedValue({ datasets: [], next_cursor: null });
+    apiMock.listEvalRunsPage.mockReset();
+    apiMock.listEvalDatasetsPage.mockReset();
     apiMock.createDataset.mockReset();
     apiMock.runEval.mockReset();
   });
@@ -279,5 +283,34 @@ describe("EvalScreen", () => {
     apiMock.listEvalDatasets.mockResolvedValue(twoDatasets);
     renderEval("id");
     expect(await screen.findByLabelText(/target evaluasi/i)).toBeInTheDocument();
+  });
+
+  it("loads more eval runs with the next cursor inside the runs panel", async () => {
+    const user = userEvent.setup();
+    const run = (id: string, adapter: string) => ({ id, dataset_id: null, adapter, status: "completed", metrics: {}, created_at: null });
+    apiMock.listEvalRuns.mockResolvedValue({ runs: [run("r1", "adapter-page-one")], next_cursor: "run-cur" });
+    apiMock.listEvalRunsPage.mockResolvedValue({ runs: [run("r2", "adapter-page-two")], next_cursor: null });
+    renderEval();
+    await screen.findByText("adapter-page-one");
+    const panel = screen.getByRole("heading", { name: /^evaluation runs$|^runs$/i }).parentElement as HTMLElement;
+    await user.click(within(panel).getByRole("button", { name: /load more/i }));
+    expect(await screen.findByText("adapter-page-two")).toBeInTheDocument();
+    expect(apiMock.listEvalRunsPage).toHaveBeenCalledWith("run-cur");
+    expect(apiMock.listEvalDatasetsPage).not.toHaveBeenCalled();
+    expect(screen.getByText("adapter-page-one")).toBeInTheDocument();
+  });
+
+  it("loads more datasets with the next cursor inside the datasets panel", async () => {
+    const user = userEvent.setup();
+    const ds = (id: string, name: string) => ({ id, name, version: 1, source: "synthetic", item_count: 1, created_at: null });
+    apiMock.listEvalDatasets.mockResolvedValue({ datasets: [ds("d1", "dataset-page-one")], next_cursor: "ds-cur" });
+    apiMock.listEvalDatasetsPage.mockResolvedValue({ datasets: [ds("d2", "dataset-page-two")], next_cursor: null });
+    renderEval();
+    await screen.findByText("dataset-page-one");
+    const panel = screen.getByRole("heading", { name: /^datasets$/i }).parentElement as HTMLElement;
+    await user.click(within(panel).getByRole("button", { name: /load more/i }));
+    expect(await screen.findByText("dataset-page-two")).toBeInTheDocument();
+    expect(apiMock.listEvalDatasetsPage).toHaveBeenCalledWith("ds-cur");
+    expect(apiMock.listEvalRunsPage).not.toHaveBeenCalled();
   });
 });

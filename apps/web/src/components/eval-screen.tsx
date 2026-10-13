@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useI18n } from "@/i18n/context";
 import { api, type EvalRunSummary } from "@/lib/api-client";
 import { useAdminData } from "@/lib/use-admin-data";
+import { useLoadMore } from "@/lib/use-load-more";
+import { LoadMore } from "./load-more";
 
 const LEAK_ADAPTER = "permission-leak.local";
 
@@ -37,6 +39,22 @@ export function EvalScreen() {
   const [reloadKey, setReloadKey] = useState(0);
   const runs = useAdminData(() => api.listEvalRuns(), reloadKey);
   const datasets = useAdminData(() => api.listEvalDatasets(), reloadKey);
+  const moreRuns = useLoadMore(
+    runs.kind === "ready" ? runs.data.runs : undefined,
+    runs.kind === "ready" ? runs.data.next_cursor : null,
+    async (cursor: string) => {
+      const page = await api.listEvalRunsPage(cursor);
+      return { items: page.runs, next_cursor: page.next_cursor };
+    },
+  );
+  const moreDatasets = useLoadMore(
+    datasets.kind === "ready" ? datasets.data.datasets : undefined,
+    datasets.kind === "ready" ? datasets.data.next_cursor : null,
+    async (cursor: string) => {
+      const page = await api.listEvalDatasetsPage(cursor);
+      return { items: page.datasets, next_cursor: page.next_cursor };
+    },
+  );
   const [formOpen, setFormOpen] = useState(false);
   const [name, setName] = useState("");
   const [itemsText, setItemsText] = useState("");
@@ -189,11 +207,11 @@ export function EvalScreen() {
             </p>
           ) : null}
           {datasets.kind === "ready" ? (
-            datasets.data.datasets.length === 0 ? (
+            moreDatasets.items.length === 0 ? (
               <p className="text-sm text-gray-500">{t.eval.noDatasets}</p>
             ) : (
               <ul className="space-y-2 text-sm">
-                {datasets.data.datasets.map((dataset) => (
+                {moreDatasets.items.map((dataset) => (
                   <li key={dataset.id} className="rounded border border-gray-200 p-2">
                     <span className="mr-2">{dataset.name}</span>
                     <span className="text-xs text-gray-500">{`v${dataset.version} · ${dataset.source} · ${dataset.item_count}`}</span>
@@ -201,6 +219,14 @@ export function EvalScreen() {
                 ))}
               </ul>
             )
+          ) : null}
+          {datasets.kind === "ready" ? (
+            <LoadMore
+              hasMore={moreDatasets.hasMore}
+              busy={moreDatasets.busy}
+              failed={moreDatasets.failed}
+              onLoadMore={moreDatasets.loadMore}
+            />
           ) : null}
         </div>
 
@@ -219,11 +245,11 @@ export function EvalScreen() {
             </p>
           ) : null}
           {runs.kind === "ready" ? (
-            runs.data.runs.length === 0 ? (
+            moreRuns.items.length === 0 ? (
               <p className="text-sm text-gray-500">{t.eval.noRuns}</p>
             ) : (
               <ul className="space-y-2 text-sm">
-                {runs.data.runs.map((run) => (
+                {moreRuns.items.map((run) => (
                   <li key={run.id} className="rounded border border-gray-200 p-2">
                     <span className="mr-2">{run.adapter}</span>
                     <span className="mr-2 font-mono text-xs">{run.status}</span>
@@ -236,6 +262,9 @@ export function EvalScreen() {
                 ))}
               </ul>
             )
+          ) : null}
+          {runs.kind === "ready" ? (
+            <LoadMore hasMore={moreRuns.hasMore} busy={moreRuns.busy} failed={moreRuns.failed} onLoadMore={moreRuns.loadMore} />
           ) : null}
         </div>
       </div>
