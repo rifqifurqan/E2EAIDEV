@@ -2377,3 +2377,15 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_vector_purge_reconcile_fr_d9.py` -> 3 failed (module missing). GREEN: 3 passed (the audit log is shared, so assertions allow pending items left by earlier tests).
   - Adjacent: `uv run pytest -q tests/test_vector_purge_reconcile_fr_d9.py tests/test_purge_vector_store_fr_d9.py tests/test_vector_store_fr_r3.py tests/test_configured_vector_store_fr_r3.py tests/test_retrieval_vector_store_fr_r3.py tests/test_docs_fr_f22.py tests/test_legal_hold_fr_d13.py tests/test_us_document_lifecycle.py tests/test_no_plaintext_credentials_nfr7.py tests/test_audit_columns_nfr20.py` -> 38 passed; `scripts/generate_api_reference.py` regenerated (163 paths); `scripts/validate_docs.py` PASS. Heavy gates skipped.
   - Not done: scheduled invocation (needs the worker/beat); live Qdrant outage drill.
+
+- Backlog audit (2026-10-13, cron, this run):
+  - Audited `PRD_CRON_BACKLOG.md` top to bottom. All 127 items in the active priority
+    queue (sections A-I) are `[x]`. The only remaining items are the two `[x] [DEFERRED]`
+    entries in section Z (FR-RL3 CI integration needs GitHub `workflow` scope; FR-X3
+    external OAuth needs external IdP/credentials) — both blocked on external setup.
+  - Verified git state is clean on main, in sync with origin/main (HEAD
+    2811349df86d50bb8f768864a4147b7bdee65466). No uncommitted work.
+  - Verified baseline tests still pass: `cd apps/api && uv run pytest -q -k
+    "pagination_nfr20 or idempotency_nfr20 or http_hardening_nfr"` -> 24 passed.
+  - No new code committed this run: the backlog is complete and all remaining work is
+    either deferred (external/permissions) or tracked as follow-ups under existing items.
