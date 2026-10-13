@@ -1,5 +1,5 @@
-import { AdminScreen } from "@/components/admin-screen";
+import { OperateScreen } from "@/components/operate-screen";
 
 export default function OperatePage() {
-  return <AdminScreen />;
+  return <OperateScreen />;
 }

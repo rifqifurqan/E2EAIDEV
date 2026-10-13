@@ -125,6 +125,35 @@ export interface DeactivateResponse {
   sessions_purged: number;
 }
 
+export interface FlywheelItem {
+  id: string;
+  source: string;
+  status: string;
+  question: string | null;
+  correction: string | null;
+  reason: string | null;
+  target: string | null;
+}
+
+export interface FlywheelQueue {
+  by_status: Record<string, number>;
+  by_source: Record<string, number>;
+  items: FlywheelItem[];
+  next_cursor: string | null;
+}
+
+export interface AiIncident {
+  id: string;
+  title: string;
+  severity: string;
+  status: string;
+}
+
+export interface IncidentList {
+  incidents: AiIncident[];
+  next_cursor: string | null;
+}
+
 // ─── Fetch helper ───────────────────────────────────────────────────────
 
 export class ApiError extends Error {
@@ -213,6 +242,8 @@ export const ENDPOINTS = {
   botScope: (botId: string) => `/bots/${botId}/scope`,
   botAsk: (botId: string) => `/bots/${botId}/ask`,
   deactivateUser: (userId: string) => `/users/${userId}/deactivate`,
+  incidents: "/incidents",
+  flywheel: "/improve/flywheel",
 } as const;
 
 // ─── Client functions ───────────────────────────────────────────────────
@@ -387,6 +418,10 @@ export const api = {
       method: "POST",
       body: { question },
     }),
+
+  // Operate / Improve (admin-only on the server)
+  listIncidents: () => apiFetch<IncidentList>(ENDPOINTS.incidents),
+  listFlywheel: () => apiFetch<FlywheelQueue>(ENDPOINTS.flywheel),
 
   // Admin
   deactivateUser: (userId: string, input: DeactivateInput) =>

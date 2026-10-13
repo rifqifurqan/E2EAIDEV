@@ -112,6 +112,22 @@ const en = {
     divisions: "Divisions",
     teams: "Teams",
   },
+  operate: {
+    incidentsTitle: "AI Incidents",
+    noIncidents: "No open AI incidents.",
+    loading: "Loading...",
+    adminOnly: "This view is available to administrators only.",
+    loadFailed: "Could not load data.",
+  },
+  improve: {
+    title: "Feedback Flywheel",
+    noItems: "No feedback items yet.",
+    byStatus: "By status",
+    queue: "Triage queue",
+    loading: "Loading...",
+    adminOnly: "This view is available to administrators only.",
+    loadFailed: "Could not load data.",
+  },
   whyItMatters: {
     title: "Why It Matters in Enterprise",
     frameworks: "Related Frameworks & Regulations",

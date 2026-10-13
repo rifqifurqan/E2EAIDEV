@@ -114,6 +114,22 @@ const id: Dictionary = {
     divisions: "Divisi",
     teams: "Tim",
   },
+  operate: {
+    incidentsTitle: "Insiden AI",
+    noIncidents: "Tidak ada insiden AI terbuka.",
+    loading: "Memuat...",
+    adminOnly: "Tampilan ini hanya tersedia untuk administrator.",
+    loadFailed: "Gagal memuat data.",
+  },
+  improve: {
+    title: "Flywheel Umpan Balik",
+    noItems: "Belum ada item umpan balik.",
+    byStatus: "Menurut status",
+    queue: "Antrean triase",
+    loading: "Memuat...",
+    adminOnly: "Tampilan ini hanya tersedia untuk administrator.",
+    loadFailed: "Gagal memuat data.",
+  },
   whyItMatters: {
     title: "Mengapa Penting di Perusahaan",
     frameworks: "Kerangka Kerja & Regulasi Terkait",

@@ -2397,3 +2397,9 @@ HOW TO RESUME
   - Tests (RED first): `cd apps/web && pnpm vitest run` -> 13 files / 84 passed; `pnpm run typecheck` ok; `pnpm lint` ok; `pnpm build` ok (added dev deps eslint-plugin-react-hooks, @next/eslint-plugin-next@15.5.27 which `next build` linting needed).
   - Headed Playwright live flow (Chrome, headless=false): hydration, login, session persisted + restored on reload, Plan intake submit, document upload (real ingest + embed), share, chat answer with citation, admin export through web-origin proxy -> 9/9 PASS.
   - Not covered: Data/Build/Test/Release/Operate/Improve remain mostly static stages; production deploy proxy target (rewrite is hardcoded to 127.0.0.1:8000).
+
+- Operate and Improve stages wired to the live API (FR-O8, FR-I1) (2026-10-14, cron):
+  - Hermes worked manually. Codex unused. Closes the "Operate/Improve remain static stages" gap from the live-web remediation note.
+  - `/operate` now renders `OperateScreen` (existing admin tools + AI incidents list from `GET /api/v1/incidents`); `/improve` renders `ImproveScreen` (status counts + triage queue from `GET /api/v1/improve/flywheel`). Both use `useAdminData`, which maps 401/403 to an admin-only notice and other failures to a generic error (no crash, no server text shown). EN/ID dictionary keys added (`operate.*`, `improve.*`).
+  - TDD / RED: `pnpm vitest run src/components/improve-screen.test.tsx src/components/operate-screen.test.tsx src/lib/api-client.test.ts` -> 3 files failed (modules/endpoints missing). GREEN: full web suite `pnpm vitest run` -> 15 files / 93 passed; `pnpm run typecheck` ok; `pnpm lint` ok. Build and live browser run skipped (not needed for a data-list slice).
+  - Not done: Data/Build stages remain placeholders; create/triage actions in the UI; pagination "load more" via `next_cursor`; live browser check as admin.

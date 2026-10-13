@@ -112,3 +112,10 @@ describe("no assistant-cloud dependency", () => {
     expect(moduleKeys).not.toContain("AssistantCloud");
   });
 });
+
+describe("Operate and Improve endpoints", () => {
+  it("match backend routes", () => {
+    expect(ENDPOINTS.incidents).toBe("/incidents");
+    expect(ENDPOINTS.flywheel).toBe("/improve/flywheel");
+  });
+});

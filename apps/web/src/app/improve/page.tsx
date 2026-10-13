@@ -1,5 +1,5 @@
-import { StagePlaceholder } from "@/components/stage-placeholder";
+import { ImproveScreen } from "@/components/improve-screen";
 
 export default function ImprovePage() {
-  return <StagePlaceholder stage="improve" />;
+  return <ImproveScreen />;
 }
