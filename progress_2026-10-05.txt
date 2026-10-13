@@ -2300,3 +2300,10 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_dsr_self_service_nfr10.py` -> 3 failed (functions/routes missing). GREEN: 3 passed (Andi's export has no Budi text; Budi sees none of Andi's ledger rows).
   - Adjacent: `uv run pytest -q tests/test_dsr_self_service_nfr10.py tests/test_data_subject_nfr10.py tests/test_dsr_ledger_nfr10.py tests/test_dsr_reminders_nfr10.py tests/test_dsr_erase_flywheel_nfr10.py tests/test_no_plaintext_credentials_nfr7.py` -> 19 passed; app ok; API reference regenerated, `test_docs_fr_f22.py` 3 passed, `validate_docs.py` PASS. Heavy gates skipped.
   - Not done: erasure of traces/vectors; web UI for the self-service page.
+
+- Telemetry opt-outs for the other compose services (NFR-12) (2026-10-13, cron):
+  - Hermes worked manually. Codex unused. Variables checked against upstream docs first: `OLLAMA_NO_CLOUD` (docs.ollama.com FAQ, since v0.16.2; pinned image is 0.35.1) and OpenFGA `OPENFGA_TRACE_ENABLED` (openfga.dev configuration; tracing defaults to false, now explicit). OpenFGA metrics stay on its internal port 2112, which compose does not publish. Valkey, Postgres, SeaweedFS, Keycloak and LiteLLM were not given invented flags (no verified telemetry switch beyond the existing LiteLLM one).
+  - `deploy/compose/compose.yaml`: `ollama` gets `environment: {OLLAMA_NO_CLOUD: "1"}`; `openfga-migrate`/`openfga` share `OPENFGA_TRACE_ENABLED: "false"` through the YAML anchor.
+  - TDD / RED: `cd cli && uv run pytest -q tests/test_no_telemetry_nfr12.py` -> 2 failed (KeyError for both vars). GREEN: 6 passed (includes a new check that every published port starts with `${BIND_ADDRESS}`).
+  - Adjacent: `uv run pytest -q tests/test_no_telemetry_nfr12.py tests/test_profiles.py tests/test_airgap.py tests/test_supply_chain_nfr9.py tests/test_wizard.py tests/test_backup_nfr6.py` -> 60 passed, 1 skipped. Compose not restarted live. Heavy gates skipped.
+  - Not done: live egress-block verification; Keycloak/Postgres/Valkey/SeaweedFS have no verified telemetry settings to add (re-check on version bumps).

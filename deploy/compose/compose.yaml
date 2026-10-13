@@ -39,6 +39,7 @@ services:
     image: ${E2EAI_IMAGE_OPENFGA:?run the wizard first}
     command: migrate
     environment: &openfga-env
+      OPENFGA_TRACE_ENABLED: "false"  # NFR-12: no traces leave the host
       OPENFGA_DATASTORE_ENGINE: postgres
       OPENFGA_DATASTORE_URI: postgres://openfga:${OPENFGA_DB_PASSWORD}@postgres:5432/openfga?sslmode=disable
     depends_on:
@@ -89,6 +90,7 @@ services:
   ollama:
     profiles: [ollama]
     image: ${E2EAI_IMAGE_OLLAMA:-}
+    environment: {OLLAMA_NO_CLOUD: "1"}  # NFR-12: local only, no Ollama cloud features
     volumes: [ollamadata:/root/.ollama]
     ports: ["${BIND_ADDRESS}:${OLLAMA_PORT}:11434"]
     restart: unless-stopped

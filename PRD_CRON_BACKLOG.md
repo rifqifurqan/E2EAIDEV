@@ -205,6 +205,8 @@ Rules for every cron tick:
 
 116. [x] [NFR-10] Self-service data-subject requests: `GET /api/v1/privacy/me/export` (own data only, audited `dsr.self_export` with counts), `POST/GET /api/v1/privacy/me/requests` (file/list own requests; erase stays an admin action after offboarding). See progress_2026-10-05.txt.
 
+117. [x] [NFR-12] Telemetry opt-outs for the remaining compose services: `OLLAMA_NO_CLOUD=1` (ollama service) and `OPENFGA_TRACE_ENABLED=false` (openfga + migrate), plus a test that every published port binds to `${BIND_ADDRESS}`. Variables verified against upstream docs. See progress_2026-10-05.txt. Live egress-block test still open.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.
