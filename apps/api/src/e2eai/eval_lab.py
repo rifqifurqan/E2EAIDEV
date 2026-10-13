@@ -907,6 +907,35 @@ async def list_runs_page(
     ], nxt
 
 
+async def list_datasets_page(
+    session: AsyncSession, *, actor: User, limit: int | None = None, cursor: str | None = None,
+) -> tuple[list[dict], str | None]:
+    """FR-T1/NFR-20: admin-only keyset-paginated dataset summaries (newest first); item contents are never returned."""
+    from .legal_hold import is_admin
+
+    if actor.status != "active" or not await is_admin(session, actor):
+        raise AppError(403, "Not allowed")
+    size = clamp_limit(limit)
+    stmt = select(EvalDataset)
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(EvalDataset.created_at, EvalDataset.id) < tuple_(ts, last_id))
+    stmt = stmt.order_by(EvalDataset.created_at.desc(), EvalDataset.id.desc()).limit(size + 1)
+    rows = list((await session.scalars(stmt)).all())
+    page, nxt = make_page(rows, size, lambda d: (d.created_at, d.id))
+    return [
+        {
+            "id": str(d.id),
+            "name": d.name,
+            "version": d.version,
+            "source": d.source,
+            "item_count": len(d.items or []),
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+        }
+        for d in page
+    ], nxt
+
+
 class DatasetIn(BaseModel):
     name: str
     source: str = "manual"
@@ -975,6 +1004,20 @@ async def tool_catalog_api(sess: dict = Depends(current_session)) -> dict:
     require_scope(sess, "evals")
     # P1 local install detection is conservative; adapters currently wired in-process are marked installed.
     return tool_catalog(installed={"ragas", "promptfoo"})
+
+
+@router.get("/datasets")
+async def list_datasets_api(
+    limit: int | None = None,
+    cursor: str | None = None,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """FR-T1/NFR-20: list eval dataset summaries for admins (cursor-paginated)."""
+    require_scope(sess, "evals")
+    user = await _current_user(db, sess)
+    datasets, next_cursor = await list_datasets_page(db, actor=user, limit=limit, cursor=cursor)
+    return {"datasets": datasets, "next_cursor": next_cursor}
 
 
 @router.post("/datasets")

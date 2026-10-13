@@ -5,6 +5,7 @@ import { I18nProvider } from "@/i18n/context";
 
 const apiMock = vi.hoisted(() => ({
   listEvalRuns: vi.fn(),
+  listEvalDatasets: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -24,6 +25,33 @@ describe("EvalScreen", () => {
   beforeEach(() => {
     apiMock.listEvalRuns.mockReset();
     apiMock.listEvalRuns.mockResolvedValue({ runs: [], next_cursor: null });
+    apiMock.listEvalDatasets.mockReset();
+    apiMock.listEvalDatasets.mockResolvedValue({ datasets: [], next_cursor: null });
+  });
+
+  it("lists datasets with version, source and item count", async () => {
+    apiMock.listEvalDatasets.mockResolvedValue({
+      datasets: [
+        { id: "d1", name: "permission-smoke", version: 2, source: "synthetic", item_count: 14, created_at: null },
+      ],
+      next_cursor: null,
+    });
+    renderEval();
+    expect(await screen.findByText("permission-smoke")).toBeInTheDocument();
+    expect(screen.getByText(/v2 · synthetic · 14/)).toBeInTheDocument();
+  });
+
+  it("shows the empty datasets state", async () => {
+    renderEval();
+    expect(await screen.findByText(/no datasets yet/i)).toBeInTheDocument();
+  });
+
+  it("shows an admin-only notice for datasets on 403", async () => {
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.listEvalDatasets.mockRejectedValue(new ApiError(403, "Forbidden"));
+    renderEval();
+    const alerts = await screen.findAllByRole("alert");
+    expect(alerts.length).toBeGreaterThan(0);
   });
 
   it("lists eval runs with adapter, status and metrics", async () => {

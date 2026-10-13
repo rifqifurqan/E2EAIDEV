@@ -7,6 +7,7 @@ import { useAdminData } from "@/lib/use-admin-data";
 export function EvalScreen() {
   const { t } = useI18n();
   const runs = useAdminData(() => api.listEvalRuns());
+  const datasets = useAdminData(() => api.listEvalDatasets());
 
   return (
     <section>
@@ -31,7 +32,31 @@ export function EvalScreen() {
         {/* Datasets */}
         <div className="rounded-lg border border-gray-200 p-4">
           <h2 className="mb-3 text-lg font-semibold">{t.eval.datasets}</h2>
-          <p className="text-sm text-gray-500">{t.eval.noDatasets}</p>
+          {datasets.kind === "loading" ? <p>{t.eval.datasetsLoading}</p> : null}
+          {datasets.kind === "forbidden" ? (
+            <p role="alert" className="rounded border border-yellow-300 bg-yellow-50 p-3 text-sm">
+              {t.eval.datasetsAdminOnly}
+            </p>
+          ) : null}
+          {datasets.kind === "error" ? (
+            <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm">
+              {t.eval.datasetsLoadFailed}
+            </p>
+          ) : null}
+          {datasets.kind === "ready" ? (
+            datasets.data.datasets.length === 0 ? (
+              <p className="text-sm text-gray-500">{t.eval.noDatasets}</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {datasets.data.datasets.map((dataset) => (
+                  <li key={dataset.id} className="rounded border border-gray-200 p-2">
+                    <span className="mr-2">{dataset.name}</span>
+                    <span className="text-xs text-gray-500">{`v${dataset.version} · ${dataset.source} · ${dataset.item_count}`}</span>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : null}
         </div>
 
         {/* Runs */}

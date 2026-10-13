@@ -7,7 +7,7 @@ Requirement: FR-F22 (P1 API reference).
 API title: E2EAIDEV API
 API version: 0.1.0
 Total paths: 163
-Total operations: 178
+Total operations: 179
 
 ## How to regenerate
 
@@ -463,6 +463,12 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: Cost Estimate Api
 - Operation ID: `cost_estimate_api_api_v1_evals_cost_estimate_post`
+- Response status codes: 200, 422
+
+#### GET /api/v1/evals/datasets
+
+- Summary: List Datasets Api
+- Operation ID: `list_datasets_api_api_v1_evals_datasets_get`
 - Response status codes: 200, 422
 
 #### POST /api/v1/evals/datasets

@@ -235,6 +235,8 @@ Rules for every cron tick:
 
 131. [x] [FR-T2/NFR-20] Eval runs list API + Test web stage live data. Completed: admin-only cursor-paginated `GET /api/v1/evals/runs` (summaries, no item results) and `EvalScreen` run list, EN/ID; API 17 adjacent tests passed, web 111 passed; see progress_2026-10-05.txt. Follow-up: datasets list, run/new-dataset actions, permission-leak summary.
 
+132. [x] [FR-T1/NFR-20] Eval datasets list API + Test web stage datasets panel. Completed: admin-only cursor-paginated `GET /api/v1/evals/datasets` (summaries, no item contents) and `EvalScreen` dataset list, EN/ID; API 11 adjacent tests passed, web 114 passed; see progress_2026-10-05.txt. Follow-up: run/new-dataset actions, permission-leak summary.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.

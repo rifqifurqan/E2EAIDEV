@@ -2421,3 +2421,9 @@ HOW TO RESUME
   - Adjacent: `uv run pytest -q tests/test_eval_runs_list_fr_t2.py tests/test_us_eval_lab_p0.py tests/test_us_evaluator_transparency_p1.py tests/test_online_eval_fr_o3.py tests/test_docs_fr_f22.py tests/test_audit_columns_nfr20.py` -> 17 passed; `scripts/validate_docs.py` PASS; web `pnpm vitest run` -> 17 files / 111 passed; `pnpm run typecheck` ok; `pnpm lint` ok. Heavy gates skipped.
   - Not done: datasets list, run-eval/new-dataset actions, load-more via `next_cursor`, permission-leak summary still static.
 
+- Eval datasets list API + Test web stage datasets panel (FR-T1, NFR-20) (2026-10-14, cron):
+  - Hermes worked manually. Codex unused. `eval_lab.list_datasets_page` (admin-only, keyset-paginated; returns id/name/version/source/item_count/created_at, item contents never exposed) + `GET /api/v1/evals/datasets`. `EvalScreen` datasets panel via `api.listEvalDatasets` (403/401 -> admin-only notice, generic error, empty state, EN/ID). API reference regenerated with `generate_api_reference.py` only.
+  - TDD / RED: `uv run pytest -q tests/test_eval_runs_list_fr_t2.py` -> ImportError (list_datasets_page missing); web `pnpm vitest run src/components/eval-screen.test.tsx` -> 2 failed. GREEN: both pass.
+  - Adjacent: `uv run pytest -q tests/test_eval_runs_list_fr_t2.py tests/test_us_eval_lab_p0.py tests/test_us_evaluator_transparency_p1.py tests/test_docs_fr_f22.py` -> 11 passed; `scripts/validate_docs.py` PASS; web `pnpm vitest run` -> 17 files / 114 passed; `pnpm run typecheck` ok; `pnpm lint` ok. Heavy gates skipped.
+  - Not done: run-eval/new-dataset actions, load-more via `next_cursor`, permission-leak summary still static.
+

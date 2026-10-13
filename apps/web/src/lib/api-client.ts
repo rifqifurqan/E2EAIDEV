@@ -210,6 +210,20 @@ export interface EvalRunSummary {
   created_at: string | null;
 }
 
+export interface EvalDatasetSummary {
+  id: string;
+  name: string;
+  version: number;
+  source: string;
+  item_count: number;
+  created_at: string | null;
+}
+
+export interface EvalDatasetList {
+  datasets: EvalDatasetSummary[];
+  next_cursor: string | null;
+}
+
 export interface EvalRunList {
   runs: EvalRunSummary[];
   next_cursor: string | null;
@@ -493,6 +507,7 @@ export const api = {
 
   // Release (scope enforced by the server)
   // Test (admin-only on the server)
+  listEvalDatasets: () => apiFetch<EvalDatasetList>(ENDPOINTS.evalDatasets),
   listEvalRuns: () => apiFetch<EvalRunList>(ENDPOINTS.evalRuns),
 
   listBotApprovals: () => apiFetch<BotApprovalList>(ENDPOINTS.botApprovals),

@@ -7,7 +7,7 @@ Requirement: FR-F22 (referensi API P1).
 Judul API: E2EAIDEV API
 Versi API: 0.1.0
 Total path: 163
-Total operasi: 178
+Total operasi: 179
 
 ## Cara generate ulang
 
@@ -463,6 +463,12 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 
 - Ringkasan: Cost Estimate Api
 - Operation ID: `cost_estimate_api_api_v1_evals_cost_estimate_post`
+- Kode status respons: 200, 422
+
+#### GET /api/v1/evals/datasets
+
+- Ringkasan: List Datasets Api
+- Operation ID: `list_datasets_api_api_v1_evals_datasets_get`
 - Kode status respons: 200, 422
 
 #### POST /api/v1/evals/datasets
