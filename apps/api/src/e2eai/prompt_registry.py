@@ -4,14 +4,15 @@ import re
 import uuid
 from difflib import unified_diff
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
 from .auth import current_session, require_scope
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import Prompt, PromptLabel, PromptVersion, User, get_session
 
 _VARIABLE_RE = re.compile(r"{{\s*([^{}]+?)\s*}}")
@@ -92,6 +93,22 @@ async def list_prompt_versions(session: AsyncSession, *, prompt_id: uuid.UUID) -
         select(PromptVersion).where(PromptVersion.prompt_id == prompt_id).order_by(PromptVersion.version.asc())
     )).scalars().all()
     return [_version_dict(row) for row in rows]
+
+
+async def list_prompt_versions_page(
+    session: AsyncSession, *, prompt_id: uuid.UUID, limit: int | None = None, cursor: str | None = None
+) -> tuple[list[dict], str | None]:
+    """Keyset-paginated prompt versions (NFR-20): oldest first = version order; the prompt must exist."""
+    await _load_prompt(session, prompt_id)
+    size = clamp_limit(limit)
+    stmt = select(PromptVersion).where(PromptVersion.prompt_id == prompt_id)
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(PromptVersion.created_at, PromptVersion.id) > tuple_(ts, last_id))
+    stmt = stmt.order_by(PromptVersion.created_at.asc(), PromptVersion.id.asc()).limit(size + 1)
+    rows = list((await session.scalars(stmt)).all())
+    page, nxt = make_page(rows, size, lambda v: (v.created_at, v.id))
+    return [_version_dict(row) for row in page], nxt
 
 
 async def set_prompt_label(
@@ -228,9 +245,16 @@ async def add_prompt_version_api(prompt_id: uuid.UUID, body: PromptVersionIn, se
 
 
 @router.get("/{prompt_id}/versions")
-async def list_prompt_versions_api(prompt_id: uuid.UUID, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
+async def list_prompt_versions_api(
+    prompt_id: uuid.UUID,
+    limit: int | None = Query(default=None),
+    cursor: str | None = Query(default=None),
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
     require_scope(sess, "bots")
-    return {"versions": await list_prompt_versions(db, prompt_id=prompt_id)}
+    versions, next_cursor = await list_prompt_versions_page(db, prompt_id=prompt_id, limit=limit, cursor=cursor)
+    return {"versions": versions, "next_cursor": next_cursor}
 
 
 @router.put("/{prompt_id}/labels")

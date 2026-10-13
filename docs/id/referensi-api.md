@@ -389,7 +389,7 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 
 - Ringkasan: Due Reviews Api
 - Operation ID: `due_reviews_api_api_v1_documents_reviews_due_get`
-- Kode status respons: 200
+- Kode status respons: 200, 422
 
 #### GET /api/v1/documents/search
 

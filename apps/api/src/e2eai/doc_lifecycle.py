@@ -12,14 +12,15 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
 from .auth import current_session, require_scope
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import DocPrincipal, Document, User, get_session
 
 MAX_REVIEW_DAYS = 3650
@@ -132,6 +133,42 @@ async def list_due_reviews(
     ]
 
 
+def _due_view(d: Document, current: datetime) -> dict[str, Any]:
+    return {
+        "document_id": str(d.id),
+        "title": d.title,
+        "review_at": _utc(d.review_at).isoformat(),
+        "overdue_days": (current - _utc(d.review_at)).days,
+        "expires_at": _utc(d.expires_at).isoformat() if d.expires_at else None,
+    }
+
+
+async def list_due_reviews_page(
+    session: AsyncSession,
+    *,
+    review_owner_id: uuid.UUID,
+    now: datetime | None = None,
+    limit: int | None = None,
+    cursor: str | None = None,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Keyset-paginated due reviews (NFR-20): most overdue first. The review-owner filter runs in SQL."""
+    current = now or datetime.now(UTC)
+    size = clamp_limit(limit)
+    stmt = select(Document).where(
+        Document.review_owner_id == review_owner_id,
+        Document.status == "active",
+        Document.review_at.is_not(None),
+        Document.review_at <= current,
+    )
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(Document.review_at, Document.id) > tuple_(ts, last_id))
+    stmt = stmt.order_by(Document.review_at.asc(), Document.id.asc()).limit(size + 1)
+    rows = list((await session.scalars(stmt)).all())
+    page, nxt = make_page(rows, size, lambda d: (d.review_at, d.id))
+    return [_due_view(d, current) for d in page], nxt
+
+
 class LifecycleIn(BaseModel):
     review_owner_id: uuid.UUID | None = None
     review_at: datetime | None = None
@@ -154,12 +191,16 @@ async def _user(db: AsyncSession, sess: dict) -> User:
 
 @router.get("/reviews/due")
 async def due_reviews_api(
-    sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)
+    limit: int | None = Query(default=None),
+    cursor: str | None = Query(default=None),
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    """FR-D8: documents whose review is due for the calling user."""
+    """FR-D8: documents whose review is due for the calling user (cursor-paginated, NFR-20)."""
     require_scope(sess, "documents")
     user = await _user(db, sess)
-    return {"reviews": await list_due_reviews(db, review_owner_id=user.id)}
+    reviews, next_cursor = await list_due_reviews_page(db, review_owner_id=user.id, limit=limit, cursor=cursor)
+    return {"reviews": reviews, "next_cursor": next_cursor}
 
 
 @router.put("/{document_id}/lifecycle")

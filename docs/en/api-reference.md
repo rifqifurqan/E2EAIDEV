@@ -389,7 +389,7 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: Due Reviews Api
 - Operation ID: `due_reviews_api_api_v1_documents_reviews_due_get`
-- Response status codes: 200
+- Response status codes: 200, 422
 
 #### GET /api/v1/documents/search
 
