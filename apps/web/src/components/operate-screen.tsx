@@ -7,12 +7,13 @@ import { useAdminData } from "@/lib/use-admin-data";
 import { AdminScreen } from "./admin-screen";
 import { WhyItMattersPanel } from "./why-it-matters-panel";
 
-// Closing needs a post-incident record (no UI yet), so the buttons stop at "released".
+// Closing needs a post-incident record; the post-incident form is shown from "fixed" on.
 const NEXT_STATUS: Record<string, IncidentTransition["to_status"] | undefined> = {
   reported: "triaged",
   triaged: "fixing",
   fixing: "fixed",
   fixed: "released",
+  released: "closed",
 };
 
 function IncidentRow({ incident, onTransition }: { incident: AiIncident; onTransition: () => void }) {
@@ -20,7 +21,14 @@ function IncidentRow({ incident, onTransition }: { incident: AiIncident; onTrans
   const [extra, setExtra] = useState("");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
-  const next = NEXT_STATUS[incident.status];
+  const [summary, setSummary] = useState("");
+  const [rootCause, setRootCause] = useState("");
+  const [pmBusy, setPmBusy] = useState(false);
+  const [pmFailed, setPmFailed] = useState(false);
+  const hasPostmortem = incident.postmortem != null;
+  // "closed" is only reachable once a post-incident record exists (same rule as the API).
+  const next = incident.status === "released" && !hasPostmortem ? undefined : NEXT_STATUS[incident.status];
+  const showPostmortemForm = !hasPostmortem && ["fixed", "released"].includes(incident.status);
   const needsNotes = next === "fixed";
   const needsRef = next === "released";
   const needsText = needsNotes || needsRef;
@@ -38,6 +46,19 @@ function IncidentRow({ incident, onTransition }: { incident: AiIncident; onTrans
       setFailed(true);
     } finally {
       setBusy(false);
+      onTransition();
+    }
+  }
+
+  async function savePostmortem() {
+    setPmFailed(false);
+    setPmBusy(true);
+    try {
+      await api.recordPostmortem(incident.id, { summary: summary.trim(), root_cause: rootCause.trim() });
+    } catch {
+      setPmFailed(true);
+    } finally {
+      setPmBusy(false);
       onTransition();
     }
   }
@@ -72,6 +93,39 @@ function IncidentRow({ incident, onTransition }: { incident: AiIncident; onTrans
       {failed ? (
         <p role="alert" className="mt-1 text-xs text-red-700">
           {t.operate.transitionFailed}
+        </p>
+      ) : null}
+      {showPostmortemForm ? (
+        <div className="mt-2 flex flex-wrap items-end gap-2 text-xs">
+          <label>
+            <span className="mr-1">{t.operate.pmSummary}</span>
+            <input
+              value={summary}
+              onChange={(event) => setSummary(event.target.value)}
+              className="rounded border border-gray-300 px-2 py-1 text-xs"
+            />
+          </label>
+          <label>
+            <span className="mr-1">{t.operate.pmRootCause}</span>
+            <input
+              value={rootCause}
+              onChange={(event) => setRootCause(event.target.value)}
+              className="rounded border border-gray-300 px-2 py-1 text-xs"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={pmBusy || summary.trim() === "" || rootCause.trim() === ""}
+            onClick={savePostmortem}
+            className="rounded border border-blue-400 px-2 py-0.5 text-xs text-blue-700 disabled:opacity-50"
+          >
+            {t.operate.pmRecord}
+          </button>
+        </div>
+      ) : null}
+      {pmFailed ? (
+        <p role="alert" className="mt-1 text-xs text-red-700">
+          {t.operate.pmFailed}
         </p>
       ) : null}
     </li>

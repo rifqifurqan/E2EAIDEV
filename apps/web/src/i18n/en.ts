@@ -169,6 +169,10 @@ const en = {
     fixNotes: "Fix notes",
     releaseRef: "Release reference",
     transitionFailed: "Could not update the incident.",
+    pmSummary: "Summary",
+    pmRootCause: "Root cause",
+    pmRecord: "Record post-incident",
+    pmFailed: "Could not save the post-incident record.",
   },
   improve: {
     title: "Feedback Flywheel",

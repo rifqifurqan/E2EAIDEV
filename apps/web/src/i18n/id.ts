@@ -171,6 +171,10 @@ const id: Dictionary = {
     fixNotes: "Catatan perbaikan",
     releaseRef: "Referensi rilis",
     transitionFailed: "Gagal memperbarui insiden.",
+    pmSummary: "Ringkasan",
+    pmRootCause: "Akar masalah",
+    pmRecord: "Catat pasca-insiden",
+    pmFailed: "Gagal menyimpan catatan pasca-insiden.",
   },
   improve: {
     title: "Flywheel Umpan Balik",

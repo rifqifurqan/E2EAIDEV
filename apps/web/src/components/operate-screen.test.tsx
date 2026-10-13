@@ -7,6 +7,7 @@ import { I18nProvider } from "@/i18n/context";
 const apiMock = vi.hoisted(() => ({
   listIncidents: vi.fn(),
   transitionIncident: vi.fn(),
+  recordPostmortem: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -26,6 +27,7 @@ describe("OperateScreen", () => {
   beforeEach(() => {
     apiMock.listIncidents.mockReset();
     apiMock.transitionIncident.mockReset();
+    apiMock.recordPostmortem.mockReset();
   });
 
   it("lists AI incidents with severity and status next to the admin tools", async () => {
@@ -131,5 +133,71 @@ describe("OperateScreen", () => {
     apiMock.listIncidents.mockResolvedValue(list("reported"));
     renderOperate("id");
     expect(await screen.findByRole("button", { name: /pindah ke triaged/i })).toBeInTheDocument();
+  });
+  const released = (postmortem: Record<string, unknown> | null) => ({
+    incidents: [{ id: "x1", title: "Wrong salary answer", severity: "sev2", status: "released", postmortem }],
+    next_cursor: null,
+  });
+
+  it("records a post-incident record for a released incident without one", async () => {
+    const user = userEvent.setup();
+    apiMock.listIncidents.mockResolvedValue(released(null));
+    apiMock.recordPostmortem.mockResolvedValue({});
+    renderOperate();
+    await screen.findByText("Wrong salary answer");
+    const submit = screen.getByRole("button", { name: /record post-incident/i });
+    expect(submit).toBeDisabled();
+    await user.type(screen.getByLabelText(/^summary/i), "Wrong answer shipped");
+    await user.type(screen.getByLabelText(/root cause/i), "Stale policy index");
+    apiMock.listIncidents.mockResolvedValue(released({ summary: "Wrong answer shipped" }));
+    await user.click(submit);
+    await waitFor(() =>
+      expect(apiMock.recordPostmortem).toHaveBeenCalledWith("x1", {
+        summary: "Wrong answer shipped",
+        root_cause: "Stale policy index",
+      }),
+    );
+    expect(await screen.findByRole("button", { name: /move to closed/i })).toBeInTheDocument();
+  });
+
+  it("closes a released incident once the post-incident record exists", async () => {
+    const user = userEvent.setup();
+    apiMock.listIncidents.mockResolvedValue(released({ summary: "s", root_cause: "r" }));
+    apiMock.transitionIncident.mockResolvedValue({});
+    renderOperate();
+    await screen.findByText("Wrong salary answer");
+    expect(screen.queryByRole("button", { name: /record post-incident/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /move to closed/i }));
+    await waitFor(() => expect(apiMock.transitionIncident).toHaveBeenCalledWith("x1", { to_status: "closed" }));
+  });
+
+  it("shows no lifecycle controls for a closed incident", async () => {
+    apiMock.listIncidents.mockResolvedValue({
+      incidents: [{ id: "x1", title: "Wrong salary answer", severity: "sev2", status: "closed", postmortem: { summary: "s" } }],
+      next_cursor: null,
+    });
+    renderOperate();
+    await screen.findByText("Wrong salary answer");
+    expect(screen.queryByRole("button", { name: /move to|record post-incident/i })).not.toBeInTheDocument();
+  });
+
+  it("shows a generic error without server text when the post-incident record fails", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.listIncidents.mockResolvedValue(released(null));
+    apiMock.recordPostmortem.mockRejectedValue(new ApiError(409, "Post-incident record needs a fixed incident", "internal detail"));
+    renderOperate();
+    await screen.findByText("Wrong salary answer");
+    await user.type(screen.getByLabelText(/^summary/i), "s");
+    await user.type(screen.getByLabelText(/root cause/i), "r");
+    await user.click(screen.getByRole("button", { name: /record post-incident/i }));
+    expect(await screen.findByText(/could not save the post-incident record/i)).toBeInTheDocument();
+    expect(screen.queryByText(/internal detail/i)).not.toBeInTheDocument();
+  });
+
+  it("labels the post-incident form in Indonesian", async () => {
+    apiMock.listIncidents.mockResolvedValue(released(null));
+    renderOperate("id");
+    expect(await screen.findByRole("button", { name: /catat pasca-insiden/i })).toBeInTheDocument();
   });
 });

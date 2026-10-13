@@ -147,10 +147,16 @@ export interface AiIncident {
   title: string;
   severity: string;
   status: string;
+  postmortem?: Record<string, unknown> | null;
+}
+
+export interface PostmortemInput {
+  summary: string;
+  root_cause: string;
 }
 
 export interface IncidentTransition {
-  to_status: "triaged" | "fixing" | "fixed" | "released";
+  to_status: "triaged" | "fixing" | "fixed" | "released" | "closed";
   fix_notes?: string;
   release_ref?: string;
 }
@@ -324,6 +330,7 @@ export const ENDPOINTS = {
   botAsk: (botId: string) => `/bots/${botId}/ask`,
   deactivateUser: (userId: string) => `/users/${userId}/deactivate`,
   incidents: "/incidents",
+  incidentPostmortem: (incidentId: string) => `/incidents/${incidentId}/postmortem`,
   incidentTransition: (incidentId: string) => `/incidents/${incidentId}/transition`,
   flywheel: "/improve/flywheel",
   flywheelExport: "/improve/flywheel/export",
@@ -512,6 +519,8 @@ export const api = {
 
   // Operate / Improve (admin-only on the server)
   listIncidents: () => apiFetch<IncidentList>(ENDPOINTS.incidents),
+  recordPostmortem: (incidentId: string, input: PostmortemInput) =>
+    apiFetch<AiIncident>(ENDPOINTS.incidentPostmortem(incidentId), { method: "POST", body: input }),
   transitionIncident: (incidentId: string, input: IncidentTransition) =>
     apiFetch<AiIncident>(ENDPOINTS.incidentTransition(incidentId), { method: "POST", body: input }),
   listFlywheel: () => apiFetch<FlywheelQueue>(ENDPOINTS.flywheel),
