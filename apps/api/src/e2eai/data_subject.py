@@ -70,6 +70,21 @@ def _request_view(req: DataSubjectRequest, now: datetime | None = None) -> dict[
     }
 
 
+async def _create_request(
+    session: AsyncSession, *, subject: User, kind: str, opened_by: str, received_at: datetime | None = None,
+) -> DataSubjectRequest:
+    received = received_at or datetime.now(UTC)
+    req = DataSubjectRequest(
+        subject_id=subject.id, kind=kind, status="open", received_at=received,
+        due_at=received + timedelta(days=DSR_RESPONSE_DAYS), opened_by=opened_by,
+    )
+    session.add(req)
+    await session.flush()
+    await audit.record(session, opened_by, "dsr.request_opened", f"user:{subject.id}", {
+        "request_id": str(req.id), "kind": kind})
+    return req
+
+
 async def open_request(
     session: AsyncSession, *, admin: User, subject_id: uuid.UUID, kind: str, received_at: datetime | None = None,
 ) -> dict[str, Any]:
@@ -78,15 +93,23 @@ async def open_request(
     if kind not in DSR_KINDS:
         raise AppError(422, "Unknown request kind", "Use export or erase.")
     subject = await _subject(session, subject_id)
-    received = received_at or datetime.now(UTC)
-    req = DataSubjectRequest(
-        subject_id=subject.id, kind=kind, status="open", received_at=received,
-        due_at=received + timedelta(days=DSR_RESPONSE_DAYS), opened_by=f"user:{admin.id}",
-    )
-    session.add(req)
-    await session.flush()
-    await audit.record(session, f"user:{admin.id}", "dsr.request_opened", f"user:{subject.id}", {
-        "request_id": str(req.id), "kind": kind})
+    req = await _create_request(session, subject=subject, kind=kind, opened_by=f"user:{admin.id}",
+                                received_at=received_at)
+    await session.commit()
+    return _request_view(req)
+
+
+def _require_active_self(user: User) -> None:
+    if user.status != "active":
+        raise AppError(403, "Not allowed")
+
+
+async def open_own_request(session: AsyncSession, *, user: User, kind: str) -> dict[str, Any]:
+    """A person files their own export/erase request. Erasure stays an admin action (offboarding, legal hold)."""
+    if kind not in DSR_KINDS:
+        raise AppError(422, "Unknown request kind", "Use export or erase.")
+    _require_active_self(user)
+    req = await _create_request(session, subject=user, kind=kind, opened_by=f"user:{user.id}")
     await session.commit()
     return _request_view(req)
 
@@ -113,6 +136,23 @@ async def list_requests_page(
         stmt = stmt.where(DataSubjectRequest.status == status)
     if overdue_only:
         stmt = stmt.where(DataSubjectRequest.status == "open", DataSubjectRequest.due_at < datetime.now(UTC))
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(DataSubjectRequest.created_at, DataSubjectRequest.id) < tuple_(ts, last_id))
+    stmt = stmt.order_by(DataSubjectRequest.created_at.desc(), DataSubjectRequest.id.desc()).limit(size + 1)
+    rows = list((await session.scalars(stmt)).all())
+    page, nxt = make_page(rows, size, lambda r: (r.created_at, r.id))
+    now = datetime.now(UTC)
+    return [_request_view(r, now) for r in page], nxt
+
+
+async def list_own_requests_page(
+    session: AsyncSession, *, user: User, limit: int | None = None, cursor: str | None = None,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """The caller's own ledger rows only (subject_id filter is part of the query, cursors are not authz)."""
+    _require_active_self(user)
+    size = clamp_limit(limit)
+    stmt = select(DataSubjectRequest).where(DataSubjectRequest.subject_id == user.id)
     if cursor:
         ts, last_id = decode_cursor(cursor)
         stmt = stmt.where(tuple_(DataSubjectRequest.created_at, DataSubjectRequest.id) < tuple_(ts, last_id))
@@ -159,10 +199,7 @@ async def send_deadline_reminders(
     return {"reminded": reminded, "recipients": len(admins)}
 
 
-async def export_subject_data(session: AsyncSession, *, admin: User, subject_id: uuid.UUID) -> dict[str, Any]:
-    await _require_admin(session, admin)
-    subject = await _subject(session, subject_id)
-
+async def _collect_export(session: AsyncSession, subject: User) -> dict[str, Any]:
     convos = (await session.execute(
         select(Conversation).where(Conversation.user_id == subject.id).order_by(Conversation.created_at, Conversation.id)
     )).scalars().all()
@@ -196,12 +233,34 @@ async def export_subject_data(session: AsyncSession, *, admin: User, subject_id:
         "notifications": [{"kind": n.kind, "created_at": _iso(n.created_at)} for n in notifications],
         "owned_documents": [{"id": str(i), "title": t} for i, t in owned],
     }
-    await audit.record(session, f"user:{admin.id}", "dsr.export", f"user:{subject.id}", {
-        "conversations": len(conversations),
-        "messages": sum(len(c["messages"]) for c in conversations),
-        "memories": len(memories), "notifications": len(notifications), "owned_documents": len(owned),
-    })
+    return data
+
+
+def _export_counts(data: dict[str, Any]) -> dict[str, int]:
+    return {
+        "conversations": len(data["conversations"]),
+        "messages": sum(len(c["messages"]) for c in data["conversations"]),
+        "memories": len(data["memories"]), "notifications": len(data["notifications"]),
+        "owned_documents": len(data["owned_documents"]),
+    }
+
+
+async def export_subject_data(session: AsyncSession, *, admin: User, subject_id: uuid.UUID) -> dict[str, Any]:
+    await _require_admin(session, admin)
+    subject = await _subject(session, subject_id)
+    data = await _collect_export(session, subject)
+    await audit.record(session, f"user:{admin.id}", "dsr.export", f"user:{subject.id}", _export_counts(data))
     await _complete_open_requests(session, subject.id, "export")
+    await session.commit()
+    return data
+
+
+async def export_own_data(session: AsyncSession, *, user: User) -> dict[str, Any]:
+    """Self-service export: only the caller's own data, audited with counts (never content)."""
+    _require_active_self(user)
+    data = await _collect_export(session, user)
+    await audit.record(session, f"user:{user.id}", "dsr.self_export", f"user:{user.id}", _export_counts(data))
+    await _complete_open_requests(session, user.id, "export")
     await session.commit()
     return data
 
@@ -315,3 +374,30 @@ async def remind_api(within_days: int = 5, sess: dict = Depends(current_session)
                      db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     require_scope(sess, "evals")
     return await send_deadline_reminders(db, admin=await _admin_user(db, sess), within_days=within_days)
+
+
+@router.get("/me/export")
+async def export_own_api(sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    require_scope(sess, "chat")
+    return await export_own_data(db, user=await _admin_user(db, sess))
+
+
+class OwnRequestIn(BaseModel):
+    kind: str
+
+
+@router.post("/me/requests")
+async def open_own_request_api(body: OwnRequestIn, sess: dict = Depends(current_session),
+                               db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    require_scope(sess, "chat")
+    return await open_own_request(db, user=await _admin_user(db, sess), kind=body.kind)
+
+
+@router.get("/me/requests")
+async def list_own_requests_api(
+    limit: int | None = None, cursor: str | None = None,
+    sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    require_scope(sess, "chat")
+    items, nxt = await list_own_requests_page(db, user=await _admin_user(db, sess), limit=limit, cursor=cursor)
+    return {"items": items, "next_cursor": nxt}

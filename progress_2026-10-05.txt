@@ -2293,3 +2293,10 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_dsr_erase_flywheel_nfr10.py` -> KeyError `flywheel_items_deleted`. GREEN: 1 passed.
   - Adjacent: `uv run pytest -q tests/test_dsr_erase_flywheel_nfr10.py tests/test_data_subject_nfr10.py tests/test_dsr_ledger_nfr10.py tests/test_dsr_reminders_nfr10.py tests/test_data_flywheel_fr_i1.py` -> 17 passed. Heavy gates skipped.
   - Not done: erasure of traces/vectors; exported EvalDataset items already built from accepted flywheel items (they are anonymised gold/fine-tune data, flagged for owner decision).
+
+- Self-service data-subject requests (NFR-10) (2026-10-13, cron):
+  - Hermes worked manually. Codex unused. Closes the "self-service" follow-up of item 85.
+  - Refactored `data_subject.py`: shared `_collect_export` and `_create_request`; admin export/open_request behave as before. Added `export_own_data` (caller's own data only; audited `dsr.self_export` with counts, no content; closes the caller's open export requests), `open_own_request` (export|erase; erase is only a ledger request, nothing is deleted and an admin still runs it after offboarding / legal-hold check), `list_own_requests_page` (subject_id filter in the query, cursor not authz). Inactive users are refused (403). Routes: `GET /api/v1/privacy/me/export`, `POST` and `GET /api/v1/privacy/me/requests`, `chat` scope for API keys.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_dsr_self_service_nfr10.py` -> 3 failed (functions/routes missing). GREEN: 3 passed (Andi's export has no Budi text; Budi sees none of Andi's ledger rows).
+  - Adjacent: `uv run pytest -q tests/test_dsr_self_service_nfr10.py tests/test_data_subject_nfr10.py tests/test_dsr_ledger_nfr10.py tests/test_dsr_reminders_nfr10.py tests/test_dsr_erase_flywheel_nfr10.py tests/test_no_plaintext_credentials_nfr7.py` -> 19 passed; app ok; API reference regenerated, `test_docs_fr_f22.py` 3 passed, `validate_docs.py` PASS. Heavy gates skipped.
+  - Not done: erasure of traces/vectors; web UI for the self-service page.

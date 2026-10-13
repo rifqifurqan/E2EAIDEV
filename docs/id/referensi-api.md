@@ -6,8 +6,8 @@ Requirement: FR-F22 (referensi API P1).
 
 Judul API: E2EAIDEV API
 Versi API: 0.1.0
-Total path: 160
-Total operasi: 173
+Total path: 162
+Total operasi: 176
 
 ## Cara generate ulang
 
@@ -984,6 +984,24 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 - Kode status respons: 200, 422
 
 ### privacy
+
+#### GET /api/v1/privacy/me/export
+
+- Ringkasan: Export Own Api
+- Operation ID: `export_own_api_api_v1_privacy_me_export_get`
+- Kode status respons: 200
+
+#### GET /api/v1/privacy/me/requests
+
+- Ringkasan: List Own Requests Api
+- Operation ID: `list_own_requests_api_api_v1_privacy_me_requests_get`
+- Kode status respons: 200, 422
+
+#### POST /api/v1/privacy/me/requests
+
+- Ringkasan: Open Own Request Api
+- Operation ID: `open_own_request_api_api_v1_privacy_me_requests_post`
+- Kode status respons: 200, 422
 
 #### GET /api/v1/privacy/requests
 

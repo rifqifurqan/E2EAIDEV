@@ -1977,6 +1977,19 @@
         "title": "OnlineEvalIn",
         "type": "object"
       },
+      "OwnRequestIn": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "OwnRequestIn",
+        "type": "object"
+      },
       "PlaygroundIn": {
         "properties": {
           "model": {
@@ -11217,6 +11230,137 @@
         "summary": "Create Use Case Intake Api",
         "tags": [
           "plan"
+        ]
+      }
+    },
+    "/api/v1/privacy/me/export": {
+      "get": {
+        "operationId": "export_own_api_api_v1_privacy_me_export_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Export Own Api Api V1 Privacy Me Export Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Export Own Api",
+        "tags": [
+          "privacy"
+        ]
+      }
+    },
+    "/api/v1/privacy/me/requests": {
+      "get": {
+        "operationId": "list_own_requests_api_api_v1_privacy_me_requests_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Own Requests Api Api V1 Privacy Me Requests Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Own Requests Api",
+        "tags": [
+          "privacy"
+        ]
+      },
+      "post": {
+        "operationId": "open_own_request_api_api_v1_privacy_me_requests_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnRequestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Open Own Request Api Api V1 Privacy Me Requests Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Open Own Request Api",
+        "tags": [
+          "privacy"
         ]
       }
     },

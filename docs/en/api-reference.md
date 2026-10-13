@@ -6,8 +6,8 @@ Requirement: FR-F22 (P1 API reference).
 
 API title: E2EAIDEV API
 API version: 0.1.0
-Total paths: 160
-Total operations: 173
+Total paths: 162
+Total operations: 176
 
 ## How to regenerate
 
@@ -984,6 +984,24 @@ Most application routes require a scoped session or API key. This generated refe
 - Response status codes: 200, 422
 
 ### privacy
+
+#### GET /api/v1/privacy/me/export
+
+- Summary: Export Own Api
+- Operation ID: `export_own_api_api_v1_privacy_me_export_get`
+- Response status codes: 200
+
+#### GET /api/v1/privacy/me/requests
+
+- Summary: List Own Requests Api
+- Operation ID: `list_own_requests_api_api_v1_privacy_me_requests_get`
+- Response status codes: 200, 422
+
+#### POST /api/v1/privacy/me/requests
+
+- Summary: Open Own Request Api
+- Operation ID: `open_own_request_api_api_v1_privacy_me_requests_post`
+- Response status codes: 200, 422
 
 #### GET /api/v1/privacy/requests
 
