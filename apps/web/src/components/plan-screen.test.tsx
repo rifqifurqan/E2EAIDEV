@@ -6,6 +6,7 @@ import { I18nProvider } from "@/i18n/context";
 
 const apiMock = vi.hoisted(() => ({
   createUseCase: vi.fn(),
+  classifyBotRisk: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -33,6 +34,7 @@ async function fillRequired() {
 describe("PlanScreen", () => {
   beforeEach(() => {
     apiMock.createUseCase.mockReset();
+    apiMock.classifyBotRisk.mockReset();
   });
 
   it("submits the intake with real success metrics, users, sources and systems", async () => {
@@ -72,6 +74,42 @@ describe("PlanScreen", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/could not submit/i);
     expect(alert).not.toHaveTextContent(/boom|password/i);
+  });
+
+  it("submits a bot risk classification with safe governance fields", async () => {
+    apiMock.classifyBotRisk.mockResolvedValueOnce({
+      bot_id: "11111111-1111-1111-1111-111111111111",
+      eu_ai_act_tier: "high",
+      pdp_impact_level: "personal_data",
+    });
+    renderPlan();
+
+    await userEvent.type(screen.getByLabelText(/risk bot id/i), "11111111-1111-1111-1111-111111111111");
+    await userEvent.selectOptions(screen.getByLabelText(/eu ai act tier/i), "high");
+    await userEvent.type(screen.getByLabelText(/nist govern/i), "mapped");
+    await userEvent.type(screen.getByLabelText(/nist measure/i), "required");
+    await userEvent.type(screen.getByLabelText(/uu pdp data impact/i), "Processes employee leave and identity data");
+    await userEvent.click(screen.getByRole("button", { name: /classify risk/i }));
+
+    expect(apiMock.classifyBotRisk).toHaveBeenCalledWith("11111111-1111-1111-1111-111111111111", {
+      eu_ai_act_tier: "high",
+      nist_ai_rmf_profile: { govern: "mapped", measure: "required" },
+      uu_pdp_data_impact: "Processes employee leave and identity data",
+    });
+    expect(await screen.findByRole("status")).toHaveTextContent(/risk classified.*high/i);
+  });
+
+  it("shows a generic localized risk-classification error without server text", async () => {
+    apiMock.classifyBotRisk.mockRejectedValueOnce(new Error("Bot not found token=abc"));
+    renderPlan();
+
+    await userEvent.type(screen.getByLabelText(/risk bot id/i), "11111111-1111-1111-1111-111111111111");
+    await userEvent.type(screen.getByLabelText(/uu pdp data impact/i), "No personal data");
+    await userEvent.click(screen.getByRole("button", { name: /classify risk/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/could not classify/i);
+    expect(alert).not.toHaveTextContent(/token|not found/i);
   });
 
   it("renders in Indonesian with the why-it-matters panel", async () => {

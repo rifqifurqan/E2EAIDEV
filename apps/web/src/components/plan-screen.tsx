@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useI18n } from "@/i18n/context";
-import { api } from "@/lib/api-client";
+import { api, type EuAiActTier } from "@/lib/api-client";
 import { WhyItMattersPanel } from "./why-it-matters-panel";
 
 function splitList(value: string, separators: RegExp): string[] {
@@ -28,6 +28,14 @@ export function PlanScreen() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [riskBotId, setRiskBotId] = useState("");
+  const [riskTier, setRiskTier] = useState<EuAiActTier>("minimal");
+  const [nistGovern, setNistGovern] = useState("");
+  const [nistMeasure, setNistMeasure] = useState("");
+  const [pdpImpact, setPdpImpact] = useState("");
+  const [riskBusy, setRiskBusy] = useState(false);
+  const [riskResult, setRiskResult] = useState<string | null>(null);
+  const [riskFailed, setRiskFailed] = useState(false);
 
   const userList = splitList(users, /,/);
   const ready =
@@ -62,6 +70,29 @@ export function PlanScreen() {
       setFailed(true);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function classifyRisk(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (riskBotId.trim() === "" || riskBusy) return;
+    setRiskBusy(true);
+    setRiskFailed(false);
+    setRiskResult(null);
+    try {
+      const classification = await api.classifyBotRisk(riskBotId.trim(), {
+        eu_ai_act_tier: riskTier,
+        nist_ai_rmf_profile: {
+          ...(nistGovern.trim() ? { govern: nistGovern.trim() } : {}),
+          ...(nistMeasure.trim() ? { measure: nistMeasure.trim() } : {}),
+        },
+        uu_pdp_data_impact: pdpImpact.trim(),
+      });
+      setRiskResult(`${t.plan.riskClassified}: ${classification.eu_ai_act_tier}`);
+    } catch {
+      setRiskFailed(true);
+    } finally {
+      setRiskBusy(false);
     }
   }
 
@@ -119,6 +150,78 @@ export function PlanScreen() {
         {failed ? (
           <p role="alert" className="mt-3 text-sm text-red-700">
             {t.plan.submitFailed}
+          </p>
+        ) : null}
+      </form>
+      <form onSubmit={classifyRisk} className="mb-6 rounded-lg border border-gray-200 bg-white p-4 text-left">
+        <h2 className="mb-3 text-lg font-semibold text-gray-900">{t.plan.riskTitle}</h2>
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className={LABEL} htmlFor="risk-bot-id">
+            {t.plan.riskBotId}
+            <input
+              id="risk-bot-id"
+              value={riskBotId}
+              onChange={(e) => setRiskBotId(e.target.value)}
+              className={INPUT}
+            />
+          </label>
+          <label className={LABEL} htmlFor="risk-tier">
+            {t.plan.riskTier}
+            <select
+              id="risk-tier"
+              value={riskTier}
+              onChange={(e) => setRiskTier(e.target.value as EuAiActTier)}
+              className={INPUT}
+            >
+              <option value="minimal">{t.plan.tierMinimal}</option>
+              <option value="limited">{t.plan.tierLimited}</option>
+              <option value="high">{t.plan.tierHigh}</option>
+              <option value="unacceptable">{t.plan.tierUnacceptable}</option>
+            </select>
+          </label>
+          <label className={LABEL} htmlFor="risk-nist-govern">
+            {t.plan.nistGovern}
+            <input
+              id="risk-nist-govern"
+              value={nistGovern}
+              onChange={(e) => setNistGovern(e.target.value)}
+              className={INPUT}
+            />
+          </label>
+          <label className={LABEL} htmlFor="risk-nist-measure">
+            {t.plan.nistMeasure}
+            <input
+              id="risk-nist-measure"
+              value={nistMeasure}
+              onChange={(e) => setNistMeasure(e.target.value)}
+              className={INPUT}
+            />
+          </label>
+          <label className={`${LABEL} md:col-span-2`} htmlFor="risk-pdp-impact">
+            {t.plan.pdpImpact}
+            <textarea
+              id="risk-pdp-impact"
+              value={pdpImpact}
+              onChange={(e) => setPdpImpact(e.target.value)}
+              className={INPUT}
+            />
+          </label>
+        </div>
+        <button
+          type="submit"
+          disabled={riskBusy || riskBotId.trim() === ""}
+          className="mt-4 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {t.plan.classifyRisk}
+        </button>
+        {riskResult ? (
+          <p role="status" className="mt-3 text-sm text-gray-700">
+            {riskResult}
+          </p>
+        ) : null}
+        {riskFailed ? (
+          <p role="alert" className="mt-3 text-sm text-red-700">
+            {t.plan.classifyFailed}
           </p>
         ) : null}
       </form>

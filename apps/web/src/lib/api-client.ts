@@ -91,6 +91,21 @@ export interface UseCaseResponse {
   status: string;
 }
 
+export type EuAiActTier = "minimal" | "limited" | "high" | "unacceptable";
+
+export interface RiskClassificationInput {
+  eu_ai_act_tier: EuAiActTier;
+  nist_ai_rmf_profile: Record<string, string>;
+  uu_pdp_data_impact: string;
+}
+
+export interface RiskClassificationResponse {
+  bot_id: string;
+  eu_ai_act_tier: EuAiActTier;
+  pdp_impact_level: string;
+  required_release_gates?: Record<string, unknown>;
+}
+
 export interface EvalDataset {
   id: string;
   name: string;
@@ -335,6 +350,7 @@ export const ENDPOINTS = {
     `/bots/${botId}/bundles/${bundleId}/rollback`,
   botGrants: (botId: string) => `/bots/${botId}/grants`,
   botScope: (botId: string) => `/bots/${botId}/scope`,
+  botRiskClassification: (botId: string) => `/bots/${botId}/risk-classification`,
   botAsk: (botId: string) => `/bots/${botId}/ask`,
   deactivateUser: (userId: string) => `/users/${userId}/deactivate`,
   incidents: "/incidents",
@@ -510,6 +526,11 @@ export const api = {
     apiFetch<{ status: string }>(ENDPOINTS.botScope(botId), {
       method: "PUT",
       body: { document_ids: documentIds, folder_ids: folderIds },
+    }),
+  classifyBotRisk: (botId: string, input: RiskClassificationInput) =>
+    apiFetch<RiskClassificationResponse>(ENDPOINTS.botRiskClassification(botId), {
+      method: "PUT",
+      body: input,
     }),
   askBot: (botId: string, question: string) =>
     apiFetch<MessageResponse>(ENDPOINTS.botAsk(botId), {

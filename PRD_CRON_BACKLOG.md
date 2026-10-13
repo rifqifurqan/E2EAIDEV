@@ -277,6 +277,8 @@ Rules for every cron tick:
 
 152. [x] [FR-P1] Plan web stage `PlanScreen`: use-case intake form now sends the real API contract (problem, users list, task_success/deflection/time_saved metrics, data sources, systems to integrate) instead of placeholder metrics and a hardcoded risk tier; submit gated on required fields, generic EN/ID errors. Web suite 249 passed; see progress_2026-10-05.txt.
 
+153. [x] [FR-P2] Plan web stage bot risk classification form: `PlanScreen` now calls `PUT /api/v1/bots/{bot_id}/risk-classification` with EU AI Act tier, NIST AI RMF profile fields, and UU PDP data impact; submit gated on bot id, generic EN/ID errors. Web suite 252 passed; see progress_2026-10-05.txt.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.
