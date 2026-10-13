@@ -7,6 +7,7 @@ raw key nor credentials are stored. If the store is unavailable the request is p
 never block writes).
 """
 
+import asyncio
 import base64
 import hashlib
 import json
@@ -25,10 +26,15 @@ class IdempotencyStore(Protocol):
     async def get(self, key: str) -> str | None: ...
     async def put(self, key: str, value: str, ttl: int) -> None: ...
 
+    async def acquire_lock(self, key: str, value: str, ttl: int) -> str | None: ...
+    async def release_lock(self, key: str, value: str) -> None: ...
+
 
 class MemoryIdempotencyStore:
     def __init__(self) -> None:
         self.data: dict[str, tuple[str, float]] = {}
+        self.locks: dict[str, tuple[str, float]] = {}
+        self._lock = asyncio.Lock()
 
     async def get(self, key: str) -> str | None:
         item = self.data.get(key)
@@ -38,6 +44,21 @@ class MemoryIdempotencyStore:
 
     async def put(self, key: str, value: str, ttl: int) -> None:
         self.data[key] = (value, time.time() + ttl)
+
+    async def acquire_lock(self, key: str, value: str, ttl: int) -> str | None:
+        async with self._lock:
+            item = self.locks.get(key)
+            now = time.time()
+            if item and item[1] >= now:
+                return item[0]
+            self.locks[key] = (value, now + ttl)
+            return None
+
+    async def release_lock(self, key: str, value: str) -> None:
+        async with self._lock:
+            item = self.locks.get(key)
+            if item and item[0] == value:
+                self.locks.pop(key, None)
 
 
 class ValkeyIdempotencyStore:
@@ -50,6 +71,19 @@ class ValkeyIdempotencyStore:
     async def put(self, key: str, value: str, ttl: int) -> None:
         await self.redis.set(f"idem:{key}", value, ex=ttl)
 
+    async def acquire_lock(self, key: str, value: str, ttl: int) -> str | None:
+        lock_key = f"idemlock:{key}"
+        acquired = await self.redis.set(lock_key, value, ex=ttl, nx=True)
+        if acquired:
+            return None
+        return await self.redis.get(lock_key)
+
+    async def release_lock(self, key: str, value: str) -> None:
+        lock_key = f"idemlock:{key}"
+        current = await self.redis.get(lock_key)
+        if current == value:
+            await self.redis.delete(lock_key)
+
 
 def _sha(*parts: bytes) -> str:
     h = hashlib.sha256()
@@ -59,10 +93,20 @@ def _sha(*parts: bytes) -> str:
     return h.hexdigest()
 
 
-def _problem(status: int, title: str, title_id: str, detail: str, path: str) -> tuple[int, list, bytes]:
+def _problem(
+    status: int,
+    title: str,
+    title_id: str,
+    detail: str,
+    path: str,
+    extra_headers: list[tuple[bytes, bytes]] | None = None,
+) -> tuple[int, list, bytes]:
     body = json.dumps({"type": "about:blank", "title": title, "title_id": title_id, "status": status,
                        "detail": detail, "instance": path}).encode()
-    return status, [(b"content-type", PROBLEM), (b"content-length", str(len(body)).encode())], body
+    headers = [(b"content-type", PROBLEM), (b"content-length", str(len(body)).encode())]
+    if extra_headers:
+        headers.extend(extra_headers)
+    return status, headers, body
 
 
 class IdempotencyMiddleware:
@@ -125,6 +169,28 @@ class IdempotencyMiddleware:
             await send({"type": "http.response.body", "body": base64.b64decode(entry["body"])})
             return
 
+        lock_key = f"{store_key}:inflight"
+        lock_value = fingerprint
+        lock_acquired = False
+        if store_ok and hasattr(self.store, "acquire_lock"):
+            try:
+                existing_lock = await self.store.acquire_lock(lock_key, lock_value, min(self.ttl, 60))  # type: ignore[attr-defined]
+            except Exception:
+                existing_lock = None
+            else:
+                lock_acquired = existing_lock is None
+                if existing_lock is not None:
+                    if existing_lock != fingerprint:
+                        await self._send_problem(send, _problem(
+                            422, "Idempotency key reused", "Kunci idempotensi dipakai ulang",
+                            "This key is already being used with a different request body.", path))
+                    else:
+                        await self._send_problem(send, _problem(
+                            409, "Idempotency request in progress", "Permintaan idempotensi sedang diproses",
+                            "A request with this idempotency key is still being processed. Retry shortly.",
+                            path, [(b"retry-after", b"1")]))
+                    return
+
         captured: dict = {"start": None, "body": b"", "ok": True}
 
         async def send_wrapper(message):
@@ -136,19 +202,26 @@ class IdempotencyMiddleware:
                     captured["ok"] = False  # streaming / huge responses are not cached
             await send(message)
 
-        await self.app(scope, self._replay(chunks, receive), send_wrapper)
+        try:
+            await self.app(scope, self._replay(chunks, receive), send_wrapper)
 
-        start = captured["start"]
-        if store_ok and captured["ok"] and start and start["status"] < 500:
-            keep = {b"content-type"}
-            entry = {"fp": fingerprint, "status": start["status"],
-                     "headers": [[k.decode("latin-1"), v.decode("latin-1")] for k, v in start.get("headers", [])
-                                 if k.lower() in keep],
-                     "body": base64.b64encode(captured["body"]).decode()}
-            try:
-                await self.store.put(store_key, json.dumps(entry), self.ttl)
-            except Exception:
-                pass
+            start = captured["start"]
+            if store_ok and captured["ok"] and start and start["status"] < 500:
+                keep = {b"content-type"}
+                entry = {"fp": fingerprint, "status": start["status"],
+                         "headers": [[k.decode("latin-1"), v.decode("latin-1")] for k, v in start.get("headers", [])
+                                     if k.lower() in keep],
+                         "body": base64.b64encode(captured["body"]).decode()}
+                try:
+                    await self.store.put(store_key, json.dumps(entry), self.ttl)
+                except Exception:
+                    pass
+        finally:
+            if lock_acquired and hasattr(self.store, "release_lock"):
+                try:
+                    await self.store.release_lock(lock_key, lock_value)  # type: ignore[attr-defined]
+                except Exception:
+                    pass
 
     @staticmethod
     def _replay(chunks, receive):

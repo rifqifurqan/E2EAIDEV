@@ -102,3 +102,67 @@ def test_raw_key_and_credentials_are_not_stored_in_clear():
     c.post("/things", json={"name": "x"}, headers={"Idempotency-Key": "my-secret-key", "Authorization": "Bearer tok123"})
     dump = repr(store.data)
     assert "my-secret-key" not in dump and "tok123" not in dump
+
+
+def test_same_key_in_flight_duplicate_is_rejected_without_second_write():
+    """Concurrent duplicate create requests must not both reach the app before replay is cached."""
+    import asyncio
+
+    async def scenario():
+        store = MemoryIdempotencyStore()
+        started = asyncio.Event()
+        release = asyncio.Event()
+        calls = {"n": 0}
+
+        async def slow_app(scope, receive, send):
+            calls["n"] += 1
+            started.set()
+            await release.wait()
+            body = b'{"ok":true}'
+            await send({
+                "type": "http.response.start",
+                "status": 201,
+                "headers": [(b"content-type", b"application/json")],
+            })
+            await send({"type": "http.response.body", "body": body})
+
+        app = IdempotencyMiddleware(slow_app, store=store)
+
+        async def request():
+            messages = [{"type": "http.request", "body": b'{"name":"x"}', "more_body": False}]
+            sent = []
+            scope = {
+                "type": "http",
+                "method": "POST",
+                "path": "/things",
+                "headers": [
+                    (b"idempotency-key", b"same-key"),
+                    (b"authorization", b"Bearer user-a"),
+                    (b"content-type", b"application/json"),
+                ],
+            }
+
+            async def receive():
+                return messages.pop(0) if messages else {"type": "http.request", "body": b"", "more_body": False}
+
+            async def send(message):
+                sent.append(message)
+
+            await app(scope, receive, send)
+            return sent
+
+        first = asyncio.create_task(request())
+        await asyncio.wait_for(started.wait(), timeout=1)
+        second = asyncio.create_task(request())
+        await asyncio.sleep(0.05)
+        release.set()
+        first_sent = await asyncio.wait_for(first, timeout=1)
+        second_sent = await asyncio.wait_for(second, timeout=1)
+        return first_sent, second_sent, calls["n"], repr(store.data)
+
+    first_sent, second_sent, call_count, store_dump = asyncio.run(scenario())
+    assert first_sent[0]["status"] == 201
+    assert second_sent[0]["status"] == 409
+    assert second_sent[0]["headers"][-1] == (b"retry-after", b"1")
+    assert call_count == 1
+    assert "same-key" not in store_dump and "Bearer user-a" not in store_dump

@@ -173,6 +173,7 @@ Rules for every cron tick:
 99. [x] [FR-B2] Wire opt-in long-term user memory into the chat answer pipeline. Completed: `send_message` now recalls the asking user's memory after owner check and passes it as uncited, untrusted context; memory is guardrail-checked, skipped from rerankers and semantic cache, and never creates document citations; see progress_2026-10-05.txt.
 
 100. [x] [NFR-20/FR-S10] Cursor pagination on permission-filtered document search. Completed: `/api/v1/documents/search` supports `limit`/`cursor`, returns `next_cursor`, and keeps permission filters before pagination; see progress_2026-10-05.txt.
+101. [x] [NFR-20] Idempotency in-flight duplicate lock. Completed: concurrent requests with the same scoped idempotency key/body now receive 409 + `Retry-After` while the first request is still running, and do not execute the mutating handler twice; see progress_2026-10-05.txt.
 
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
