@@ -2252,3 +2252,10 @@ HOW TO RESUME
   - `exchange_oidc_code_for_identity` now wraps the token POST in `with_retry` for connect errors only (the authorization code is single use, so a request that may have reached Keycloak is never replayed) and the userinfo GET for any transport error. Exhausted/unreachable IdP -> 503 `upstream-unavailable` "Identity provider unavailable"; no client secret, token or endpoint in the message. Keycloak 4xx rejections still return 401 and are not retried.
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_oidc_resilience_nfr19.py` -> TypeError (new `retry_sleep` seam). GREEN: 5 passed. Adjacent: `uv run pytest -q tests/test_oidc_resilience_nfr19.py tests/test_auth.py tests/test_phase0_core.py` -> 17 passed. Heavy gates skipped.
   - Not done: MCP client retry (no real transport exists yet), circuit breaker for Keycloak, live Keycloak outage drill.
+
+- Flywheel summary counts over the whole queue (NFR-20, FR-I1) (2026-10-13, cron):
+  - Hermes worked manually. Codex unused. Closes the "flywheel summary counts still read the first 1000 rows" follow-up.
+  - `flywheel.queue_summary` now computes `by_status`/`by_source` with SQL GROUP BY (whole queue) and applies the `status` filter in SQL with a deterministic `(created_at, id)` order and a 200-row cap; the `Counter` import was dropped. Admin check still runs first.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_flywheel_summary_counts_nfr20.py` -> 1 failed (counts capped at 1000). GREEN: 1 passed (1003 queued + 3 dismissed rows).
+  - Adjacent: `uv run pytest -q tests/test_flywheel_summary_counts_nfr20.py tests/test_data_flywheel_fr_i1.py tests/test_pagination_remaining_lists_nfr20.py` -> 11 passed; app ok. Heavy gates skipped per speed-biased instruction.
+  - Audit: no GET list endpoints remain unpaged except bounded/static ones; bots/evals/connectors expose no list GET, so that follow-up is closed.

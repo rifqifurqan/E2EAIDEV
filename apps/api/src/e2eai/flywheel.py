@@ -10,12 +10,11 @@ Accepted items with a correction become dataset items (gold split for `eval`, fi
 from __future__ import annotations
 
 import uuid
-from collections import Counter
 from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select, tuple_
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
@@ -199,12 +198,20 @@ async def link_release(session: AsyncSession, *, actor: User, item_id: uuid.UUID
 
 async def queue_summary(session: AsyncSession, *, actor: User, status: str | None = None) -> dict[str, Any]:
     await _require_admin(session, actor)
-    items = (await session.scalars(select(FlywheelItem).order_by(FlywheelItem.created_at).limit(1000))).all()
-    by_status = Counter(i.status for i in items)
-    by_source = Counter(i.source for i in items)
+    # Counts are aggregated in SQL so they cover the whole queue, not just the first rows (NFR-20).
+    by_status = dict((await session.execute(
+        select(FlywheelItem.status, func.count()).group_by(FlywheelItem.status)
+    )).all())
+    by_source = dict((await session.execute(
+        select(FlywheelItem.source, func.count()).group_by(FlywheelItem.source)
+    )).all())
+    stmt = select(FlywheelItem).order_by(FlywheelItem.created_at, FlywheelItem.id).limit(200)
+    if status is not None:
+        stmt = stmt.where(FlywheelItem.status == status)
+    items = (await session.scalars(stmt)).all()
     return {
         "by_status": dict(sorted(by_status.items())), "by_source": dict(sorted(by_source.items())),
-        "items": [summarize(i) for i in items if status is None or i.status == status][:200],
+        "items": [summarize(i) for i in items],
     }
 
 
