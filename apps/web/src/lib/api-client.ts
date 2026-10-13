@@ -321,7 +321,7 @@ export const ENDPOINTS = {
   flywheel: "/improve/flywheel",
   dueReviews: "/documents/reviews/due",
   modelRegistry: "/model-registry",
-  botApprovals: "/bot-approvals",
+  botApprovals: "/governance/bot-approvals",
 } as const;
 
 // ─── Client functions ───────────────────────────────────────────────────
