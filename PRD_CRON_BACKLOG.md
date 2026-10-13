@@ -146,6 +146,8 @@ Rules for every cron tick:
 
 86. [x] [NFR-12] No outbound telemetry by default (LiteLLM, vLLM, TEI). Completed as config/compose opt-outs with tests; see progress_2026-10-05.txt. Follow-up: web (Next.js) and other services, live egress-block verification.
 
+87. [x] [NFR-6] Backup and restore plan with RPO/RTO check. Completed as secret-free `backup.py` + `e2eai backup-plan` CLI with tests; commands NOT yet executed against the live stack. Follow-up: live backup/restore drill (deferred: needs a disposable environment), scheduling, encryption, Langfuse.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.

@@ -8,7 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import airgap, detect, generate, models, upgrade
+from . import airgap, backup, detect, generate, models, upgrade
 from .services import BY_NAME, SECRETS, SERVICES, USERS, enabled_services, owner_enabled
 
 app = typer.Typer(add_completion=False, help=__doc__, no_args_is_help=True)
@@ -339,3 +339,16 @@ def upgrade_plan_cmd(
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
     out.print(upgrade.render_upgrade_runbook(plan))
+
+
+@app.command("backup-plan")
+def backup_plan_cmd(
+    backup_dir: str = typer.Option("backups/daily", help="Directory where backup artifacts are written."),
+    compose_dir: str = typer.Option("deploy/compose", help="Docker Compose directory."),
+    api_dir: str = typer.Option("apps/api", help="API app directory for Alembic migrations."),
+    ready_url: str = typer.Option("http://127.0.0.1:8000/api/v1/ready", help="Post-restore readiness URL."),
+) -> None:
+    """Print a secret-free NFR-6 backup and restore procedure (open formats, RPO 24 h / RTO 4 h)."""
+    plan = backup.build_backup_plan(backup_dir=backup_dir, compose_dir=compose_dir)
+    restore = backup.build_restore_plan(backup_dir=backup_dir, compose_dir=compose_dir, api_dir=api_dir, ready_url=ready_url)
+    out.print(backup.render_backup_runbook(plan, restore), markup=False, highlight=False, soft_wrap=True)  # never wrap commands
