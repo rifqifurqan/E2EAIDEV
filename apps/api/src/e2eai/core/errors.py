@@ -14,9 +14,11 @@ PROBLEM = "application/problem+json"
 
 
 class AppError(Exception):
-    def __init__(self, status: int, title: str, detail: str = "", code: str = "about:blank"):
+    def __init__(self, status: int, title: str, detail: str = "", code: str = "about:blank",
+                 headers: dict[str, str] | None = None):
         super().__init__(title)
         self.status, self.title, self.detail, self.code = status, title, detail, code
+        self.headers = headers or {}
 
 
 def problem(request: Request, status: int, title: str, detail: str = "", code: str = "about:blank") -> JSONResponse:
@@ -31,7 +33,10 @@ def problem(request: Request, status: int, title: str, detail: str = "", code: s
 def install(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(request: Request, exc: AppError):
-        return problem(request, exc.status, exc.title, exc.detail, exc.code)
+        resp = problem(request, exc.status, exc.title, exc.detail, exc.code)
+        for k, v in exc.headers.items():
+            resp.headers[k] = v
+        return resp
 
     @app.exception_handler(StarletteHTTPException)
     async def _http(request: Request, exc: StarletteHTTPException):

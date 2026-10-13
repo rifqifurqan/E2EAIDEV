@@ -4,6 +4,7 @@ router wires them to the live DB and Valkey."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import secrets
 import uuid
@@ -29,6 +30,7 @@ COOKIE = "e2eai_session"
 CSRF_HEADER = "X-CSRF-Token"
 LOGIN_MAX_ATTEMPTS = 10  # ponytail: fixed-window placeholder (NFR-18, FR-F13); sliding window in P1
 LOGIN_WINDOW_SECONDS = 300
+LOGIN_IP_MAX_ATTEMPTS = 50  # per client address; higher than the per-account limit so an office NAT is not locked out
 
 
 @dataclass(frozen=True)
@@ -243,6 +245,30 @@ async def login_allowed(redis: Redis, key: str,
     return count <= limit
 
 
+def _rl_key(kind: str, value: str) -> str:
+    """Rate-limit keys hold a digest, never the raw email or address."""
+    return f"login_rl:{kind}:{hashlib.sha256(value.encode()).hexdigest()[:32]}"
+
+
+async def login_decision(redis: Redis, email: str, ip: str) -> tuple[bool, int]:
+    """Count a login attempt against the account AND the client address (NFR-18).
+
+    Returns ``(allowed, retry_after_seconds)``; ``retry_after`` is 0 when allowed.
+    """
+    retry_after = 0
+    allowed = True
+    for kind, value, limit in (("acct", email.strip().lower(), LOGIN_MAX_ATTEMPTS), ("ip", ip, LOGIN_IP_MAX_ATTEMPTS)):
+        bucket = _rl_key(kind, value)
+        count = await redis.incr(bucket)
+        if count == 1:
+            await redis.expire(bucket, LOGIN_WINDOW_SECONDS)
+        if count > limit:
+            allowed = False
+            ttl = await redis.ttl(bucket)
+            retry_after = max(retry_after, ttl if ttl and ttl > 0 else LOGIN_WINDOW_SECONDS)
+    return allowed, (0 if allowed else max(1, retry_after))
+
+
 @dataclass
 class Sessions:
     """Server-side sessions in Valkey with a sliding idle timeout (NFR-18, default 8 h)."""
@@ -370,10 +396,13 @@ async def oidc_callback(
 
 
 @router.post("/auth/login")
-async def login(body: LoginIn, response: Response, db: AsyncSession = Depends(get_session)) -> dict:
+async def login(body: LoginIn, request: Request, response: Response, db: AsyncSession = Depends(get_session)) -> dict:
     redis = redis_client()
-    if not await login_allowed(redis, body.email.lower()):
-        raise AppError(429, "Too many attempts", "Please wait and try again.")
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, retry_after = await login_decision(redis, body.email, client_ip)
+    if not allowed:
+        raise AppError(429, "Too many attempts", "Please wait and try again.", "about:blank",
+                       headers={"Retry-After": str(retry_after)})
     user = await authenticate(db, body.email, body.password)
     if user is None:
         await audit.record(db, body.email.lower(), "auth.login.failed", f"email:{body.email.lower()}")
