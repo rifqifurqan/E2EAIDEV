@@ -27,7 +27,7 @@ from .auth import current_session
 from .authz import principals
 from .core.config import Settings, get_settings, repo_root
 from .core.errors import AppError
-from .core.resilience import post_json_with_retry
+from .core.resilience import breaker_for, post_json_with_retry
 from .db import Chunk, ChunkEmbedding, DocPrincipal, Document, FolderPrincipal, User, get_session
 from .guardrails import PromptGuardPolicy, PromptInjectionDetector, select_prompt_detector
 from .language import detect_language
@@ -84,7 +84,7 @@ class TeiReranker:
         if not chunks:
             return []
         response = await post_json_with_retry(
-            self.client_factory, base_url=self.base_url, timeout=self.timeout, path="/rerank",
+            self.client_factory, base_url=self.base_url, timeout=self.timeout, breaker=breaker_for(self.base_url + "/rerank"), path="/rerank",
             headers={"Authorization": f"Bearer {self.api_key}"},
             json={
                 "model": self.model,
@@ -155,7 +155,7 @@ class LiteLLMEmbedder:
         if not texts:
             return []
         response = await post_json_with_retry(
-            self.client_factory, base_url=self.base_url, timeout=self.timeout, path="/v1/embeddings",
+            self.client_factory, base_url=self.base_url, timeout=self.timeout, breaker=breaker_for(self.base_url + "/v1/embeddings"), path="/v1/embeddings",
             headers={"Authorization": f"Bearer {self.api_key}"},
             json={"model": self.model, "input": list(texts)},
         )
@@ -215,7 +215,7 @@ class LiteLLMAnswerGenerator:
     async def generate(self, question: str, chunks: list[dict], answer_language: str) -> str:
         system_prompt = build_answer_system_prompt(chunks, answer_language)
         response = await post_json_with_retry(
-            self.client_factory, base_url=self.base_url, timeout=self.timeout, path="/v1/chat/completions",
+            self.client_factory, base_url=self.base_url, timeout=self.timeout, breaker=breaker_for(self.base_url + "/v1/chat/completions"), path="/v1/chat/completions",
             headers={"Authorization": f"Bearer {self.api_key}"},
             json={
                 "model": self.model,

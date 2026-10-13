@@ -6,6 +6,7 @@
 
 import asyncio
 import random
+import time
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
@@ -50,6 +51,56 @@ async def with_retry(
     raise RetryExhausted(attempts, last)
 
 
+class CircuitOpen(Exception):
+    """Raised when the breaker is open and the upstream must not be contacted."""
+
+
+class CircuitBreaker:
+    """Consecutive-failure circuit breaker: closed -> open -> half_open (one probe) -> closed (NFR-19)."""
+
+    def __init__(self, failure_threshold: int = 5, cooldown: float = 30.0, clock: Callable[[], float] = time.monotonic):
+        self.failure_threshold = max(1, failure_threshold)
+        self.cooldown = cooldown
+        self._clock = clock
+        self.state = "closed"
+        self._failures = 0
+        self._opened_at = 0.0
+
+    def allow(self) -> bool:
+        if self.state == "closed":
+            return True
+        if self.state == "open" and self._clock() - self._opened_at >= self.cooldown:
+            self.state = "half_open"  # allow exactly one probe
+            return True
+        return False
+
+    def retry_after(self) -> int:
+        remaining = self.cooldown - (self._clock() - self._opened_at)
+        return max(1, int(remaining + 0.999)) if self.state == "open" else 1
+
+    def record_success(self) -> None:
+        self.state = "closed"
+        self._failures = 0
+
+    def record_failure(self) -> None:
+        self._failures += 1
+        if self.state == "half_open" or self._failures >= self.failure_threshold:
+            self.state = "open"
+            self._opened_at = self._clock()
+
+
+_BREAKERS: dict[str, CircuitBreaker] = {}
+
+
+def breaker_for(key: str) -> CircuitBreaker:
+    """Shared per-upstream breaker (key = base URL; never contains credentials)."""
+    return _BREAKERS.setdefault(key, CircuitBreaker())
+
+
+def reset_breakers() -> None:
+    _BREAKERS.clear()
+
+
 RETRY_STATUS = frozenset({429, 502, 503, 504})
 
 
@@ -69,6 +120,7 @@ async def post_json_with_retry(
     json: dict,
     attempts: int = 3,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    breaker: CircuitBreaker | None = None,
 ):
     """POST with bounded retries on transport errors and 429/502/503/504 (NFR-19).
 
@@ -76,6 +128,11 @@ async def post_json_with_retry(
     503 ``AppError`` is raised; neither headers nor payload appear in its message.
     """
     from .errors import AppError
+
+    if breaker is not None and not breaker.allow():
+        raise AppError(503, "Upstream service unavailable",
+                       "A model or search service is temporarily unavailable. Please try again shortly.",
+                       "upstream-unavailable", headers={"Retry-After": str(breaker.retry_after())})
 
     async def once():
         async with client_factory(base_url=base_url, timeout=timeout) as client:
@@ -87,8 +144,13 @@ async def post_json_with_retry(
 
     retryable = TRANSIENT + (_RetryableStatus,) + _httpx_transient()
     try:
-        return await with_retry(once, attempts=attempts, timeout=None, retry_on=retryable, sleep=sleep)
+        result = await with_retry(once, attempts=attempts, timeout=None, retry_on=retryable, sleep=sleep)
+        if breaker is not None:
+            breaker.record_success()
+        return result
     except RetryExhausted:
+        if breaker is not None:
+            breaker.record_failure()
         raise AppError(503, "Upstream service unavailable",
                        "A model or search service did not respond. Please try again shortly.",
                        "upstream-unavailable") from None
