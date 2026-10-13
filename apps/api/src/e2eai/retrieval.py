@@ -32,6 +32,7 @@ from .db import Chunk, ChunkEmbedding, DocPrincipal, Document, FolderPrincipal, 
 from .guardrails import PromptGuardPolicy, PromptInjectionDetector, select_prompt_detector
 from .language import detect_language
 from .semantic_cache import CacheContext, SemanticPromptCache
+from .vector_store import VectorPoint, VectorQuery, VectorStore
 
 
 # ---------------------------------------------------------------------------
@@ -233,8 +234,14 @@ class LiteLLMAnswerGenerator:
         return choices[0].get("message", {}).get("content", "")
 
 
-async def index_document_chunks(session: AsyncSession, *, embedder: Embedder, document_id: uuid.UUID) -> int:
-    """Embed all current chunks for one document once, independent of shares (FR-C1)."""
+async def index_document_chunks(
+    session: AsyncSession, *, embedder: Embedder, document_id: uuid.UUID, vector_store: VectorStore | None = None
+) -> int:
+    """Embed all current chunks for one document once, independent of shares (FR-C1).
+
+    With an external ``vector_store`` (FR-R3) the vectors are also written there (ids only, no text). The pgvector
+    rows stay as the source of truth that the SQL permission re-check joins against.
+    """
     rows = (
         await session.execute(
             select(Chunk)
@@ -255,6 +262,11 @@ async def index_document_chunks(session: AsyncSession, *, embedder: Embedder, do
                 vector=[float(x) for x in vector],
             )
         )
+    if vector_store is not None:
+        await vector_store.upsert([
+            VectorPoint(str(chunk.id), str(document_id), [float(x) for x in vector])
+            for chunk, vector in zip(rows, vectors, strict=True)
+        ])
     await audit.record(session, "system:ingest", "document.index", f"document:{document_id}", {"chunks": len(rows)})
     await session.commit()
     return len(rows)
@@ -273,6 +285,7 @@ async def retrieve_relevant_chunks(
     scoped_document_ids: Sequence[uuid.UUID] | None = None,
     scoped_folder_ids: Sequence[uuid.UUID] | None = None,
     mode: str = "dense",
+    vector_store: VectorStore | None = None,
 ) -> list[dict]:
     """Rank indexed chunks by vector distance after SQL-level permission and scope filtering (FR-C2/FR-C3).
 
@@ -284,6 +297,8 @@ async def retrieve_relevant_chunks(
     """
     if mode not in ("dense", "hybrid"):
         raise AppError(400, "Invalid retrieval mode")
+    if vector_store is not None and mode != "dense":
+        raise AppError(400, "Hybrid retrieval is not available with an external vector store")
     principal_list = sorted(set(user_principals))
     if not principal_list:
         return []
@@ -336,6 +351,8 @@ async def retrieve_relevant_chunks(
         if folder_ids:
             scope_filters.append(Document.folder_id.in_(folder_ids))
         filters.append(or_(*scope_filters))
+    if vector_store is not None:
+        return await _store_candidates(session, vector_store, filters, qvec, limit=limit)
     distance_col = ChunkEmbedding.vector.cosine_distance(qvec).label("distance")
     if mode == "hybrid":
         return await _hybrid_candidates(session, filters, distance_col, question=question, limit=limit)
@@ -357,6 +374,44 @@ async def retrieve_relevant_chunks(
             "score": round(1.0 - float(distance), 4),
         }
         for doc_id, title, text, page, section_path, distance in rows.all()
+    ]
+
+
+async def _store_candidates(session: AsyncSession, store: VectorStore, filters: list, qvec, *, limit: int) -> list[dict]:
+    """External vector store path (FR-R3). The permitted document ids come from the SQL predicate and travel inside
+    the store query (FR-C2); the returned chunk ids are then re-checked with the same predicate, so a faulty backend
+    can neither widen access nor surface a stale or revoked chunk."""
+    allowed_ids = (
+        await session.scalars(
+            select(Document.id).join(Chunk, Chunk.document_id == Document.id)
+            .join(ChunkEmbedding, ChunkEmbedding.chunk_id == Chunk.id).where(*filters).distinct()
+        )
+    ).all()
+    if not allowed_ids:
+        return []
+    hits = await store.query(VectorQuery(vector=[float(x) for x in qvec],
+                                         allowed_document_ids={str(i) for i in allowed_ids}, limit=limit))
+    scores: dict[uuid.UUID, float] = {}
+    for hit in hits:
+        try:
+            scores[uuid.UUID(hit.chunk_id)] = hit.score
+        except ValueError:
+            continue
+    if not scores:
+        return []
+    rows = (
+        await session.execute(
+            select(Chunk.id, Document.id, Document.title, Chunk.text, Chunk.page, Chunk.section_path)
+            .join(Chunk, Chunk.document_id == Document.id)
+            .join(ChunkEmbedding, ChunkEmbedding.chunk_id == Chunk.id)
+            .where(*filters, Chunk.id.in_(list(scores)))
+        )
+    ).all()
+    ordered = sorted(rows, key=lambda r: -scores[r[0]])[:limit]
+    return [
+        {"document_id": str(doc_id), "document": title, "text": text, "page": page, "section": section_path,
+         "score": round(scores[chunk_id], 4)}
+        for chunk_id, doc_id, title, text, page, section_path in ordered
     ]
 
 

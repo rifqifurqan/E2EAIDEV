@@ -2335,3 +2335,10 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_config_components_fr_f21.py` -> collection ImportError (`ConfigError`). GREEN: 5 passed.
   - Adjacent: `uv run pytest -q tests/test_config_components_fr_f21.py tests/test_config_export_fr_f21.py tests/test_auth.py tests/test_phase0_core.py tests/test_vector_store_fr_r3.py` -> 27 passed; `-k "oidc or config or readiness or http_hardening"` -> 37 passed. Heavy gates skipped.
   - Not done: using `Settings.vector_store` to pick the store in ingest/retrieval; Qdrant compose service.
+
+- Retrieval/indexing through an external VectorStore (FR-R3, FR-C2) (2026-10-13, cron):
+  - Hermes worked manually. Codex unused. Connects the `VectorStore` port to the retrieval module.
+  - `retrieval.index_document_chunks` takes optional `vector_store` and upserts ids + vectors there (pgvector rows stay as source of truth). `retrieve_relevant_chunks` takes optional `vector_store`: the SQL predicate (status, expiry, version, permissions, scope) yields the permitted document ids, only those go into `VectorQuery.allowed_document_ids`, and the returned chunk ids are re-checked with the same SQL predicate before text/titles are read, so a backend that ignores the filter or returns stale chunks cannot leak. No permitted documents -> the store is never queried. `mode="hybrid"` with an external store -> 400 (sparse pool is Postgres-only).
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_retrieval_vector_store_fr_r3.py` -> 4 failed (`vector_store` parameter missing). GREEN: 4 passed.
+  - Adjacent: `uv run pytest -q tests/test_retrieval_vector_store_fr_r3.py tests/test_vector_store_fr_r3.py tests/test_us_hybrid_search_p1.py tests/test_us_reranker_p0.py tests/test_us_answer_language_p0.py tests/test_us_upload_ingest.py tests/test_us_document_search_p1.py` -> 51 passed. Heavy gates skipped.
+  - Not done: picking the store from `Settings.vector_store` inside the ingest job and chat pipeline; deletion propagation to the external store on trash/purge (FR-D9); Qdrant compose service + digest; live Qdrant run.
