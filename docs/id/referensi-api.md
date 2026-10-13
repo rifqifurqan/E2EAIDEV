@@ -169,7 +169,7 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 
 - Ringkasan: List Api Keys Api
 - Operation ID: `list_api_keys_api_api_v1_api_keys_get`
-- Kode status respons: 200
+- Kode status respons: 200, 422
 
 #### POST /api/v1/api-keys
 

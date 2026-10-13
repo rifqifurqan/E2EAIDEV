@@ -11,11 +11,12 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import ApiKey, User, get_session
 
 VALID_SCOPES = frozenset({"chat", "documents", "sharing", "evals", "bots"})
@@ -147,6 +148,33 @@ async def revoke_api_key(
     await session.commit()
 
 
+def _key_summary(k: ApiKey) -> dict:
+    return {
+        "id": str(k.id),
+        "prefix": k.prefix,
+        "name": k.name,
+        "scopes": k.scopes,
+        "expires_at": k.expires_at.isoformat() if k.expires_at else None,
+        "revoked_at": k.revoked_at.isoformat() if k.revoked_at else None,
+        "created_at": k.created_at.isoformat() if k.created_at else None,
+    }
+
+
+async def list_api_keys_page(
+    session: AsyncSession, *, user: User, limit: int | None = None, cursor: str | None = None
+) -> tuple[list[dict], str | None]:
+    """Keyset-paginated, owner-scoped key list (NFR-20): newest first, ties broken by id. No hashes."""
+    size = clamp_limit(limit)
+    stmt = select(ApiKey).where(ApiKey.user_id == user.id)
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(ApiKey.created_at, ApiKey.id) < tuple_(ts, last_id))
+    stmt = stmt.order_by(ApiKey.created_at.desc(), ApiKey.id.desc()).limit(size + 1)
+    rows = list((await session.scalars(stmt)).all())
+    page, nxt = make_page(rows, size, lambda k: (k.created_at, k.id))
+    return [_key_summary(k) for k in page], nxt
+
+
 async def list_api_keys(
     session: AsyncSession,
     *,
@@ -156,18 +184,7 @@ async def list_api_keys(
     rows = (await session.execute(
         select(ApiKey).where(ApiKey.user_id == user.id).order_by(ApiKey.created_at.desc())
     )).scalars().all()
-    return [
-        {
-            "id": str(k.id),
-            "prefix": k.prefix,
-            "name": k.name,
-            "scopes": k.scopes,
-            "expires_at": k.expires_at.isoformat() if k.expires_at else None,
-            "revoked_at": k.revoked_at.isoformat() if k.revoked_at else None,
-            "created_at": k.created_at.isoformat() if k.created_at else None,
-        }
-        for k in rows
-    ]
+    return [_key_summary(k) for k in rows]
 
 
 async def authenticate_api_key(
@@ -232,10 +249,13 @@ def make_router():
 
     @router.get("")
     async def list_api_keys_api(
+        limit: int | None = None,
+        cursor: str | None = None,
         sess: dict = Depends(current_session),
         db: AsyncSession = Depends(get_session),
     ) -> dict:
         user = await _current_user(db, sess)
-        return {"keys": await list_api_keys(db, user=user)}
+        keys, next_cursor = await list_api_keys_page(db, user=user, limit=limit, cursor=cursor)
+        return {"keys": keys, "next_cursor": next_cursor}
 
     return router

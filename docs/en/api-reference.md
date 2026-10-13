@@ -169,7 +169,7 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: List Api Keys Api
 - Operation ID: `list_api_keys_api_api_v1_api_keys_get`
-- Response status codes: 200
+- Response status codes: 200, 422
 
 #### POST /api/v1/api-keys
 

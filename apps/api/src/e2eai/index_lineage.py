@@ -12,12 +12,13 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import current_session, require_scope
 from .authz import principals
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import Document, IndexLineage, User, get_session
 
 
@@ -89,6 +90,37 @@ async def visible_lineage(
     return [_row(r) for r in (await session.execute(stmt)).scalars().all()]
 
 
+async def visible_lineage_page(
+    session: AsyncSession, *, user: User, document_id: uuid.UUID | None = None,
+    limit: int | None = None, cursor: str | None = None,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Keyset-paginated lineage (NFR-20). The permission predicate runs in SQL before the page cut."""
+    from .documents import _visible_document_clause
+
+    size = clamp_limit(limit)
+    principal_list = sorted(set(await principals(session, user)))
+    if not principal_list:
+        return [], None
+    stmt = (
+        select(IndexLineage)
+        .join(Document, Document.id == IndexLineage.document_id)
+        .where(
+            Document.status == "active",
+            or_(Document.expires_at.is_(None), Document.expires_at > func.now()),
+            _visible_document_clause(principal_list),
+        )
+    )
+    if document_id is not None:
+        stmt = stmt.where(IndexLineage.document_id == document_id)
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(IndexLineage.recorded_at, IndexLineage.id) < tuple_(ts, last_id))
+    stmt = stmt.order_by(IndexLineage.recorded_at.desc(), IndexLineage.id.desc()).limit(size + 1)
+    rows = list((await session.execute(stmt)).scalars().all())
+    page, nxt = make_page(rows, size, lambda r: (r.recorded_at, r.id))
+    return [_row(r) for r in page], nxt
+
+
 async def lineage_summary(session: AsyncSession) -> dict[str, Any]:
     """Admin summary: index versions by embedding model/parser/chunker (counts only)."""
 
@@ -118,13 +150,16 @@ async def _user(db: AsyncSession, sess: dict) -> User:
 @router.get("")
 async def lineage_api(
     document_id: uuid.UUID | None = None,
+    limit: int | None = None,
+    cursor: str | None = None,
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     """FR-D10: lineage of the documents the caller can access."""
     require_scope(sess, "documents")
     user = await _user(db, sess)
-    return {"lineage": await visible_lineage(db, user=user, document_id=document_id)}
+    rows, next_cursor = await visible_lineage_page(db, user=user, document_id=document_id, limit=limit, cursor=cursor)
+    return {"lineage": rows, "next_cursor": next_cursor}
 
 
 @router.get("/summary")
