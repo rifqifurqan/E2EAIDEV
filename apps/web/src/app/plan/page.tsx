@@ -1,5 +1,5 @@
-import { StagePlaceholder } from "@/components/stage-placeholder";
+import { PlanScreen } from "@/components/plan-screen";
 
 export default function PlanPage() {
-  return <StagePlaceholder stage="plan" />;
+  return <PlanScreen />;
 }

@@ -78,9 +78,11 @@ export interface ShareInput {
 
 export interface UseCaseInput {
   title: string;
-  business_owner?: string;
-  purpose: string;
-  risk_tier?: string;
+  problem: string;
+  users: string[];
+  success_metrics: { task_success: string; deflection: string; time_saved: string };
+  data_sources: string[];
+  systems_to_integrate: string[];
 }
 
 export interface UseCaseResponse {
@@ -468,19 +470,7 @@ export const api = {
   createUseCase: (input: UseCaseInput) =>
     apiFetch<UseCaseResponse>(ENDPOINTS.useCases, {
       method: "POST",
-      body: {
-        title: input.title,
-        problem: input.purpose,
-        users: input.business_owner ? [input.business_owner] : ["business owner"],
-        success_metrics: {
-          task_success: "Defined during intake",
-          deflection: "Defined during intake",
-          time_saved: "Defined during intake",
-        },
-        data_sources: [],
-        systems_to_integrate: [],
-        risk_tier: input.risk_tier ?? "limited",
-      },
+      body: input,
     }),
 
   // Evals
