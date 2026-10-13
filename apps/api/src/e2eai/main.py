@@ -141,11 +141,9 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/api/v1/ready", tags=["ops"])
-    async def ready() -> dict[str, str]:
-        async with sessions()() as session:
-            await session.execute(text("SELECT 1"))
-        return {"status": "ready"}
+    from .core.readiness import make_ready_router
+    from .readiness_checks import default_checks
+    app.include_router(make_ready_router(default_checks))
 
     return app
 
