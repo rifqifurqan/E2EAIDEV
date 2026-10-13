@@ -168,6 +168,10 @@ const id: Dictionary = {
     loading: "Memuat...",
     adminOnly: "Tampilan ini hanya tersedia untuk administrator.",
     loadFailed: "Gagal memuat data.",
+    triageFailed: "Gagal memproses item.",
+    acceptEval: "Terima untuk evaluasi",
+    acceptFinetune: "Terima untuk fine-tuning",
+    dismiss: "Abaikan",
   },
   whyItMatters: {
     title: "Mengapa Penting di Perusahaan",

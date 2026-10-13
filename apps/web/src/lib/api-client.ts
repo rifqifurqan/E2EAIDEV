@@ -319,6 +319,7 @@ export const ENDPOINTS = {
   deactivateUser: (userId: string) => `/users/${userId}/deactivate`,
   incidents: "/incidents",
   flywheel: "/improve/flywheel",
+  flywheelTriage: (itemId: string) => `/improve/flywheel/${itemId}/triage`,
   dueReviews: "/documents/reviews/due",
   modelRegistry: "/model-registry",
   botApprovals: "/governance/bot-approvals",
@@ -501,6 +502,11 @@ export const api = {
   // Operate / Improve (admin-only on the server)
   listIncidents: () => apiFetch<IncidentList>(ENDPOINTS.incidents),
   listFlywheel: () => apiFetch<FlywheelQueue>(ENDPOINTS.flywheel),
+  triageFlywheelItem: (itemId: string, decision: "accept" | "dismiss", target?: "eval" | "finetune") =>
+    apiFetch<FlywheelItem>(ENDPOINTS.flywheelTriage(itemId), {
+      method: "POST",
+      body: target === undefined ? { decision } : { decision, target },
+    }),
 
   // Data / Build (signed-in users; scope enforced by the server)
   listDueReviews: () => apiFetch<DueReviewList>(ENDPOINTS.dueReviews),

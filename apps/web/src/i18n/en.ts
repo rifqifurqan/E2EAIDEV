@@ -166,6 +166,10 @@ const en = {
     loading: "Loading...",
     adminOnly: "This view is available to administrators only.",
     loadFailed: "Could not load data.",
+    triageFailed: "Could not triage the item.",
+    acceptEval: "Accept for eval",
+    acceptFinetune: "Accept for fine-tuning",
+    dismiss: "Dismiss",
   },
   whyItMatters: {
     title: "Why It Matters in Enterprise",

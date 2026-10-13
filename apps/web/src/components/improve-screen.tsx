@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useI18n } from "@/i18n/context";
 import { api } from "@/lib/api-client";
 import { useAdminData } from "@/lib/use-admin-data";
@@ -7,7 +8,23 @@ import { WhyItMattersPanel } from "./why-it-matters-panel";
 
 export function ImproveScreen() {
   const { t } = useI18n();
-  const state = useAdminData(() => api.listFlywheel());
+  const [reloadKey, setReloadKey] = useState(0);
+  const state = useAdminData(() => api.listFlywheel(), reloadKey);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [triageFailed, setTriageFailed] = useState(false);
+
+  async function triage(id: string, decision: "accept" | "dismiss", target?: "eval" | "finetune") {
+    setTriageFailed(false);
+    setBusyId(id);
+    try {
+      await api.triageFlywheelItem(id, decision, target);
+    } catch {
+      setTriageFailed(true);
+    } finally {
+      setBusyId(null);
+      setReloadKey((key) => key + 1);
+    }
+  }
 
   return (
     <section>
@@ -32,6 +49,11 @@ export function ImproveScreen() {
             ))}
           </ul>
           <h2 className="mb-2 text-lg font-semibold">{t.improve.queue}</h2>
+          {triageFailed ? (
+            <p role="alert" className="mb-2 rounded border border-red-300 bg-red-50 p-3 text-sm">
+              {t.improve.triageFailed}
+            </p>
+          ) : null}
           {state.data.items.length === 0 ? (
             <p className="text-sm text-gray-500">{t.improve.noItems}</p>
           ) : (
@@ -40,6 +62,34 @@ export function ImproveScreen() {
                 <li key={item.id} className="rounded border border-gray-200 p-2">
                   <span className="mr-2 font-mono text-xs text-gray-500">{item.status}</span>
                   <span>{item.question}</span>
+                  {item.status === "queued" ? (
+                    <span className="ml-3 inline-flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={busyId === item.id || !item.correction}
+                        onClick={() => triage(item.id, "accept", "eval")}
+                        className="rounded border border-green-400 px-2 py-0.5 text-xs text-green-700 disabled:opacity-50"
+                      >
+                        {t.improve.acceptEval}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyId === item.id || !item.correction}
+                        onClick={() => triage(item.id, "accept", "finetune")}
+                        className="rounded border border-green-400 px-2 py-0.5 text-xs text-green-700 disabled:opacity-50"
+                      >
+                        {t.improve.acceptFinetune}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyId === item.id}
+                        onClick={() => triage(item.id, "dismiss")}
+                        className="rounded border border-gray-400 px-2 py-0.5 text-xs text-gray-700 disabled:opacity-50"
+                      >
+                        {t.improve.dismiss}
+                      </button>
+                    </span>
+                  ) : null}
                 </li>
               ))}
             </ul>
