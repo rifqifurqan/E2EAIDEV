@@ -67,6 +67,11 @@ def test_erase_removes_flywheel_items_linked_to_the_subjects_messages_only():
 
             await session.execute(delete(FlywheelItem))
             await session.commit()
+            # leave the shared DB as found: erase pseudonymises Andi, other tests expect the demo user back
+            gone = await session.scalar(select(User).where(User.email.like("erased-%@erased.invalid")).limit(1))
+            if gone is not None:
+                gone.email, gone.display_name, gone.status = "andi@demo.e2eai", "Andi", "active"
+                await session.commit()
 
     _migrate()
     asyncio.run(run())

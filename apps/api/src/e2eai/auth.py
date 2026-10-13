@@ -22,6 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
+from .core.audit_actor import set_actor
 from .core.config import get_settings
 from .core.errors import AppError
 from .db import LocalCredential, Organization, User, get_session
@@ -373,6 +374,7 @@ async def current_session(request: Request) -> dict:
             if result is None:
                 raise AppError(401, "Invalid API key")
             user, key = result
+            set_actor(f"user:{user.id}")  # NFR-20: created_by/updated_by for this request
             return {"user_id": str(user.id), "auth_type": "api_key", "scopes": list(key.scopes)}
 
     # Fall back to session cookie
@@ -380,6 +382,8 @@ async def current_session(request: Request) -> dict:
     data = await _sessions().get(sid) if sid else None
     if not data:
         raise AppError(401, "Not authenticated")
+    if data.get("user_id"):
+        set_actor(f"user:{data['user_id']}")  # NFR-20: created_by/updated_by for this request
     return {"sid": sid, "auth_type": "session", **data}
 
 

@@ -94,7 +94,7 @@ def test_export_closes_the_open_request_and_overdue_listing_flags_late_ones():
 def test_erase_closes_request_pages_walk_and_ledger_holds_no_personal_data():
     async def run():
         from e2eai.data_subject import erase_subject_data, list_requests_page, open_request
-        from e2eai.db import sessions
+        from e2eai.db import User, sessions
 
         async with sessions()() as session:
             admin, andi, budi = await _people(session)
@@ -124,6 +124,12 @@ def test_erase_closes_request_pages_walk_and_ledger_holds_no_personal_data():
             from e2eai.main import create_app
             paths = create_app().openapi()["paths"]
             assert {"get", "post"} <= set(paths["/api/v1/privacy/requests"])
+
+            # leave the shared DB as found: erase pseudonymises Andi, other tests expect the demo user back
+            gone = await session.scalar(select(User).where(User.email.like("erased-%@erased.invalid")).limit(1))
+            if gone is not None:
+                gone.email, gone.display_name, gone.status = "andi@demo.e2eai", "Andi", "active"
+                await session.commit()
 
     _migrate()
     asyncio.run(run())

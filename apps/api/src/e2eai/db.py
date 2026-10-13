@@ -29,6 +29,12 @@ class Audited:
     updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
+# NFR-20: tables that intentionally do not carry created/updated by and at, with the reason.
+AUDIT_EXEMPT_TABLES: dict[str, str] = {
+    "audit_log": "append-only hash chain; each entry already records its own time (at) and actor",
+}
+
+
 class Organization(Audited, Base):
     __tablename__ = "organizations"
     name: Mapped[str] = mapped_column(String(200))
@@ -66,12 +72,20 @@ class TeamMember(Base):
     __tablename__ = "team_members"
     team_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class Role(Base):
     __tablename__ = "roles"
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
     name: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class Project(Audited, Base):
@@ -89,6 +103,10 @@ class UserRole(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("roles.id"), primary_key=True)
     project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class LocalCredential(Base):
@@ -96,6 +114,9 @@ class LocalCredential(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     password_hash: Mapped[str] = mapped_column(String(200))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class AuditEntry(Base):
@@ -115,6 +136,10 @@ class Setting(Base):
     __tablename__ = "settings"
     key: Mapped[str] = mapped_column(String(80), primary_key=True)
     value: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class Folder(Audited, Base):
@@ -138,6 +163,10 @@ class FolderPrincipal(Base):
     principal: Mapped[str] = mapped_column(String(80), primary_key=True)
     level: Mapped[str] = mapped_column(String(16), default="viewer")
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class Notification(Base):
@@ -149,6 +178,9 @@ class Notification(Base):
     details: Mapped[dict] = mapped_column(JSONB, default=dict)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class Document(Audited, Base):
@@ -196,6 +228,10 @@ class Chunk(Base):
     section_path: Mapped[str | None] = mapped_column(String(1000))
     figure_object_key: Mapped[str | None] = mapped_column(String(300))
     table_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class ChunkEmbedding(Base):
@@ -213,6 +249,9 @@ class ChunkEmbedding(Base):
     # fixed-dim per-index table + HNSW when a second embedding model or >~1M chunks lands.
     vector: Mapped[list[float]] = mapped_column(Vector())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class IndexLineage(Base):
@@ -231,6 +270,10 @@ class IndexLineage(Base):
     embedding_model: Mapped[str] = mapped_column(String(160))
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class DocPrincipal(Base):
@@ -242,6 +285,10 @@ class DocPrincipal(Base):
     principal: Mapped[str] = mapped_column(String(80), primary_key=True)
     level: Mapped[str] = mapped_column(String(16), default="viewer")  # viewer/editor/owner
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class Conversation(Base):
@@ -255,6 +302,8 @@ class Conversation(Base):
     legal_hold: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class Message(Base):
@@ -269,6 +318,9 @@ class Message(Base):
     latency_ms: Mapped[int | None] = mapped_column(Integer)
     stop_reason: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class MessageCitation(Base):
@@ -281,6 +333,10 @@ class MessageCitation(Base):
     chunk_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("chunks.id"))
     page: Mapped[int | None] = mapped_column(Integer)
     section: Mapped[str | None] = mapped_column(String(1000))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class MessageFeedback(Base):
@@ -293,6 +349,9 @@ class MessageFeedback(Base):
     correction_masked: Mapped[str | None] = mapped_column(Text)
     trace_id: Mapped[str | None] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class EvalDataset(Base):
@@ -305,6 +364,8 @@ class EvalDataset(Base):
     items: Mapped[list] = mapped_column(JSONB, default=list)
     created_by: Mapped[str | None] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class EvalRun(Base):
@@ -318,6 +379,8 @@ class EvalRun(Base):
     item_results: Mapped[list] = mapped_column(JSONB, default=list)
     created_by: Mapped[str | None] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class AccessRequest(Base):
@@ -334,6 +397,9 @@ class AccessRequest(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resolved_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class Bot(Base):
@@ -345,6 +411,8 @@ class Bot(Base):
     production_bundle_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class BotBundle(Base):
@@ -358,6 +426,9 @@ class BotBundle(Base):
     bundle: Mapped[dict] = mapped_column(JSONB, default=dict)
     released_by: Mapped[str | None] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class BotGrant(Base):
@@ -366,6 +437,10 @@ class BotGrant(Base):
     bot_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bots.id", ondelete="CASCADE"), primary_key=True)
     principal: Mapped[str] = mapped_column(String(80), primary_key=True)
     level: Mapped[str] = mapped_column(String(32), default="user")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class BotRiskClassification(Base):
@@ -384,6 +459,9 @@ class BotRiskClassification(Base):
     required_release_gates: Mapped[dict] = mapped_column(JSONB, default=dict)
     classified_by: Mapped[str | None] = mapped_column(String(80))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class ModelRegistryEntry(Base):
@@ -407,6 +485,8 @@ class ModelRegistryEntry(Base):
     registered_by: Mapped[str] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class AIIncident(Base):
@@ -436,6 +516,8 @@ class AIIncident(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class FlywheelItem(Base):
@@ -468,6 +550,8 @@ class FlywheelItem(Base):
     triaged_by: Mapped[str | None] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class ConnectorDocument(Base):
@@ -483,6 +567,10 @@ class ConnectorDocument(Base):
     document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
     content_sha256: Mapped[str] = mapped_column(String(64))
     last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class AIInventoryEntry(Base):
@@ -512,6 +600,7 @@ class AIInventoryEntry(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     updated_by: Mapped[str | None] = mapped_column(String(80))
+    created_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class BotApproval(Base):
@@ -537,6 +626,9 @@ class BotApproval(Base):
     decided_by: Mapped[str | None] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class BotScope(Base):
@@ -545,6 +637,10 @@ class BotScope(Base):
     bot_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bots.id", ondelete="CASCADE"), primary_key=True)
     target_type: Mapped[str] = mapped_column(String(16), primary_key=True)  # document/folder
     target_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class BotEnvironment(Base):
@@ -559,6 +655,9 @@ class BotEnvironment(Base):
     bundle_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     allow_production_data: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class ApiKey(Base):
@@ -575,6 +674,9 @@ class ApiKey(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class Prompt(Base):
@@ -587,6 +689,8 @@ class Prompt(Base):
     description: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class PromptVersion(Base):
@@ -600,6 +704,8 @@ class PromptVersion(Base):
     notes: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str | None] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class PromptLabel(Base):
@@ -612,6 +718,8 @@ class PromptLabel(Base):
     version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("prompt_versions.id", ondelete="CASCADE"))
     updated_by: Mapped[str | None] = mapped_column(String(80))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class SloAlert(Base):
@@ -629,6 +737,8 @@ class SloAlert(Base):
     window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class FinopsBudgetAlert(Base):
@@ -648,6 +758,8 @@ class FinopsBudgetAlert(Base):
     window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class McpToolCall(Base):
@@ -670,6 +782,9 @@ class McpToolCall(Base):
     auth_mode: Mapped[str | None] = mapped_column(String(32))  # FR-X3: delegated/token_exchange/None
     acting_user_id: Mapped[str | None] = mapped_column(String(80))  # FR-X3: user who the AI acts as
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class SystemRegistration(Audited, Base):
@@ -715,6 +830,9 @@ class UserMemorySetting(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class UserMemory(Base):
@@ -725,6 +843,9 @@ class UserMemory(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     text: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class DataSubjectRequest(Base):
@@ -745,6 +866,9 @@ class DataSubjectRequest(Base):
     opened_by: Mapped[str] = mapped_column(String(80))
     last_reminder: Mapped[str | None] = mapped_column(String(10))  # 'due_soon' | 'overdue': reminders are sent once per state
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 class SystemGrant(Base):
@@ -752,6 +876,10 @@ class SystemGrant(Base):
     __tablename__ = "system_grants"
     system_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("system_registrations.id", ondelete="CASCADE"), primary_key=True)
     principal: Mapped[str] = mapped_column(String(80), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[str | None] = mapped_column(String(80))
+    updated_by: Mapped[str | None] = mapped_column(String(80))
 
 
 ROLE_NAMES = ("admin", "ai_engineer", "evaluator", "compliance", "business_user")  # FR-F3
@@ -772,3 +900,5 @@ def sessions() -> async_sessionmaker[AsyncSession]:
 async def get_session() -> AsyncIterator[AsyncSession]:
     async with sessions()() as session:
         yield session
+
+from .core import audit_actor as _audit_actor  # noqa: E402,F401  (registers the created_by/updated_by hook)
