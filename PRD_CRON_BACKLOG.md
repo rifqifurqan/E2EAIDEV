@@ -193,6 +193,8 @@ Rules for every cron tick:
 
 110. [x] [NFR-20/FR-I1] Flywheel summary counts aggregated in SQL (whole queue, not first 1000 rows) and status filter applied in SQL. Completed in `flywheel.queue_summary`; see progress_2026-10-05.txt. Pagination rollout is now complete: no GET list endpoints remain unpaged except bounded/static ones (bots/evals/connectors expose no list GET).
 
+111. [x] [NFR-19/FR-F1] Circuit breaker for Keycloak OIDC calls (open after repeated outages, fail fast 503 + `Retry-After`, 4xx rejections do not trip it, `circuit_breaker_state{upstream="keycloak"}` gauge). See progress_2026-10-05.txt.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.

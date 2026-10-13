@@ -92,3 +92,39 @@ def test_rejected_code_is_still_401_and_not_retried():
     with pytest.raises(AppError) as exc:
         run(client)
     assert exc.value.status == 401 and client.post_n == 1
+
+
+def _run_keep_breaker(client):
+    return asyncio.run(exchange_oidc_code_for_identity(
+        client, PROVIDER, code="c", redirect_uri="https://app/cb", retry_sleep=_nosleep))
+
+
+def test_repeated_keycloak_outage_opens_breaker_and_fails_fast_with_retry_after():
+    from e2eai.core.resilience import breaker_states
+
+    reset_breakers()
+    for _ in range(5):  # each failed login attempt = one breaker failure
+        with pytest.raises(AppError):
+            _run_keep_breaker(Client([httpx.ConnectError("refused")] * 3, []))
+    assert breaker_states()["keycloak"] == 2  # open
+
+    probe = Client([TOKEN], [INFO])
+    with pytest.raises(AppError) as exc:
+        _run_keep_breaker(probe)
+    assert exc.value.status == 503 and probe.post_n == 0  # Keycloak not contacted
+    assert int(exc.value.headers["Retry-After"]) >= 1
+    assert "kc.local" not in f"{exc.value.title} {exc.value.detail}"
+    reset_breakers()
+
+
+def test_keycloak_rejections_and_success_do_not_trip_or_they_close_the_breaker():
+    from e2eai.core.resilience import breaker_states
+
+    reset_breakers()
+    for _ in range(6):  # 4xx = IdP is up, the code was just bad
+        with pytest.raises(AppError):
+            _run_keep_breaker(Client([Resp(status_code=400)], []))
+    assert breaker_states()["keycloak"] == 0
+    assert _run_keep_breaker(Client([TOKEN], [INFO])).email == "a@b.c"
+    assert breaker_states()["keycloak"] == 0
+    reset_breakers()

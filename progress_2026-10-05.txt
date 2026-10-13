@@ -2259,3 +2259,10 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_flywheel_summary_counts_nfr20.py` -> 1 failed (counts capped at 1000). GREEN: 1 passed (1003 queued + 3 dismissed rows).
   - Adjacent: `uv run pytest -q tests/test_flywheel_summary_counts_nfr20.py tests/test_data_flywheel_fr_i1.py tests/test_pagination_remaining_lists_nfr20.py` -> 11 passed; app ok. Heavy gates skipped per speed-biased instruction.
   - Audit: no GET list endpoints remain unpaged except bounded/static ones; bots/evals/connectors expose no list GET, so that follow-up is closed.
+
+- Circuit breaker for Keycloak OIDC calls (NFR-19, FR-F1) (2026-10-13, cron):
+  - Hermes worked manually. Codex unused.
+  - `exchange_oidc_code_for_identity` now uses `breaker_for(token_endpoint, "keycloak")`: after 5 consecutive failed exchanges (transport errors / retry exhaustion) the breaker opens and further logins fail fast with the same 503 `upstream-unavailable` problem plus `Retry-After`, without contacting Keycloak; a half-open probe closes it after cooldown. Keycloak 4xx rejections and successful exchanges count as success (IdP is up). Label `keycloak` (no URL) appears in the existing `circuit_breaker_state` gauge.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_oidc_resilience_nfr19.py` -> 2 failed (no `keycloak` breaker). GREEN: 7 passed.
+  - Adjacent: `uv run pytest -q tests/test_oidc_resilience_nfr19.py tests/test_auth.py tests/test_circuit_breaker_nfr19.py tests/test_phase0_core.py tests/test_metrics_nfr16.py` -> 31 passed; `-k oidc` -> 12 passed. Heavy gates skipped.
+  - Not done: breaker for MCP (no real transport yet); OpenFGA must keep failing closed; cross-process breaker state; live Keycloak outage drill.

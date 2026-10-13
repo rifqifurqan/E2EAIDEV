@@ -124,9 +124,14 @@ async def exchange_oidc_code_for_identity(
         form["client_secret"] = provider.client_secret
     if code_verifier:
         form["code_verifier"] = code_verifier
-    from .core.resilience import RetryExhausted, with_retry
+    from .core.resilience import RetryExhausted, breaker_for, with_retry
 
     sleep_kw = {"sleep": retry_sleep} if retry_sleep else {}
+    breaker = breaker_for(provider.token_endpoint, "keycloak")
+    if not breaker.allow():  # fail fast while Keycloak is known to be down (NFR-19)
+        err = _idp_unavailable()
+        err.headers = {"Retry-After": str(breaker.retry_after())}
+        raise err
     try:
         # The authorization code is single use: retry only when the request never reached Keycloak.
         token_response = await with_retry(
@@ -137,16 +142,17 @@ async def exchange_oidc_code_for_identity(
             ),
             timeout=None, retry_on=(httpx.ConnectError, httpx.ConnectTimeout), **sleep_kw,
         )
-    except httpx.TransportError:
-        raise _idp_unavailable() from None
-    except RetryExhausted:
+    except (httpx.TransportError, RetryExhausted):
+        breaker.record_failure()
         raise _idp_unavailable() from None
     if token_response.status_code >= 400:
+        breaker.record_success()  # the IdP answered: a bad code is not an outage
         raise AppError(401, "OIDC token exchange failed")
     token_payload = token_response.json()
     access_token = token_payload.get("access_token")
     token_type = token_payload.get("token_type", "Bearer")
     if not access_token or token_type.lower() != "bearer":
+        breaker.record_success()
         raise AppError(401, "OIDC token response is invalid")
     try:
         userinfo_response = await with_retry(
@@ -157,7 +163,9 @@ async def exchange_oidc_code_for_identity(
             timeout=None, retry_on=(httpx.TransportError,), **sleep_kw,
         )
     except (httpx.TransportError, RetryExhausted):
+        breaker.record_failure()
         raise _idp_unavailable() from None
+    breaker.record_success()
     if userinfo_response.status_code >= 400:
         raise AppError(401, "OIDC userinfo validation failed")
     userinfo = userinfo_response.json()
