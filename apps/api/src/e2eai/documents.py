@@ -389,7 +389,8 @@ async def restore_document(
 
 
 async def purge_document(
-    session: AsyncSession, authz, *, actor: User, document_id: uuid.UUID, storage: ObjectStorage | None = None
+    session: AsyncSession, authz, *, actor: User, document_id: uuid.UUID, storage: ObjectStorage | None = None,
+    vector_store=None,
 ) -> None:
     """Permanently delete derived content and the stored object (FR-D9). Legal hold blocks it (FR-D13).
 
@@ -415,8 +416,16 @@ async def purge_document(
     await session.execute(delete(DocumentVersion).where(DocumentVersion.document_id == document_id))
     doc.status = "purged"
     doc.current_version_id = None
-    await audit.record(session, f"user:{actor.id}", "document.purge", _document_object(document_id),
-                       {"principals": len(grants), "objects": len(object_keys)})
+    details: dict = {"principals": len(grants), "objects": len(object_keys)}
+    if vector_store is not None:
+        # FR-R3: the external store is purged too. An outage must not block the SQL tightening above (retrieval
+        # re-checks hits in SQL, so leftover vectors are invisible); it is recorded as a reason code for a retry.
+        try:
+            await vector_store.delete_documents([str(document_id)])
+            details["vector_store_purge"] = "ok"
+        except Exception:  # noqa: BLE001 - any backend failure degrades to a retryable audit note
+            details["vector_store_purge"] = "failed"
+    await audit.record(session, f"user:{actor.id}", "document.purge", _document_object(document_id), details)
     await session.commit()
 
     deletes = [{"user": p, "relation": _relation(level), "object": _document_object(document_id)} for p, level in grants]

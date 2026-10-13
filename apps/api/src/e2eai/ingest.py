@@ -121,6 +121,7 @@ async def ingest_version(
     policy: ScanPolicy | None = None,
     pii_detector: PiiDetector | None = None,
     pii_policy: PiiPolicy | None = None,
+    vector_store=None,
 ) -> dict:
     """Scan, then parse the stored object for one version, (re)write chunks, index embeddings, set status.
 
@@ -200,7 +201,9 @@ async def ingest_version(
                        {"version_id": str(version_id), "chunks": len(parsed)})
     await session.commit()
 
-    indexed = await index_document_chunks(session, embedder=embedder, document_id=version.document_id)
+    indexed = await index_document_chunks(
+        session, embedder=embedder, document_id=version.document_id, vector_store=vector_store
+    )
     await record_lineage(
         session, document_id=version.document_id, version_id=version_id,
         parser=type(parser).__name__, chunker="structure-aware",

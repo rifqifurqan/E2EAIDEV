@@ -2342,3 +2342,10 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_retrieval_vector_store_fr_r3.py` -> 4 failed (`vector_store` parameter missing). GREEN: 4 passed.
   - Adjacent: `uv run pytest -q tests/test_retrieval_vector_store_fr_r3.py tests/test_vector_store_fr_r3.py tests/test_us_hybrid_search_p1.py tests/test_us_reranker_p0.py tests/test_us_answer_language_p0.py tests/test_us_upload_ingest.py tests/test_us_document_search_p1.py` -> 51 passed. Heavy gates skipped.
   - Not done: picking the store from `Settings.vector_store` inside the ingest job and chat pipeline; deletion propagation to the external store on trash/purge (FR-D9); Qdrant compose service + digest; live Qdrant run.
+
+- Ingest and purge propagate to the external VectorStore (FR-D9, FR-R3) (2026-10-13, cron):
+  - Hermes worked manually. Codex unused.
+  - `ingest.ingest_version` accepts `vector_store` and forwards it to `index_document_chunks`. `documents.purge_document` accepts `vector_store`: after the SQL tightening it calls `delete_documents([document_id])`; any backend error is swallowed into audit detail `vector_store_purge: failed` (no exception text) and the purge still completes, because retrieval re-checks hits in SQL so leftover vectors are never returned. Success records `ok`. Without a store the audit details are unchanged.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_purge_vector_store_fr_d9.py` -> 3 failed (`vector_store` parameter missing). GREEN: 3 passed.
+  - Adjacent: `uv run pytest -q tests/test_purge_vector_store_fr_d9.py tests/test_us_document_lifecycle.py tests/test_legal_hold_fr_d13.py tests/test_us_upload_ingest.py tests/test_retrieval_vector_store_fr_r3.py tests/test_vector_store_fr_r3.py tests/test_us_malware_scan.py tests/test_us_pii_redaction.py` -> 42 passed. Heavy gates skipped.
+  - Not done: wiring the store from `Settings.vector_store` into the ingest job and API handlers; a retry job for purges flagged `failed`; trash exclusion in the external store is covered by the SQL re-check only; Qdrant compose service + pinned digest.
