@@ -12,13 +12,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
 from .auth import current_session, require_scope
 from .bot_risk import VALID_EU_AI_ACT_TIERS
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import AIInventoryEntry, Bot, BotRiskClassification, User, get_session
 
 VALID_INVENTORY_KINDS = ("bot", "model")
@@ -176,6 +177,25 @@ async def list_inventory(session: AsyncSession, *, kind: str | None = None) -> l
     return list((await session.execute(stmt)).scalars().all())
 
 
+async def list_inventory_page(
+    session: AsyncSession, *, kind: str | None = None, limit: int | None = None, cursor: str | None = None
+) -> tuple[list[AIInventoryEntry], str | None]:
+    """Keyset-paginated inventory (NFR-20): newest first, ties broken by id."""
+    size = clamp_limit(limit)
+    stmt = select(AIInventoryEntry)
+    if kind is not None:
+        normalized_kind = kind.lower().strip()
+        if normalized_kind not in VALID_INVENTORY_KINDS:
+            raise AppError(400, f"Unknown inventory kind: {kind}")
+        stmt = stmt.where(AIInventoryEntry.kind == normalized_kind)
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(AIInventoryEntry.created_at, AIInventoryEntry.id) < tuple_(ts, last_id))
+    stmt = stmt.order_by(AIInventoryEntry.created_at.desc(), AIInventoryEntry.id.desc()).limit(size + 1)
+    rows = list((await session.execute(stmt)).scalars().all())
+    return make_page(rows, size, lambda e: (e.created_at, e.id))
+
+
 def safe_inventory_summary(entry: AIInventoryEntry) -> dict[str, Any]:
     updated_at = entry.__dict__.get("updated_at")
     return {
@@ -239,10 +259,12 @@ async def upsert_inventory_entry_api(
 @router.get("/ai-inventory")
 async def list_inventory_api(
     kind: str | None = Query(default=None),
+    limit: int | None = Query(default=None),
+    cursor: str | None = Query(default=None),
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     """FR-P3: List AI inventory entries."""
     require_scope(sess, "bots")
-    rows = await list_inventory(db, kind=kind)
-    return {"items": [safe_inventory_summary(row) for row in rows]}
+    rows, next_cursor = await list_inventory_page(db, kind=kind, limit=limit, cursor=cursor)
+    return {"items": [safe_inventory_summary(row) for row in rows], "next_cursor": next_cursor}

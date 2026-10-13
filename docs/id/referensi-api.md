@@ -689,7 +689,7 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 
 - Ringkasan: List Holds Api
 - Operation ID: `list_holds_api_api_v1_legal_hold_get`
-- Kode status respons: 200
+- Kode status respons: 200, 422
 
 #### PUT /api/v1/legal-hold/conversations/{conversation_id}
 

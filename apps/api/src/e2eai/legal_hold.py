@@ -17,12 +17,13 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
 from .auth import current_session, require_scope
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import Conversation, Document, Role, User, UserRole, get_session
 
 
@@ -74,6 +75,24 @@ async def list_holds(session: AsyncSession) -> dict[str, list[str]]:
     docs = (await session.scalars(select(Document.id).where(Document.legal_hold.is_(True)).order_by(Document.id))).all()
     convs = (await session.scalars(select(Conversation.id).where(Conversation.legal_hold.is_(True)).order_by(Conversation.id))).all()
     return {"documents": [str(d) for d in docs], "conversations": [str(c) for c in convs]}
+
+
+async def list_holds_page(
+    session: AsyncSession, *, kind: str, limit: int | None = None, cursor: str | None = None
+) -> dict[str, Any]:
+    """Keyset-paginated held ids for one kind (NFR-20). Caller enforces admin access; ids only."""
+    model = {"documents": Document, "conversations": Conversation}.get(kind)
+    if model is None:
+        raise AppError(400, "kind must be documents or conversations")
+    size = clamp_limit(limit)
+    stmt = select(model).where(model.legal_hold.is_(True))
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(model.created_at, model.id) < tuple_(ts, last_id))
+    stmt = stmt.order_by(model.created_at.desc(), model.id.desc()).limit(size + 1)
+    rows = list((await session.scalars(stmt)).all())
+    page, nxt = make_page(rows, size, lambda r: (r.created_at, r.id))
+    return {kind: [str(r.id) for r in page], "next_cursor": nxt}
 
 
 @dataclass
@@ -192,11 +211,14 @@ async def set_conversation_hold_api(
 
 @router.get("")
 async def list_holds_api(
-    sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)
+    kind: str | None = None, limit: int | None = None, cursor: str | None = None,
+    sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     require_scope(sess, "admin")
     await _require_admin(db, await _user(db, sess))
-    return await list_holds(db)
+    if kind is None:  # legacy shape: both lists, unpaged
+        return {**await list_holds(db), "next_cursor": None}
+    return await list_holds_page(db, kind=kind, limit=limit, cursor=cursor)
 
 
 @router.post("/retention-sweep")

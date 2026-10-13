@@ -13,13 +13,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
 from .ai_inventory import _safe_card
 from .auth import current_session, require_scope
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import EvalRun, ModelRegistryEntry, User, get_session
 from .legal_hold import is_admin
 
@@ -156,6 +157,23 @@ async def list_models(session: AsyncSession, *, name: str | None = None) -> list
     return [summarize(e) for e in (await session.scalars(stmt)).all()]
 
 
+async def list_models_page(
+    session: AsyncSession, *, name: str | None = None, limit: int | None = None, cursor: str | None = None
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Keyset-paginated registry list (NFR-20): newest first, ties broken by id."""
+    size = clamp_limit(limit)
+    stmt = select(ModelRegistryEntry)
+    if name:
+        stmt = stmt.where(ModelRegistryEntry.name == name)
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(ModelRegistryEntry.created_at, ModelRegistryEntry.id) < tuple_(ts, last_id))
+    stmt = stmt.order_by(ModelRegistryEntry.created_at.desc(), ModelRegistryEntry.id.desc()).limit(size + 1)
+    rows = list((await session.scalars(stmt)).all())
+    page, nxt = make_page(rows, size, lambda e: (e.created_at, e.id))
+    return [summarize(e) for e in page], nxt
+
+
 class RegisterIn(BaseModel):
     name: str
     version: str
@@ -183,11 +201,13 @@ async def _user(db: AsyncSession, sess: dict) -> User:
 
 @router.get("")
 async def list_models_api(
-    name: str | None = None, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)
+    name: str | None = None, limit: int | None = None, cursor: str | None = None,
+    sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     require_scope(sess, "evals")
     await _user(db, sess)
-    return {"models": await list_models(db, name=name)}
+    models, next_cursor = await list_models_page(db, name=name, limit=limit, cursor=cursor)
+    return {"models": models, "next_cursor": next_cursor}
 
 
 @router.post("")

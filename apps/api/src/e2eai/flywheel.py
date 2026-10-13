@@ -15,12 +15,13 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
 from .auth import current_session, require_scope
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import EvalDataset, EvalRun, FlywheelItem, Message, MessageFeedback, User, get_session
 from .eval_lab import create_dataset
 from .incidents import redact
@@ -207,6 +208,25 @@ async def queue_summary(session: AsyncSession, *, actor: User, status: str | Non
     }
 
 
+async def queue_page(
+    session: AsyncSession, *, actor: User, status: str | None = None,
+    limit: int | None = None, cursor: str | None = None,
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Keyset-paginated triage queue (NFR-20): newest first, ties broken by id. Admin-only, checked first."""
+    await _require_admin(session, actor)
+    size = clamp_limit(limit)
+    stmt = select(FlywheelItem)
+    if status:
+        stmt = stmt.where(FlywheelItem.status == status)
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(FlywheelItem.created_at, FlywheelItem.id) < tuple_(ts, last_id))
+    stmt = stmt.order_by(FlywheelItem.created_at.desc(), FlywheelItem.id.desc()).limit(size + 1)
+    rows = list((await session.scalars(stmt)).all())
+    page, nxt = make_page(rows, size, lambda i: (i.created_at, i.id))
+    return [summarize(i) for i in page], nxt
+
+
 class FlagIn(BaseModel):
     source: str = "reviewer_flag"
     question: str
@@ -245,10 +265,14 @@ async def _user(db: AsyncSession, sess: dict) -> User:
 
 @router.get("")
 async def queue_api(
-    status: str | None = None, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)
+    status: str | None = None, limit: int | None = None, cursor: str | None = None,
+    sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     require_scope(sess, "admin")
-    return await queue_summary(db, actor=await _user(db, sess), status=status)
+    actor = await _user(db, sess)
+    summary = await queue_summary(db, actor=actor, status=status)
+    items, next_cursor = await queue_page(db, actor=actor, status=status, limit=limit, cursor=cursor)
+    return {**summary, "items": items, "next_cursor": next_cursor}
 
 
 @router.post("/collect")

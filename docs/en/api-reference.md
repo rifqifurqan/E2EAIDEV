@@ -689,7 +689,7 @@ Most application routes require a scoped session or API key. This generated refe
 
 - Summary: List Holds Api
 - Operation ID: `list_holds_api_api_v1_legal_hold_get`
-- Response status codes: 200
+- Response status codes: 200, 422
 
 #### PUT /api/v1/legal-hold/conversations/{conversation_id}
 
