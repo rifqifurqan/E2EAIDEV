@@ -1,0 +1,24 @@
+# FR-RL3: CI integration for eval suites (GitLab CI).
+# Runs the deterministic/offline eval, release-gate, and red-team security suites.
+# A regression fails the job (no allow_failure) and blocks the pipeline.
+# No secrets, no live stack, no paid services — the gated suites are pure/offline.
+image: python:3.12-slim
+
+stages:
+  - eval
+
+variables:
+  # Hosted CI has no live E2EAIDEV stack; DB-backed suites skip cleanly while
+  # deterministic eval/release/security logic still gates regressions.
+  E2EAI_SKIP_DB_TESTS: "1"
+
+eval-gate:
+  stage: eval
+  before_script:
+    - pip install --no-cache-dir uv==0.8.22
+    - cd apps/api && uv sync --frozen && cd ../..
+  script:
+    - python scripts/ci_eval_gate.py
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
