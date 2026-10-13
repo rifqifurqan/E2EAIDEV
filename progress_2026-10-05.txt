@@ -2266,3 +2266,9 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_oidc_resilience_nfr19.py` -> 2 failed (no `keycloak` breaker). GREEN: 7 passed.
   - Adjacent: `uv run pytest -q tests/test_oidc_resilience_nfr19.py tests/test_auth.py tests/test_circuit_breaker_nfr19.py tests/test_phase0_core.py tests/test_metrics_nfr16.py` -> 31 passed; `-k oidc` -> 12 passed. Heavy gates skipped.
   - Not done: breaker for MCP (no real transport yet); OpenFGA must keep failing closed; cross-process breaker state; live Keycloak outage drill.
+
+- Optional VLM outage degrades instead of failing ingestion (NFR-19, FR-D15) (2026-10-13, cron):
+  - Hermes worked manually. Codex unused. Per-bot guardrail `mandatory` flag was already present (`GuardrailPolicy.mandatory`), so that follow-up is closed; this slice covers the VLM part of "same rule for VLM/Langfuse/Lab tools".
+  - Added `vlm_enrichment.run_vlm_enrichment(plan, client)`: disabled/empty plan -> `skipped` without calling the model; each page described via an injected client and normalized with `build_vlm_derived_chunks` (document-inherited permissions); first upstream error -> remaining pages reported in `failed_pages`, status `degraded`, reason `vlm_unavailable`, no exception, no host/URL/key/exception text in the result.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_vlm_degrade_nfr19.py` -> collection ImportError. GREEN: 4 passed; adjacent `tests/test_us_vlm_enrichment_p1.py` -> 7 passed total. Heavy gates skipped.
+  - Not done: wiring `run_vlm_enrichment` into the worker/ingest job (no VLM client exists yet); same rule for Langfuse/Lab tools.

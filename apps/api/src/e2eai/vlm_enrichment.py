@@ -92,3 +92,36 @@ def build_vlm_derived_chunks(*, document_id: str, version_id: str, outputs: Sequ
             "permissions": {"inherits_from": "document", "source_document_id": str(document_id)},
         })
     return chunks
+
+
+async def run_vlm_enrichment(plan: dict, client) -> dict:
+    """Run the optional VLM job; an outage degrades instead of failing ingestion (NFR-19).
+
+    ``client.describe_page(document_id=, version_id=, page=)`` returns ``{"text", "figure_object_key"}``.
+    The baseline parse is already indexed, so on the first upstream error the remaining pages are
+    skipped (fail fast) and reported as ``failed_pages``. Errors are reduced to the reason code
+    ``vlm_unavailable``: hosts, URLs, keys and exception text are never copied into the result.
+    """
+    if not plan.get("enqueue"):
+        return {"status": "skipped", "chunks": [], "failed_pages": [], "reason": None}
+    pages = [int(row["page"]) for row in plan.get("pages") or []]
+    outputs: list[dict] = []
+    failed: list[int] = []
+    for index, page in enumerate(pages):
+        try:
+            result = await client.describe_page(
+                document_id=plan["document_id"], version_id=plan["version_id"], page=page,
+            )
+        except Exception:  # noqa: BLE001 - any upstream failure degrades; details are intentionally dropped
+            failed.extend(pages[index:])
+            break
+        outputs.append({
+            "page": page, "text": (result or {}).get("text"),
+            "figure_object_key": (result or {}).get("figure_object_key"),
+        })
+    chunks = build_vlm_derived_chunks(document_id=plan["document_id"], version_id=plan["version_id"], outputs=outputs)
+    return {
+        "status": "degraded" if failed else "ok",
+        "chunks": chunks, "failed_pages": failed,
+        "reason": "vlm_unavailable" if failed else None,
+    }
