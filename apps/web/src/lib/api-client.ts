@@ -529,6 +529,8 @@ export const api = {
 
   // Operate / Improve (admin-only on the server)
   listIncidents: () => apiFetch<IncidentList>(ENDPOINTS.incidents),
+  listIncidentsPage: (cursor: string) =>
+    apiFetch<IncidentList>(`${ENDPOINTS.incidents}?cursor=${encodeURIComponent(cursor)}`),
   reportIncident: (input: ReportIncidentInput) =>
     apiFetch<AiIncident>(ENDPOINTS.incidents, { method: "POST", body: input }),
   recordPostmortem: (incidentId: string, input: PostmortemInput) =>

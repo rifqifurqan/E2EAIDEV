@@ -19,6 +19,10 @@ const id: Dictionary = {
     chat: "Obrolan",
     admin: "Admin",
   },
+  common: {
+    loadMore: "Muat lebih banyak",
+    loadMoreFailed: "Gagal memuat data tambahan.",
+  },
   lang: {
     switch: "English",
     current: "Bahasa Indonesia",

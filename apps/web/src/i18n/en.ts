@@ -17,6 +17,10 @@ const en = {
     chat: "Chat",
     admin: "Admin",
   },
+  common: {
+    loadMore: "Load more",
+    loadMoreFailed: "Could not load more.",
+  },
   lang: {
     switch: "Bahasa Indonesia",
     current: "English",

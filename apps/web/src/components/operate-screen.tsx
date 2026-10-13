@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useI18n } from "@/i18n/context";
 import { api, type AiIncident, type IncidentTransition, type ReportIncidentInput } from "@/lib/api-client";
 import { useAdminData } from "@/lib/use-admin-data";
+import { useLoadMore } from "@/lib/use-load-more";
+import { LoadMore } from "./load-more";
 import { AdminScreen } from "./admin-screen";
 import { WhyItMattersPanel } from "./why-it-matters-panel";
 
@@ -211,10 +213,20 @@ function ReportIncidentForm({ onDone }: { onDone: () => void }) {
   );
 }
 
+async function fetchIncidentsPage(cursor: string) {
+  const page = await api.listIncidentsPage(cursor);
+  return { items: page.incidents, next_cursor: page.next_cursor };
+}
+
 export function OperateScreen() {
   const { t } = useI18n();
   const [reloadKey, setReloadKey] = useState(0);
   const state = useAdminData(() => api.listIncidents(), reloadKey);
+  const more = useLoadMore(
+    state.kind === "ready" ? state.data.incidents : undefined,
+    state.kind === "ready" ? state.data.next_cursor : null,
+    fetchIncidentsPage,
+  );
 
   return (
     <div className="space-y-6">
@@ -236,15 +248,18 @@ export function OperateScreen() {
           </p>
         ) : null}
         {state.kind === "ready" ? (
-          state.data.incidents.length === 0 ? (
+          more.items.length === 0 ? (
             <p className="text-sm text-gray-500">{t.operate.noIncidents}</p>
           ) : (
             <ul className="space-y-2 text-sm">
-              {state.data.incidents.map((incident) => (
+              {more.items.map((incident) => (
                 <IncidentRow key={incident.id} incident={incident} onTransition={() => setReloadKey((key) => key + 1)} />
               ))}
             </ul>
           )
+        ) : null}
+        {state.kind === "ready" ? (
+          <LoadMore hasMore={more.hasMore} busy={more.busy} failed={more.failed} onLoadMore={more.loadMore} />
         ) : null}
       </section>
       <WhyItMattersPanel stage="operate" />

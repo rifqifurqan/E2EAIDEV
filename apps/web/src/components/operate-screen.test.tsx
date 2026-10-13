@@ -6,6 +6,7 @@ import { I18nProvider } from "@/i18n/context";
 
 const apiMock = vi.hoisted(() => ({
   listIncidents: vi.fn(),
+  listIncidentsPage: vi.fn(),
   transitionIncident: vi.fn(),
   recordPostmortem: vi.fn(),
   reportIncident: vi.fn(),
@@ -27,6 +28,7 @@ function renderOperate(locale: "en" | "id" = "en") {
 describe("OperateScreen", () => {
   beforeEach(() => {
     apiMock.listIncidents.mockReset();
+    apiMock.listIncidentsPage.mockReset();
     apiMock.transitionIncident.mockReset();
     apiMock.recordPostmortem.mockReset();
     apiMock.reportIncident.mockReset();
@@ -263,5 +265,59 @@ describe("OperateScreen", () => {
     apiMock.listIncidents.mockResolvedValue({ incidents: [], next_cursor: null });
     renderOperate("id");
     expect(await screen.findByRole("button", { name: /laporkan insiden/i })).toBeInTheDocument();
+  });
+
+  it("loads more incidents with the next cursor and hides the button at the end", async () => {
+    const user = userEvent.setup();
+    apiMock.listIncidents.mockResolvedValue({
+      incidents: [{ id: "p1", title: "First page incident", severity: "sev3", status: "reported" }],
+      next_cursor: "cur-2",
+    });
+    apiMock.listIncidentsPage.mockResolvedValue({
+      incidents: [{ id: "p2", title: "Second page incident", severity: "sev4", status: "reported" }],
+      next_cursor: null,
+    });
+    renderOperate();
+    await screen.findByText("First page incident");
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    expect(await screen.findByText("Second page incident")).toBeInTheDocument();
+    expect(apiMock.listIncidentsPage).toHaveBeenCalledWith("cur-2");
+    expect(screen.getByText("First page incident")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /load more/i })).not.toBeInTheDocument();
+  });
+
+  it("shows no load-more button when there is no next cursor", async () => {
+    apiMock.listIncidents.mockResolvedValue({
+      incidents: [{ id: "p1", title: "Only incident", severity: "sev3", status: "reported" }],
+      next_cursor: null,
+    });
+    renderOperate();
+    await screen.findByText("Only incident");
+    expect(screen.queryByRole("button", { name: /load more/i })).not.toBeInTheDocument();
+  });
+
+  it("shows a generic error without server text when loading more fails, keeping loaded rows", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.listIncidents.mockResolvedValue({
+      incidents: [{ id: "p1", title: "First page incident", severity: "sev3", status: "reported" }],
+      next_cursor: "cur-2",
+    });
+    apiMock.listIncidentsPage.mockRejectedValue(new ApiError(500, "boom", "stack detail"));
+    renderOperate();
+    await screen.findByText("First page incident");
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    expect(await screen.findByText(/could not load more/i)).toBeInTheDocument();
+    expect(screen.queryByText(/stack detail/i)).not.toBeInTheDocument();
+    expect(screen.getByText("First page incident")).toBeInTheDocument();
+  });
+
+  it("labels load more in Indonesian", async () => {
+    apiMock.listIncidents.mockResolvedValue({
+      incidents: [{ id: "p1", title: "Insiden", severity: "sev3", status: "reported" }],
+      next_cursor: "cur-2",
+    });
+    renderOperate("id");
+    expect(await screen.findByRole("button", { name: /muat lebih banyak/i })).toBeInTheDocument();
   });
 });
