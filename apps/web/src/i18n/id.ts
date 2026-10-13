@@ -159,6 +159,10 @@ const id: Dictionary = {
     loading: "Memuat...",
     adminOnly: "Tampilan ini hanya tersedia untuk administrator.",
     loadFailed: "Gagal memuat data.",
+    moveTo: "Pindah ke",
+    fixNotes: "Catatan perbaikan",
+    releaseRef: "Referensi rilis",
+    transitionFailed: "Gagal memperbarui insiden.",
   },
   improve: {
     title: "Flywheel Umpan Balik",

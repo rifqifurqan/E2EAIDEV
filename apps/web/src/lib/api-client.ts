@@ -149,6 +149,12 @@ export interface AiIncident {
   status: string;
 }
 
+export interface IncidentTransition {
+  to_status: "triaged" | "fixing" | "fixed" | "released";
+  fix_notes?: string;
+  release_ref?: string;
+}
+
 export interface IncidentList {
   incidents: AiIncident[];
   next_cursor: string | null;
@@ -318,6 +324,7 @@ export const ENDPOINTS = {
   botAsk: (botId: string) => `/bots/${botId}/ask`,
   deactivateUser: (userId: string) => `/users/${userId}/deactivate`,
   incidents: "/incidents",
+  incidentTransition: (incidentId: string) => `/incidents/${incidentId}/transition`,
   flywheel: "/improve/flywheel",
   flywheelTriage: (itemId: string) => `/improve/flywheel/${itemId}/triage`,
   dueReviews: "/documents/reviews/due",
@@ -501,6 +508,8 @@ export const api = {
 
   // Operate / Improve (admin-only on the server)
   listIncidents: () => apiFetch<IncidentList>(ENDPOINTS.incidents),
+  transitionIncident: (incidentId: string, input: IncidentTransition) =>
+    apiFetch<AiIncident>(ENDPOINTS.incidentTransition(incidentId), { method: "POST", body: input }),
   listFlywheel: () => apiFetch<FlywheelQueue>(ENDPOINTS.flywheel),
   triageFlywheelItem: (itemId: string, decision: "accept" | "dismiss", target?: "eval" | "finetune") =>
     apiFetch<FlywheelItem>(ENDPOINTS.flywheelTriage(itemId), {

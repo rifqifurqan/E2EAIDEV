@@ -157,6 +157,10 @@ const en = {
     loading: "Loading...",
     adminOnly: "This view is available to administrators only.",
     loadFailed: "Could not load data.",
+    moveTo: "Move to",
+    fixNotes: "Fix notes",
+    releaseRef: "Release reference",
+    transitionFailed: "Could not update the incident.",
   },
   improve: {
     title: "Feedback Flywheel",
