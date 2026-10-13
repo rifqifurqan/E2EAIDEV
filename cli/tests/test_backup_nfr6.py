@@ -8,6 +8,7 @@ from e2eai_wizard.backup import (
     build_backup_plan,
     build_restore_plan,
     check_backup_age,
+    BACKUP_TARGETS_WITH_QDRANT,
     render_backup_runbook,
 )
 from e2eai_wizard.cli import app
@@ -80,3 +81,23 @@ def test_backup_plan_cli_prints_runbook_without_secrets():
     assert r.exit_code == 0, r.output
     assert 'pg_dump -U "$POSTGRES_USER" -Fc e2eai' in r.output and "pg_restore" in r.output
     assert "backups/2026-10-13" in r.output
+
+
+def test_qdrant_volume_is_backed_up_and_restored_only_when_selected():
+    """FR-R3 + NFR-6: the vector store volume is part of the plan when Qdrant is installed."""
+    base = "\n".join(_cmds(build_backup_plan(backup_dir="backups/x")))
+    assert "qdrant" not in base.lower()
+
+    backup = "\n".join(_cmds(build_backup_plan(backup_dir="backups/x", qdrant=True)))
+    restore = "\n".join(_cmds(build_restore_plan(backup_dir="backups/x", qdrant=True)))
+    assert "qdrantdata" in backup and "qdrant.tar.gz" in backup
+    assert "qdrantdata" in restore and "qdrant.tar.gz" in restore
+    assert "qdrant" not in "\n".join(_cmds(build_restore_plan(backup_dir="backups/x"))).lower()
+    assert "QDRANT_API_KEY" not in backup + restore  # the key travels only inside the private env file
+    assert any(t.name == "vector-store" and t.open_format for t in BACKUP_TARGETS_WITH_QDRANT)
+
+
+def test_backup_plan_cli_includes_qdrant_with_flag():
+    r = CliRunner().invoke(app, ["backup-plan", "--qdrant"])
+    assert r.exit_code == 0, r.output
+    assert "qdrant.tar.gz" in r.output and "vector-store" in r.output

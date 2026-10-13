@@ -354,11 +354,13 @@ def backup_plan_cmd(
     compose_dir: str = typer.Option("deploy/compose", help="Docker Compose directory."),
     api_dir: str = typer.Option("apps/api", help="API app directory for Alembic migrations."),
     ready_url: str = typer.Option("http://127.0.0.1:8000/api/v1/ready", help="Post-restore readiness URL."),
+    qdrant: bool = typer.Option(False, "--qdrant", help="Include the Qdrant volume (when Qdrant is the vector store)."),
 ) -> None:
     """Print a secret-free NFR-6 backup and restore procedure (open formats, RPO 24 h / RTO 4 h)."""
-    plan = backup.build_backup_plan(backup_dir=backup_dir, compose_dir=compose_dir)
-    restore = backup.build_restore_plan(backup_dir=backup_dir, compose_dir=compose_dir, api_dir=api_dir, ready_url=ready_url)
-    out.print(backup.render_backup_runbook(plan, restore), markup=False, highlight=False, soft_wrap=True)  # never wrap commands
+    plan = backup.build_backup_plan(backup_dir=backup_dir, compose_dir=compose_dir, qdrant=qdrant)
+    restore = backup.build_restore_plan(backup_dir=backup_dir, compose_dir=compose_dir, api_dir=api_dir,
+                                        ready_url=ready_url, qdrant=qdrant)
+    out.print(backup.render_backup_runbook(plan, restore, qdrant=qdrant), markup=False, highlight=False, soft_wrap=True)  # never wrap commands
 
 
 @app.command("licenses")

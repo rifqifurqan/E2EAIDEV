@@ -30,6 +30,11 @@ BACKUP_TARGETS: tuple[BackupTarget, ...] = (
     BackupTarget("config", "config.tar.gz", True, "e2eai.yaml, compose files and the secrets file (mode 600)."),
 )
 
+# FR-R3: only when Qdrant is the installed vector store (the pgvector rows are inside the Postgres dumps).
+QDRANT_TARGET = BackupTarget("vector-store", "qdrant.tar.gz", True,
+                             "Qdrant data volume (vectors; ids only, rebuildable from Postgres) as a tar archive.")
+BACKUP_TARGETS_WITH_QDRANT: tuple[BackupTarget, ...] = (*BACKUP_TARGETS, QDRANT_TARGET)
+
 
 @dataclass(frozen=True)
 class BackupStep:
@@ -45,7 +50,8 @@ class BackupPlan:
     steps: list[BackupStep]
 
 
-def build_backup_plan(*, backup_dir: str = "backups/daily", compose_dir: str = "deploy/compose") -> BackupPlan:
+def build_backup_plan(*, backup_dir: str = "backups/daily", compose_dir: str = "deploy/compose",
+                      qdrant: bool = False) -> BackupPlan:
     dump_cmds = [
         f"cd {compose_dir} && docker compose exec -T postgres pg_dump -U \"$POSTGRES_USER\" -Fc {db} "
         f"> ../../{backup_dir}/postgres-{db}.dump"
@@ -61,6 +67,8 @@ def build_backup_plan(*, backup_dir: str = "backups/daily", compose_dir: str = "
             "tar czf /backup/valkey.tar.gz /data",
             f"docker run --rm -v e2eaidev_swdata:/data -v \"$PWD/{backup_dir}\":/backup alpine "
             "tar czf /backup/seaweedfs.tar.gz /data",
+            *([f"docker run --rm -v e2eaidev_qdrantdata:/data -v \"$PWD/{backup_dir}\":/backup alpine "
+               "tar czf /backup/qdrant.tar.gz /data"] if qdrant else []),
         ],
         notes="Use the volume names shown by `docker volume ls`. Langfuse/ClickHouse traces are added when that profile is installed.",
     )
@@ -86,7 +94,8 @@ def build_backup_plan(*, backup_dir: str = "backups/daily", compose_dir: str = "
 
 
 def build_restore_plan(*, backup_dir: str = "backups/daily", compose_dir: str = "deploy/compose",
-                       api_dir: str = "apps/api", ready_url: str = "http://127.0.0.1:8000/api/v1/ready") -> BackupPlan:
+                       api_dir: str = "apps/api", ready_url: str = "http://127.0.0.1:8000/api/v1/ready",
+                       qdrant: bool = False) -> BackupPlan:
     prepare = BackupStep(
         phase="prepare",
         title="Prepare a fresh install and verify the backup",
@@ -111,6 +120,8 @@ def build_restore_plan(*, backup_dir: str = "backups/daily", compose_dir: str = 
             "tar xzf /backup/valkey.tar.gz -C /",
             f"docker run --rm -v e2eaidev_swdata:/data -v \"$PWD/{backup_dir}\":/backup alpine "
             "tar xzf /backup/seaweedfs.tar.gz -C /",
+            *([f"docker run --rm -v e2eaidev_qdrantdata:/data -v \"$PWD/{backup_dir}\":/backup alpine "
+               "tar xzf /backup/qdrant.tar.gz -C /"] if qdrant else []),
         ],
         notes="Stop writers first. Restored state is exactly the backup time; changes after it are lost (RPO).",
     )
@@ -143,7 +154,7 @@ def check_backup_age(*, age_hours: float, profile: str = "single-node") -> dict:
     return {"ok": ok, "rpo_hours": limit, "age_hours": age_hours, "profile": profile, "message": message}
 
 
-def render_backup_runbook(backup: BackupPlan, restore: BackupPlan) -> str:
+def render_backup_runbook(backup: BackupPlan, restore: BackupPlan, *, qdrant: bool = False) -> str:
     lines = [
         "# E2EAIDEV backup and restore",
         "",
@@ -155,7 +166,7 @@ def render_backup_runbook(backup: BackupPlan, restore: BackupPlan) -> str:
         "## What is backed up",
         "",
     ]
-    lines += [f"- **{t.name}**: {t.description}" for t in BACKUP_TARGETS]
+    lines += [f"- **{t.name}**: {t.description}" for t in (BACKUP_TARGETS_WITH_QDRANT if qdrant else BACKUP_TARGETS)]
     for title, plan in (("Backup", backup), ("Restore onto a fresh install", restore)):
         lines += ["", f"# {title}"]
         for i, step in enumerate(plan.steps, 1):
