@@ -158,6 +158,8 @@ Rules for every cron tick:
 
 92. [x] [NFR-20] Per-user display time zone. Completed as `core/timezones.py` + `preferences.py` (`/api/v1/me/preferences`), plus `tzdata` dependency (zoneinfo had no zone data on this host); see progress_2026-10-05.txt. Follow-up: use `to_user_time` in UI/response formatting; created_by/updated_by on remaining tables.
 
+93. [x] [NFR-19] Bounded retry on OpenFGA checks (transient only, still fail closed). Completed in `authz.py` with `tests/test_authz_retry_nfr19.py`; see progress_2026-10-05.txt. Follow-up: Keycloak/MCP retry, circuit breaker.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.

@@ -1,9 +1,11 @@
 """OpenFGA: the source of truth for sharing (PRD T4). Checks fail closed (NFR-19)."""
 
+import asyncio
 import hashlib
 import json
 import logging
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 
 import httpx
 from sqlalchemy import select
@@ -13,6 +15,8 @@ from .core.config import Settings
 from .db import Setting, TeamMember, User, UserRole
 
 log = logging.getLogger("e2eai.authz")
+_RETRY_STATUS = frozenset({429, 502, 503, 504})
+_BACKOFF = 0.1  # seconds; doubles per attempt (0.1, 0.2)
 
 _GRANTEES = [
     {"type": "user"}, {"type": "team", "relation": "member"}, {"type": "division", "relation": "member"},
@@ -70,6 +74,8 @@ class Authz:
     client: httpx.AsyncClient
     store_id: str
     model_id: str
+    attempts: int = 3  # NFR-19: bounded retry for transient outages on checks
+    sleep: Callable[[float], Awaitable[None]] = field(default=asyncio.sleep, repr=False)
 
     async def write(self, writes: list[dict] = (), deletes: list[dict] = ()) -> None:
         body: dict = {"authorization_model_id": self.model_id}
@@ -85,13 +91,25 @@ class Authz:
         body = {"tuple_key": {"user": user, "relation": relation, "object": obj}, "authorization_model_id": self.model_id}
         if context:
             body["context"] = context
-        try:
-            r = await self.client.post(f"/stores/{self.store_id}/check", json=body)
-            r.raise_for_status()
-            return r.json().get("allowed") is True
-        except Exception as e:
-            log.warning("authz check failed closed: %s %s %s (%s)", user, relation, obj, e)
-            return False
+        for attempt in range(max(1, self.attempts)):
+            try:
+                r = await self.client.post(f"/stores/{self.store_id}/check", json=body)
+                if getattr(r, "status_code", 200) in _RETRY_STATUS and attempt < self.attempts - 1:
+                    await self.sleep(_BACKOFF * (2 ** attempt))
+                    continue
+                r.raise_for_status()
+                return r.json().get("allowed") is True
+            except httpx.TransportError as e:
+                if attempt < self.attempts - 1:
+                    await self.sleep(_BACKOFF * (2 ** attempt))
+                    continue
+                log.warning("authz check failed closed after %d attempts: %s %s %s (%s)",
+                            attempt + 1, user, relation, obj, type(e).__name__)
+                return False
+            except Exception as e:
+                log.warning("authz check failed closed: %s %s %s (%s)", user, relation, obj, type(e).__name__)
+                return False
+        return False
 
 
 def client(settings: Settings, timeout: float = 3.0) -> httpx.AsyncClient:
