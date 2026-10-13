@@ -156,6 +156,10 @@ const id: Dictionary = {
     loading: "Memuat...",
     signIn: "Silakan masuk untuk melihat registri model.",
     loadFailed: "Tidak dapat memuat data.",
+    approve: "Setujui",
+    reject: "Tolak",
+    needsScore: "Perlu skor evaluasi sebelum disetujui.",
+    decisionFailed: "Gagal mencatat keputusan.",
   },
   operate: {
     incidentsTitle: "Insiden AI",

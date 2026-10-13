@@ -154,6 +154,10 @@ const en = {
     loading: "Loading...",
     signIn: "Please sign in to see the model registry.",
     loadFailed: "Could not load data.",
+    approve: "Approve",
+    reject: "Reject",
+    needsScore: "Needs an eval score before approval.",
+    decisionFailed: "Could not record the decision.",
   },
   operate: {
     incidentsTitle: "AI Incidents",

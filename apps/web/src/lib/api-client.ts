@@ -330,6 +330,8 @@ export const ENDPOINTS = {
   dueReviews: "/documents/reviews/due",
   documentReviewed: (documentId: string) => `/documents/${documentId}/lifecycle/reviewed`,
   modelRegistry: "/model-registry",
+  modelDecision: (name: string, version: string) =>
+    `/model-registry/${encodeURIComponent(name)}/${encodeURIComponent(version)}/decision`,
   botApprovals: "/governance/bot-approvals",
   botApprovalDecision: (approvalId: string) => `/governance/bot-approvals/${approvalId}/decisions`,
 } as const;
@@ -526,6 +528,11 @@ export const api = {
       body: { next_review_in_days: nextReviewInDays },
     }),
   listModels: () => apiFetch<ModelVersionList>(ENDPOINTS.modelRegistry),
+  decideModel: (name: string, version: string, decision: "approved" | "rejected") =>
+    apiFetch<ModelVersion>(ENDPOINTS.modelDecision(name, version), {
+      method: "POST",
+      body: { decision },
+    }),
 
   // Release (scope enforced by the server)
   // Test (admin-only on the server)

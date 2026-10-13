@@ -251,6 +251,8 @@ Rules for every cron tick:
 
 139. [x] [FR-D8] Data stage mark-reviewed action with next-review interval via `POST /documents/{id}/lifecycle/reviewed`, due list refresh, generic EN/ID errors. Web suite 182 passed; see progress_2026-10-05.txt.
 
+140. [x] [FR-M7] Build stage model-registry approve/reject actions via `POST /model-registry/{name}/{version}/decision`, approve gated on an eval score like the API, list refresh, generic EN/ID errors. Web suite 188 passed; see progress_2026-10-05.txt.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.
