@@ -24,6 +24,7 @@ SERVICES = (
     Service("tei-embed", "TEI embeddings", 18081, "TEI_EMBED_PORT", profile="tei-embed"),
     Service("tei-rerank", "TEI reranker", 18082, "TEI_RERANK_PORT", profile="tei-rerank"),
     Service("keycloak", "Keycloak (SSO)", 18180, "KEYCLOAK_PORT", profile="keycloak"),
+    Service("qdrant", "Qdrant (vector store, P1)", 16333, "QDRANT_PORT", profile="qdrant"),
 )
 BY_NAME = {s.name: s for s in SERVICES}
 
@@ -38,6 +39,7 @@ SECRETS = {
     "LITELLM_MASTER_KEY": ("litellm", "LiteLLM master key", "sk-"),
     "TEI_API_KEY": ("tei", "TEI API key", ""),
     "VLLM_API_KEY": ("vllm", "vLLM API key", "sk-"),
+    "QDRANT_API_KEY": ("qdrant", "Qdrant API key", ""),
     "KEYCLOAK_DB_PASSWORD": ("keycloak", "Keycloak database password", ""),
     "KEYCLOAK_ADMIN_PASSWORD": ("keycloak", "Keycloak admin password", ""),
 }

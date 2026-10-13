@@ -129,6 +129,17 @@ services:
     ports: ["${BIND_ADDRESS}:${TEI_RERANK_PORT}:80"]
     restart: unless-stopped
 
+  qdrant:
+    # FR-R3: optional P1 vector store. Holds ids + vectors only; chunk text and permissions stay in Postgres.
+    profiles: [qdrant]
+    image: ${E2EAI_IMAGE_QDRANT:-}
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY}
+      QDRANT__TELEMETRY_DISABLED: "true"  # NFR-12
+    volumes: [qdrantdata:/qdrant/storage]
+    ports: ["${BIND_ADDRESS}:${QDRANT_PORT}:6333"]
+    restart: unless-stopped
+
   keycloak:
     profiles: [keycloak]
     image: ${E2EAI_IMAGE_KEYCLOAK:-}
@@ -152,3 +163,4 @@ volumes:
   ollamadata:
   vllmcache:
   teidata:
+  qdrantdata:
