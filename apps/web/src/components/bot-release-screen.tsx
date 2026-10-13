@@ -1,9 +1,12 @@
 "use client";
 
 import { useI18n } from "@/i18n/context";
+import { api } from "@/lib/api-client";
+import { useAdminData } from "@/lib/use-admin-data";
 
 export function BotReleaseScreen() {
   const { t } = useI18n();
+  const approvals = useAdminData(() => api.listBotApprovals());
 
   return (
     <section>
@@ -48,6 +51,36 @@ export function BotReleaseScreen() {
           <h2 className="mb-3 text-lg font-semibold">{t.bots.scope}</h2>
           <p className="text-sm text-gray-500">{t.bots.noBots}</p>
         </div>
+      </div>
+
+      <div className="mt-6 rounded-lg border border-gray-200 p-4">
+        <h2 className="mb-3 text-lg font-semibold">{t.bots.approvalsTitle}</h2>
+        {approvals.kind === "loading" ? <p>{t.bots.approvalsLoading}</p> : null}
+        {approvals.kind === "forbidden" ? (
+          <p role="alert" className="rounded border border-yellow-300 bg-yellow-50 p-3 text-sm">
+            {t.bots.approvalsSignIn}
+          </p>
+        ) : null}
+        {approvals.kind === "error" ? (
+          <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm">
+            {t.bots.approvalsLoadFailed}
+          </p>
+        ) : null}
+        {approvals.kind === "ready" ? (
+          approvals.data.items.length === 0 ? (
+            <p className="text-sm text-gray-500">{t.bots.approvalsEmpty}</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {approvals.data.items.map((approval) => (
+                <li key={approval.id} className="rounded border border-gray-200 p-2">
+                  <span className="mr-2">{approval.approval_type}</span>
+                  <span className="mr-2 text-xs text-gray-500">{`${t.bots.risk}: ${approval.risk_tier}`}</span>
+                  <span className="font-mono text-xs">{approval.status}</span>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : null}
       </div>
     </section>
   );

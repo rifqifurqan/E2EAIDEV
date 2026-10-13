@@ -2409,3 +2409,9 @@ HOW TO RESUME
   - `/data` renders `DataScreen` (due document reviews, `GET /api/v1/documents/reviews/due`, overdue days); `/build` renders `BuildScreen` (model versions with approval status, `GET /api/v1/model-registry`). Both reuse `useAdminData`; 401/403 show a sign-in notice, other failures a generic error (no server text). EN/ID keys `data.*`, `build.*`; `api-client` gained `listDueReviews`/`listModels` and the `dueReviews`/`modelRegistry` endpoints.
   - TDD / RED: `pnpm vitest run src/components/data-screen.test.tsx src/lib/api-client.test.ts` -> failed (module/endpoints missing). GREEN: full web suite `pnpm vitest run` -> 17 files / 103 passed; `pnpm run typecheck` ok; `pnpm lint` ok. API untouched; build and live browser run skipped (data-list slice).
   - Not done: register/approve actions, load-more via `next_cursor`, live browser check.
+
+- Release web stage shows live bot approval requests (FR-P4, FR-RL2) (2026-10-14, cron):
+  - Hermes worked manually. Codex unused. `BotReleaseScreen` now loads `GET /api/v1/bot-approvals` via `useAdminData` and lists approval type, risk tier and status; 401/403 -> sign-in notice, other failures -> generic error (no server text), empty state, EN/ID keys `bots.approvals*`/`bots.risk`. `api-client` gained `BotApproval`/`listBotApprovals`.
+  - TDD / RED: `pnpm vitest run src/components/bot-release-screen.test.tsx` -> 4 failed. GREEN: full web suite `pnpm vitest run` -> 17 files / 107 passed; `pnpm run typecheck` ok; `pnpm lint` ok. API untouched; build and live browser run skipped.
+  - Not done: request/decide actions, load-more via `next_cursor`, Test stage (EvalScreen) still static, bundles/grants/scope panels still static.
+

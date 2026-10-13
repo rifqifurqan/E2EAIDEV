@@ -91,6 +91,12 @@ const id: Dictionary = {
     superseded: "Digantikan",
     rolledBack: "Dikembalikan",
     noBots: "Belum ada bot yang dikonfigurasi.",
+    approvalsTitle: "Permintaan persetujuan",
+    approvalsEmpty: "Belum ada permintaan persetujuan.",
+    approvalsLoading: "Memuat...",
+    approvalsSignIn: "Silakan masuk untuk melihat permintaan persetujuan.",
+    approvalsLoadFailed: "Gagal memuat data.",
+    risk: "Risiko",
   },
   admin: {
     title: "Admin",

@@ -89,6 +89,12 @@ const en = {
     superseded: "Superseded",
     rolledBack: "Rolled Back",
     noBots: "No bots configured yet.",
+    approvalsTitle: "Approval requests",
+    approvalsEmpty: "No approval requests yet.",
+    approvalsLoading: "Loading...",
+    approvalsSignIn: "Please sign in to see approval requests.",
+    approvalsLoadFailed: "Could not load data.",
+    risk: "Risk",
   },
   admin: {
     title: "Admin",

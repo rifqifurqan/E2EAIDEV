@@ -182,6 +182,25 @@ export interface ModelVersionList {
   next_cursor: string | null;
 }
 
+export interface BotApproval {
+  id: string;
+  bot_id: string;
+  approval_type: string;
+  risk_tier: string;
+  status: string;
+  rationale: string | null;
+  decision_note: string | null;
+  requested_by: string | null;
+  decided_by: string | null;
+  created_at: string | null;
+  decided_at: string | null;
+}
+
+export interface BotApprovalList {
+  items: BotApproval[];
+  next_cursor: string | null;
+}
+
 // ─── Fetch helper ───────────────────────────────────────────────────────
 
 export class ApiError extends Error {
@@ -274,6 +293,7 @@ export const ENDPOINTS = {
   flywheel: "/improve/flywheel",
   dueReviews: "/documents/reviews/due",
   modelRegistry: "/model-registry",
+  botApprovals: "/bot-approvals",
 } as const;
 
 // ─── Client functions ───────────────────────────────────────────────────
@@ -456,6 +476,9 @@ export const api = {
   // Data / Build (signed-in users; scope enforced by the server)
   listDueReviews: () => apiFetch<DueReviewList>(ENDPOINTS.dueReviews),
   listModels: () => apiFetch<ModelVersionList>(ENDPOINTS.modelRegistry),
+
+  // Release (scope enforced by the server)
+  listBotApprovals: () => apiFetch<BotApprovalList>(ENDPOINTS.botApprovals),
 
   // Admin
   deactivateUser: (userId: string, input: DeactivateInput) =>
