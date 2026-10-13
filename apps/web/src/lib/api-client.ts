@@ -326,6 +326,7 @@ export const ENDPOINTS = {
   incidents: "/incidents",
   incidentTransition: (incidentId: string) => `/incidents/${incidentId}/transition`,
   flywheel: "/improve/flywheel",
+  flywheelExport: "/improve/flywheel/export",
   flywheelTriage: (itemId: string) => `/improve/flywheel/${itemId}/triage`,
   dueReviews: "/documents/reviews/due",
   documentReviewed: (documentId: string) => `/documents/${documentId}/lifecycle/reviewed`,
@@ -514,6 +515,11 @@ export const api = {
   transitionIncident: (incidentId: string, input: IncidentTransition) =>
     apiFetch<AiIncident>(ENDPOINTS.incidentTransition(incidentId), { method: "POST", body: input }),
   listFlywheel: () => apiFetch<FlywheelQueue>(ENDPOINTS.flywheel),
+  exportFlywheel: (target: "eval" | "finetune", name: string) =>
+    apiFetch<{ dataset_id: string; name: string; version: number; items: number }>(ENDPOINTS.flywheelExport, {
+      method: "POST",
+      body: { target, name },
+    }),
   triageFlywheelItem: (itemId: string, decision: "accept" | "dismiss", target?: "eval" | "finetune") =>
     apiFetch<FlywheelItem>(ENDPOINTS.flywheelTriage(itemId), {
       method: "POST",

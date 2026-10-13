@@ -7,6 +7,7 @@ import { I18nProvider } from "@/i18n/context";
 const apiMock = vi.hoisted(() => ({
   listFlywheel: vi.fn(),
   triageFlywheelItem: vi.fn(),
+  exportFlywheel: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -26,6 +27,7 @@ describe("ImproveScreen", () => {
   beforeEach(() => {
     apiMock.listFlywheel.mockReset();
     apiMock.triageFlywheelItem.mockReset();
+    apiMock.exportFlywheel.mockReset();
   });
 
   it("shows status counts and queue items from the live flywheel API", async () => {
@@ -128,5 +130,64 @@ describe("ImproveScreen", () => {
     renderImprove("id");
     expect(await screen.findByRole("button", { name: /terima untuk evaluasi/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /abaikan/i })).toBeInTheDocument();
+  });
+  const withAccepted = (accepted: number) => ({
+    by_status: { accepted },
+    by_source: {},
+    items: [],
+    next_cursor: null,
+  });
+
+  it("exports accepted eval items to a named dataset and shows the result", async () => {
+    const user = userEvent.setup();
+    apiMock.listFlywheel.mockResolvedValue(withAccepted(2));
+    apiMock.exportFlywheel.mockResolvedValue({ dataset_id: "d1", name: "hr-gold", version: 1, items: 2 });
+    renderImprove();
+    await user.type(await screen.findByLabelText(/dataset name/i), "hr-gold");
+    await user.click(screen.getByRole("button", { name: /export accepted items/i }));
+    await waitFor(() => expect(apiMock.exportFlywheel).toHaveBeenCalledWith("eval", "hr-gold"));
+    expect(await screen.findByText(/exported 2 items to hr-gold \(v1\)/i)).toBeInTheDocument();
+  });
+
+  it("exports to the fine-tune set when selected", async () => {
+    const user = userEvent.setup();
+    apiMock.listFlywheel.mockResolvedValue(withAccepted(1));
+    apiMock.exportFlywheel.mockResolvedValue({ dataset_id: "d2", name: "ft", version: 1, items: 1 });
+    renderImprove();
+    await user.type(await screen.findByLabelText(/dataset name/i), "ft");
+    await user.selectOptions(screen.getByLabelText(/export target/i), "finetune");
+    await user.click(screen.getByRole("button", { name: /export accepted items/i }));
+    await waitFor(() => expect(apiMock.exportFlywheel).toHaveBeenCalledWith("finetune", "ft"));
+  });
+
+  it("disables export until a dataset name is entered", async () => {
+    apiMock.listFlywheel.mockResolvedValue(withAccepted(1));
+    renderImprove();
+    expect(await screen.findByRole("button", { name: /export accepted items/i })).toBeDisabled();
+  });
+
+  it("hides the export panel when nothing is accepted", async () => {
+    apiMock.listFlywheel.mockResolvedValue({ by_status: { queued: 1 }, by_source: {}, items: [], next_cursor: null });
+    renderImprove();
+    await screen.findByText(/queued: 1/i);
+    expect(screen.queryByRole("button", { name: /export accepted items/i })).not.toBeInTheDocument();
+  });
+
+  it("shows a generic error without server text when the export fails", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.listFlywheel.mockResolvedValue(withAccepted(1));
+    apiMock.exportFlywheel.mockRejectedValue(new ApiError(409, "No accepted items to export", "internal detail"));
+    renderImprove();
+    await user.type(await screen.findByLabelText(/dataset name/i), "x");
+    await user.click(screen.getByRole("button", { name: /export accepted items/i }));
+    expect(await screen.findByText(/could not export the accepted items/i)).toBeInTheDocument();
+    expect(screen.queryByText(/internal detail/i)).not.toBeInTheDocument();
+  });
+
+  it("labels the export panel in Indonesian", async () => {
+    apiMock.listFlywheel.mockResolvedValue(withAccepted(1));
+    renderImprove("id");
+    expect(await screen.findByRole("button", { name: /ekspor item yang diterima/i })).toBeInTheDocument();
   });
 });

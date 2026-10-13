@@ -12,6 +12,27 @@ export function ImproveScreen() {
   const state = useAdminData(() => api.listFlywheel(), reloadKey);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [triageFailed, setTriageFailed] = useState(false);
+  const [exportName, setExportName] = useState("");
+  const [exportTarget, setExportTarget] = useState<"eval" | "finetune">("eval");
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportFailed, setExportFailed] = useState(false);
+  const [exportResult, setExportResult] = useState<string | null>(null);
+
+  async function exportAccepted() {
+    setExportFailed(false);
+    setExportResult(null);
+    setExportBusy(true);
+    try {
+      const result = await api.exportFlywheel(exportTarget, exportName.trim());
+      setExportResult(`${t.improve.exported} ${result.items} ${t.improve.exportedTo} ${result.name} (v${result.version})`);
+      setExportName("");
+    } catch {
+      setExportFailed(true);
+    } finally {
+      setExportBusy(false);
+      setReloadKey((key) => key + 1);
+    }
+  }
 
   async function triage(id: string, decision: "accept" | "dismiss", target?: "eval" | "finetune") {
     setTriageFailed(false);
@@ -48,6 +69,48 @@ export function ImproveScreen() {
               <li key={status} className="rounded bg-gray-100 px-2 py-1">{`${status}: ${count}`}</li>
             ))}
           </ul>
+          {(state.data.by_status.accepted ?? 0) > 0 ? (
+            <div className="mb-4 rounded border border-gray-200 p-3">
+              <h2 className="mb-2 text-lg font-semibold">{t.improve.exportTitle}</h2>
+              <div className="flex flex-wrap items-end gap-3 text-sm">
+                <label htmlFor="export-name">
+                  <span className="mr-1">{t.improve.datasetName}</span>
+                  <input
+                    id="export-name"
+                    value={exportName}
+                    onChange={(event) => setExportName(event.target.value)}
+                    className="rounded border border-gray-300 px-2 py-1 text-sm"
+                  />
+                </label>
+                <label htmlFor="export-target">
+                  <span className="mr-1">{t.improve.exportTarget}</span>
+                  <select
+                    id="export-target"
+                    value={exportTarget}
+                    onChange={(event) => setExportTarget(event.target.value as "eval" | "finetune")}
+                    className="rounded border border-gray-300 px-2 py-1 text-sm"
+                  >
+                    <option value="eval">{t.improve.targetEval}</option>
+                    <option value="finetune">{t.improve.targetFinetune}</option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  disabled={exportBusy || exportName.trim() === ""}
+                  onClick={exportAccepted}
+                  className="rounded border border-blue-400 px-3 py-1 text-sm text-blue-700 disabled:opacity-50"
+                >
+                  {t.improve.exportAccepted}
+                </button>
+              </div>
+              {exportResult !== null ? <p className="mt-2 text-sm text-green-700">{exportResult}</p> : null}
+              {exportFailed ? (
+                <p role="alert" className="mt-2 text-sm text-red-700">
+                  {t.improve.exportFailed}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <h2 className="mb-2 text-lg font-semibold">{t.improve.queue}</h2>
           {triageFailed ? (
             <p role="alert" className="mb-2 rounded border border-red-300 bg-red-50 p-3 text-sm">
