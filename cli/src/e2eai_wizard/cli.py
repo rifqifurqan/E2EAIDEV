@@ -8,7 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import airgap, backup, detect, generate, models, upgrade
+from . import airgap, backup, detect, generate, licenses, models, upgrade
 from .services import BY_NAME, SECRETS, SERVICES, USERS, enabled_services, owner_enabled
 
 app = typer.Typer(add_completion=False, help=__doc__, no_args_is_help=True)
@@ -183,6 +183,12 @@ def _write(root: Path, a: dict, yes: bool, force: bool) -> list[Path]:
         return generate.write_all(root, a, force=True)
 
 
+def _show_licenses(root: Path, a: dict) -> None:
+    rows = licenses.license_report(a, models.load_catalog(root))
+    out.print("[bold]Licenses[/bold]  (NFR-17: shown before install)")
+    out.print(licenses.render_license_report(rows), markup=False, highlight=False, soft_wrap=True)
+
+
 def _summary(root: Path, a: dict, written: list[Path]) -> None:
     table = Table("Service", "URL", "Username", "Password / key")
     host = a["bind"] if a["bind"] != "0.0.0.0" else "127.0.0.1"
@@ -267,6 +273,7 @@ def init(
     if detect.docker_volume_exists("e2eai_pgdata"):
         out.print("[yellow]Existing database volume e2eai_pgdata: new database passwords only apply to a fresh volume. "
                   "To change only models, use `uv run e2eai models`.[/yellow]")
+    _show_licenses(root, a)  # NFR-17: licenses are shown before anything is written
     written = _write(root, a, yes, force)
     _summary(root, a, written)
     if pull:
@@ -352,3 +359,11 @@ def backup_plan_cmd(
     plan = backup.build_backup_plan(backup_dir=backup_dir, compose_dir=compose_dir)
     restore = backup.build_restore_plan(backup_dir=backup_dir, compose_dir=compose_dir, api_dir=api_dir, ready_url=ready_url)
     out.print(backup.render_backup_runbook(plan, restore), markup=False, highlight=False, soft_wrap=True)  # never wrap commands
+
+
+@app.command("licenses")
+def licenses_cmd() -> None:
+    """Show the license of every tool and catalog model the wizard can install (NFR-17)."""
+    catalog = models.load_catalog(_find_root(Path.cwd()))
+    rows = licenses.catalog_license_report(catalog)
+    out.print(licenses.render_license_report(rows), markup=False, highlight=False, soft_wrap=True)
