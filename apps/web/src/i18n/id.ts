@@ -112,6 +112,9 @@ const id: Dictionary = {
     approvalsSignIn: "Silakan masuk untuk melihat permintaan persetujuan.",
     approvalsLoadFailed: "Gagal memuat data.",
     risk: "Risiko",
+    approve: "Setujui",
+    reject: "Tolak",
+    decisionFailed: "Gagal mencatat keputusan.",
   },
   admin: {
     title: "Admin",

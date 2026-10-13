@@ -110,6 +110,9 @@ const en = {
     approvalsSignIn: "Please sign in to see approval requests.",
     approvalsLoadFailed: "Could not load data.",
     risk: "Risk",
+    approve: "Approve",
+    reject: "Reject",
+    decisionFailed: "Could not record the decision.",
   },
   admin: {
     title: "Admin",

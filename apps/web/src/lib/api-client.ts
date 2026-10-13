@@ -322,6 +322,7 @@ export const ENDPOINTS = {
   dueReviews: "/documents/reviews/due",
   modelRegistry: "/model-registry",
   botApprovals: "/governance/bot-approvals",
+  botApprovalDecision: (approvalId: string) => `/governance/bot-approvals/${approvalId}/decisions`,
 } as const;
 
 // ─── Client functions ───────────────────────────────────────────────────
@@ -511,6 +512,11 @@ export const api = {
   listEvalRuns: () => apiFetch<EvalRunList>(ENDPOINTS.evalRuns),
 
   listBotApprovals: () => apiFetch<BotApprovalList>(ENDPOINTS.botApprovals),
+  decideBotApproval: (approvalId: string, decision: "approved" | "rejected") =>
+    apiFetch<BotApproval>(ENDPOINTS.botApprovalDecision(approvalId), {
+      method: "POST",
+      body: { decision },
+    }),
 
   // Admin
   deactivateUser: (userId: string, input: DeactivateInput) =>

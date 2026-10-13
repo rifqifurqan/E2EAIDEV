@@ -1,12 +1,29 @@
 "use client";
 
+import { useState } from "react";
 import { useI18n } from "@/i18n/context";
 import { api } from "@/lib/api-client";
 import { useAdminData } from "@/lib/use-admin-data";
 
 export function BotReleaseScreen() {
   const { t } = useI18n();
-  const approvals = useAdminData(() => api.listBotApprovals());
+  const [reloadKey, setReloadKey] = useState(0);
+  const approvals = useAdminData(() => api.listBotApprovals(), reloadKey);
+  const [decidingId, setDecidingId] = useState<string | null>(null);
+  const [decisionFailed, setDecisionFailed] = useState(false);
+
+  async function decide(id: string, decision: "approved" | "rejected") {
+    setDecisionFailed(false);
+    setDecidingId(id);
+    try {
+      await api.decideBotApproval(id, decision);
+    } catch {
+      setDecisionFailed(true);
+    } finally {
+      setDecidingId(null);
+      setReloadKey((key) => key + 1);
+    }
+  }
 
   return (
     <section>
@@ -66,6 +83,11 @@ export function BotReleaseScreen() {
             {t.bots.approvalsLoadFailed}
           </p>
         ) : null}
+        {decisionFailed ? (
+          <p role="alert" className="mb-2 rounded border border-red-300 bg-red-50 p-3 text-sm">
+            {t.bots.decisionFailed}
+          </p>
+        ) : null}
         {approvals.kind === "ready" ? (
           approvals.data.items.length === 0 ? (
             <p className="text-sm text-gray-500">{t.bots.approvalsEmpty}</p>
@@ -76,6 +98,26 @@ export function BotReleaseScreen() {
                   <span className="mr-2">{approval.approval_type}</span>
                   <span className="mr-2 text-xs text-gray-500">{`${t.bots.risk}: ${approval.risk_tier}`}</span>
                   <span className="font-mono text-xs">{approval.status}</span>
+                  {approval.status === "pending" ? (
+                    <span className="ml-3 inline-flex gap-2">
+                      <button
+                        type="button"
+                        disabled={decidingId === approval.id}
+                        onClick={() => decide(approval.id, "approved")}
+                        className="rounded border border-green-400 px-2 py-0.5 text-xs text-green-700 disabled:opacity-50"
+                      >
+                        {t.bots.approve}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={decidingId === approval.id}
+                        onClick={() => decide(approval.id, "rejected")}
+                        className="rounded border border-red-400 px-2 py-0.5 text-xs text-red-700 disabled:opacity-50"
+                      >
+                        {t.bots.reject}
+                      </button>
+                    </span>
+                  ) : null}
                 </li>
               ))}
             </ul>
