@@ -95,3 +95,23 @@ def test_login_endpoint_returns_429_problem_with_retry_after(monkeypatch):
     assert r.status_code == 429
     assert r.headers["content-type"].startswith("application/problem+json")
     assert 0 < int(r.headers["retry-after"]) <= 300
+
+
+def test_successful_login_clears_the_account_counter_but_not_the_ip_counter():
+    from e2eai.auth import clear_account_attempts
+
+    class R(FakeRedis):
+        async def delete(self, *keys):
+            for k in keys:
+                self.store.pop(k, None)
+                self.ttls.pop(k, None)
+
+    r = R()
+    for _ in range(LOGIN_MAX_ATTEMPTS - 1):
+        _decide(r, "andi@demo.e2eai", "192.0.2.1")
+    asyncio.run(clear_account_attempts(r, "ANDI@demo.e2eai"))
+    # the account is fresh again, the address counter keeps its history
+    assert len(r.store) == 1
+    for _ in range(LOGIN_MAX_ATTEMPTS):
+        allowed, _ = _decide(r, "andi@demo.e2eai", "192.0.2.1")
+        assert allowed

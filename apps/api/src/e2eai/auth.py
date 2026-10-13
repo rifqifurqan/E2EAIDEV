@@ -269,6 +269,11 @@ async def login_decision(redis: Redis, email: str, ip: str) -> tuple[bool, int]:
     return allowed, (0 if allowed else max(1, retry_after))
 
 
+async def clear_account_attempts(redis: Redis, email: str) -> None:
+    """Forget the failed-attempt count of one account after a correct password (the address counter stays)."""
+    await redis.delete(_rl_key("acct", email.strip().lower()))
+
+
 @dataclass
 class Sessions:
     """Server-side sessions in Valkey with a sliding idle timeout (NFR-18, default 8 h)."""
@@ -408,6 +413,7 @@ async def login(body: LoginIn, request: Request, response: Response, db: AsyncSe
         await audit.record(db, body.email.lower(), "auth.login.failed", f"email:{body.email.lower()}")
         await db.commit()
         raise AppError(401, "Invalid email or password")
+    await clear_account_attempts(redis, body.email)
     settings = get_settings()
     is_break_glass = user.email.lower() in settings.oidc_local_fallback_emails
     if not local_login_allowed(settings.auth_provider, oidc_available=False, is_break_glass_user=is_break_glass):
