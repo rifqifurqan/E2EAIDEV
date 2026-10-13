@@ -213,6 +213,8 @@ Rules for every cron tick:
 
 120. [x] [FR-R3] `VectorStore` port with Qdrant (P1) adapter and contract check. Completed as `vector_store.py`: mandatory permission filter inside the query (empty set -> nothing, no backend call), ids-only payload, idempotent upsert, delete by document, retry + breaker `vector-store` with URL-free 503, `check_vector_store_contract`, in-memory reference store, `make_vector_store`; see progress_2026-10-05.txt. Follow-up: wire Qdrant into ingest/retrieval selection by `components.vector_store`, add Qdrant compose service.
 
+121. [x] [FR-F21/FR-R3/FR-F20] `components` in e2eai.yaml validated at startup. Completed in `core/config.py`: `ConfigError`, `validate_components` (auth, job_engine, vector_store, tracing; every bad value reported with allowed list; defaults filled), `Settings.vector_store` and `Settings.job_engine`; see progress_2026-10-05.txt. Follow-up: use `Settings.vector_store` in ingest/retrieval, Qdrant compose service.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.

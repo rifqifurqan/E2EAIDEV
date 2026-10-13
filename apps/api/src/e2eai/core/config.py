@@ -27,6 +27,36 @@ def _env(root: Path) -> dict[str, str]:
     return values | {k: v for k, v in os.environ.items() if k in values or k.startswith("E2EAI_")}
 
 
+class ConfigError(RuntimeError):
+    """Invalid e2eai.yaml: raised at startup with a message that names the key and the allowed values (FR-F21)."""
+
+
+ALLOWED_COMPONENTS: dict[str, tuple[str, ...]] = {
+    "auth": ("local", "oidc"),
+    "job_engine": ("celery", "temporal"),
+    "vector_store": ("pgvector", "qdrant"),
+    "tracing": ("postgres", "langfuse"),
+}
+_COMPONENT_DEFAULTS = {"auth": "local", "job_engine": "celery", "vector_store": "pgvector", "tracing": "postgres"}
+
+
+def validate_components(cfg: dict) -> dict[str, str]:
+    """Return the effective `components` (defaults filled) or raise ConfigError listing every bad value."""
+    raw = cfg.get("components", {})
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ConfigError("components must be a mapping of component -> choice")
+    problems = [
+        f"components.{key}: {raw[key]!r} is not supported (allowed: {', '.join(allowed)})"
+        for key, allowed in ALLOWED_COMPONENTS.items()
+        if key in raw and raw[key] not in allowed
+    ]
+    if problems:
+        raise ConfigError("Invalid e2eai.yaml: " + "; ".join(problems))
+    return {key: raw.get(key, default) for key, default in _COMPONENT_DEFAULTS.items()}
+
+
 def _resolve_secret_ref(value: str, env_values: dict[str, str]) -> str:
     """Resolve optional secret references without storing secret values in e2eai.yaml."""
     if not value:
@@ -64,6 +94,8 @@ class Settings:
     tei_api_key: str = ""
     tei_rerank_port: int = 18082
     session_idle_hours: int = 8  # NFR-18
+    vector_store: str = "pgvector"  # FR-R3
+    job_engine: str = "celery"  # FR-F20
 
 
 @lru_cache
@@ -71,6 +103,7 @@ def get_settings() -> Settings:
     root = repo_root()
     e = _env(root)
     cfg = yaml.safe_load((root / "e2eai.yaml").read_text(encoding="utf-8"))
+    components = validate_components(cfg)
     auth_cfg = cfg.get("auth", {})
     oidc_cfg = auth_cfg.get("oidc", {})
     host = "127.0.0.1"
@@ -92,7 +125,9 @@ def get_settings() -> Settings:
         tei_rerank_port=int(e.get("TEI_RERANK_PORT", "18082")),
         default_language=cfg.get("locale", {}).get("default_language", "id"),
         time_zone=cfg.get("locale", {}).get("time_zone", "Asia/Jakarta"),
-        auth_provider=cfg.get("components", {}).get("auth", "local"),
+        auth_provider=components["auth"],
+        vector_store=components["vector_store"],
+        job_engine=components["job_engine"],
         oidc_authorization_endpoint=oidc_cfg.get("authorization_endpoint", ""),
         oidc_token_endpoint=oidc_cfg.get("token_endpoint", ""),
         oidc_userinfo_endpoint=oidc_cfg.get("userinfo_endpoint", ""),

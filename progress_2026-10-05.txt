@@ -2328,3 +2328,10 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_vector_store_fr_r3.py` -> collection ModuleNotFoundError. GREEN: 7 passed (Qdrant REST double; leaky store is caught by the contract).
   - Adjacent: `uv run pytest -q tests/test_vector_store_fr_r3.py tests/test_circuit_breaker_nfr19.py tests/test_lab_tool_degrade_nfr19.py tests/test_metrics_nfr16.py` -> 25 passed. Heavy gates skipped.
   - Not done: choosing the store from `components.vector_store` in ingest/retrieval, Qdrant compose service + pinned digest, live Qdrant run.
+
+- Startup validation of `components` in e2eai.yaml (FR-F21, FR-R3, FR-F20) (2026-10-13, cron):
+  - Hermes worked manually. Codex unused. FR-F21 says invalid config fails at startup with a clear message, but `components.*` was read unchecked.
+  - `core/config.py`: `ConfigError`, `ALLOWED_COMPONENTS` (auth local|oidc, job_engine celery|temporal, vector_store pgvector|qdrant, tracing postgres|langfuse), `validate_components` (all bad values reported together with the allowed list, defaults filled, non-mapping rejected), `get_settings` calls it; `Settings.vector_store` / `Settings.job_engine` added with defaults. Wizard output (`generate.py`) only emits allowed values.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_config_components_fr_f21.py` -> collection ImportError (`ConfigError`). GREEN: 5 passed.
+  - Adjacent: `uv run pytest -q tests/test_config_components_fr_f21.py tests/test_config_export_fr_f21.py tests/test_auth.py tests/test_phase0_core.py tests/test_vector_store_fr_r3.py` -> 27 passed; `-k "oidc or config or readiness or http_hardening"` -> 37 passed. Heavy gates skipped.
+  - Not done: using `Settings.vector_store` to pick the store in ingest/retrieval; Qdrant compose service.
