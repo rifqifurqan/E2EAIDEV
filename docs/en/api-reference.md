@@ -6,8 +6,8 @@ Requirement: FR-F22 (P1 API reference).
 
 API title: E2EAIDEV API
 API version: 0.1.0
-Total paths: 162
-Total operations: 176
+Total paths: 163
+Total operations: 177
 
 ## How to regenerate
 
@@ -1146,3 +1146,11 @@ Most application routes require a scoped session or API key. This generated refe
 - Summary: Mcp Descriptor Api
 - Operation ID: `mcp_descriptor_api_api_v1_systems__system_id__mcp_descriptor_post`
 - Response status codes: 200, 422
+
+### vector-store
+
+#### POST /api/v1/admin/vector-store/reconcile-purges
+
+- Summary: Reconcile Purges Api
+- Operation ID: `reconcile_purges_api_api_v1_admin_vector_store_reconcile_purges_post`
+- Response status codes: 200

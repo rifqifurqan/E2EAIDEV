@@ -6,8 +6,8 @@ Requirement: FR-F22 (referensi API P1).
 
 Judul API: E2EAIDEV API
 Versi API: 0.1.0
-Total path: 162
-Total operasi: 176
+Total path: 163
+Total operasi: 177
 
 ## Cara generate ulang
 
@@ -1146,3 +1146,11 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 - Ringkasan: Mcp Descriptor Api
 - Operation ID: `mcp_descriptor_api_api_v1_systems__system_id__mcp_descriptor_post`
 - Kode status respons: 200, 422
+
+### vector-store
+
+#### POST /api/v1/admin/vector-store/reconcile-purges
+
+- Ringkasan: Reconcile Purges Api
+- Operation ID: `reconcile_purges_api_api_v1_admin_vector_store_reconcile_purges_post`
+- Kode status respons: 200

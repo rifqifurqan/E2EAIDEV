@@ -4932,6 +4932,31 @@
         ]
       }
     },
+    "/api/v1/admin/vector-store/reconcile-purges": {
+      "post": {
+        "operationId": "reconcile_purges_api_api_v1_admin_vector_store_reconcile_purges_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "title": "Response Reconcile Purges Api Api V1 Admin Vector Store Reconcile Purges Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Reconcile Purges Api",
+        "tags": [
+          "vector-store"
+        ]
+      }
+    },
     "/api/v1/agents/trajectory/score": {
       "post": {
         "description": "FR-B5: score a recorded agent trajectory against an expected one.",

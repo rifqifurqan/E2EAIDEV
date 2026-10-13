@@ -9,6 +9,7 @@ from .secret_rotation import router as secret_rotation_router
 from .doc_lifecycle import router as doc_lifecycle_router
 from .index_lineage import router as index_lineage_router
 from .legal_hold import router as legal_hold_router
+from .vector_reconcile import router as vector_reconcile_router
 from .model_registry import router as model_registry_router
 from .model_file_security import router as model_file_security_router
 from .model_endpoints import router as model_endpoints_router
@@ -91,6 +92,7 @@ def create_app() -> FastAPI:
     app.include_router(doc_lifecycle_router)
     app.include_router(index_lineage_router)
     app.include_router(legal_hold_router)
+    app.include_router(vector_reconcile_router)
     app.include_router(model_registry_router)
     app.include_router(model_file_security_router)
     app.include_router(model_endpoints_router)
