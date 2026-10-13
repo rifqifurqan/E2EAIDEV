@@ -11,14 +11,15 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
 from .auth import current_session, require_scope
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import AIInventoryEntry, Bot, BotApproval, BotRiskClassification, User, get_session
 
 VALID_APPROVAL_TYPES = ("high_risk_release",)
@@ -131,6 +132,27 @@ async def list_bot_approvals(session: AsyncSession, *, bot_id: uuid.UUID | None 
     return list((await session.execute(stmt)).scalars().all())
 
 
+async def list_bot_approvals_page(
+    session: AsyncSession,
+    *,
+    bot_id: uuid.UUID | None = None,
+    limit: int | None = None,
+    cursor: str | None = None,
+) -> tuple[list[BotApproval], str | None]:
+    """Keyset-paginated approvals (NFR-20): oldest first (review queue order), ties broken by id."""
+    size = clamp_limit(limit)
+    stmt = select(BotApproval)
+    if bot_id is not None:
+        stmt = stmt.where(BotApproval.bot_id == bot_id)
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(BotApproval.created_at, BotApproval.id) > tuple_(ts, last_id))
+    stmt = stmt.order_by(BotApproval.created_at.asc(), BotApproval.id.asc()).limit(size + 1)
+    rows = list((await session.scalars(stmt)).all())
+    page, nxt = make_page(rows, size, lambda a: (a.created_at, a.id))
+    return page, nxt
+
+
 def safe_approval_summary(approval: BotApproval) -> dict[str, Any]:
     created_at = approval.__dict__.get("created_at")
     decided_at = approval.__dict__.get("decided_at")
@@ -203,10 +225,12 @@ async def decide_bot_approval_api(
 @router.get("/bot-approvals")
 async def list_bot_approvals_api(
     bot_id: uuid.UUID | None = None,
+    limit: int | None = Query(default=None),
+    cursor: str | None = Query(default=None),
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    """FR-P4: List bot approval workflow records."""
+    """FR-P4: List bot approval workflow records (cursor-paginated, NFR-20)."""
     require_scope(sess, "bots")
-    rows = await list_bot_approvals(db, bot_id=bot_id)
-    return {"items": [safe_approval_summary(row) for row in rows]}
+    rows, next_cursor = await list_bot_approvals_page(db, bot_id=bot_id, limit=limit, cursor=cursor)
+    return {"items": [safe_approval_summary(row) for row in rows], "next_cursor": next_cursor}

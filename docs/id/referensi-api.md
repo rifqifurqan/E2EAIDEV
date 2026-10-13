@@ -729,7 +729,7 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 
 - Ringkasan: List Api
 - Operation ID: `list_api_api_v1_memory_get`
-- Kode status respons: 200
+- Kode status respons: 200, 422
 
 #### POST /api/v1/memory
 

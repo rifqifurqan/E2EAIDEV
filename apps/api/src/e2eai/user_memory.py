@@ -11,14 +11,15 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
 from .auth import current_session, require_scope
 from .core.errors import AppError
+from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import User, UserMemory, UserMemorySetting, get_session
 from .incidents import redact
 from .pii import mask_text
@@ -88,6 +89,21 @@ async def list_memories(session: AsyncSession, *, user: User) -> list[dict[str, 
     return [_view(r) for r in rows.all()]
 
 
+async def list_memories_page(
+    session: AsyncSession, *, user: User, limit: int | None = None, cursor: str | None = None
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Keyset-paginated, owner-scoped memory list (NFR-20): newest first, ties broken by id."""
+    size = clamp_limit(limit)
+    stmt = select(UserMemory).where(UserMemory.user_id == user.id)
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(UserMemory.created_at, UserMemory.id) < tuple_(ts, last_id))
+    stmt = stmt.order_by(UserMemory.created_at.desc(), UserMemory.id.desc()).limit(size + 1)
+    rows = list((await session.scalars(stmt)).all())
+    page, nxt = make_page(rows, size, lambda m: (m.created_at, m.id))
+    return [_view(r) for r in page], nxt
+
+
 async def delete_memory(session: AsyncSession, *, user: User, memory_id: str | uuid.UUID) -> None:
     try:
         mid = memory_id if isinstance(memory_id, uuid.UUID) else uuid.UUID(str(memory_id))
@@ -141,10 +157,16 @@ async def _user(db: AsyncSession, sess: dict) -> User:
 
 
 @router.get("")
-async def list_api(sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+async def list_api(
+    limit: int | None = Query(default=None),
+    cursor: str | None = Query(default=None),
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
     require_scope(sess, "chat")
     user = await _user(db, sess)
-    return {"enabled": await is_enabled(db, user), "items": await list_memories(db, user=user)}
+    items, next_cursor = await list_memories_page(db, user=user, limit=limit, cursor=cursor)
+    return {"enabled": await is_enabled(db, user), "items": items, "next_cursor": next_cursor}
 
 
 @router.post("")

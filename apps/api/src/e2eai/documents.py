@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import and_, case, delete, exists, func, literal, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -835,6 +835,32 @@ async def list_access_requests(
     return list((await session.execute(stmt)).scalars().all())
 
 
+async def list_access_requests_page(
+    session: AsyncSession,
+    *,
+    owner: User,
+    status_filter: str = "pending",
+    limit: int | None = None,
+    cursor: str | None = None,
+) -> tuple[list[AccessRequest], str | None]:
+    """Keyset-paginated access requests for documents the user owns (NFR-20); ownership filter runs in SQL."""
+    size = clamp_limit(limit)
+    owned_doc_ids = select(DocPrincipal.document_id).where(
+        DocPrincipal.principal == f"user:{owner.id}",
+        DocPrincipal.level == "owner",
+    ).scalar_subquery()
+    stmt = select(AccessRequest).where(
+        AccessRequest.document_id.in_(owned_doc_ids), AccessRequest.status == status_filter
+    )
+    if cursor:
+        ts, last_id = decode_cursor(cursor)
+        stmt = stmt.where(tuple_(AccessRequest.created_at, AccessRequest.id) < tuple_(ts, last_id))
+    stmt = stmt.order_by(AccessRequest.created_at.desc(), AccessRequest.id.desc()).limit(size + 1)
+    rows = list((await session.scalars(stmt)).all())
+    page, nxt = make_page(rows, size, lambda r: (r.created_at, r.id))
+    return page, nxt
+
+
 async def _current_user(db: AsyncSession, sess: dict) -> User:
     user = await db.get(User, uuid.UUID(sess["user_id"]))
     if user is None or user.status != "active":
@@ -1019,18 +1045,22 @@ async def request_access_api(
 @router.get("/documents/access-requests")
 async def list_access_requests_api(
     status: str = "pending",
+    limit: int | None = Query(default=None),
+    cursor: str | None = Query(default=None),
     sess: dict = Depends(current_session),
     db: AsyncSession = Depends(get_session),
 ) -> dict:
-    """List access requests for documents owned by the caller (FR-S5)."""
+    """List access requests for documents owned by the caller (FR-S5, cursor-paginated NFR-20)."""
     require_scope(sess, "sharing")
     user = await _current_user(db, sess)
-    reqs = await list_access_requests(db, owner=user, status_filter=status)
+    reqs, next_cursor = await list_access_requests_page(
+        db, owner=user, status_filter=status, limit=limit, cursor=cursor
+    )
     return {"requests": [
         {"id": str(r.id), "document_id": str(r.document_id), "requester_id": str(r.requester_id),
          "status": r.status, "created_at": r.created_at.isoformat()}
         for r in reqs
-    ]}
+    ], "next_cursor": next_cursor}
 
 
 @router.post("/documents/access-requests/{request_id}/approve")

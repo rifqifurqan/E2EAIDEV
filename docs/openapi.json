@@ -6365,7 +6365,7 @@
     },
     "/api/v1/documents/access-requests": {
       "get": {
-        "description": "List access requests for documents owned by the caller (FR-S5).",
+        "description": "List access requests for documents owned by the caller (FR-S5, cursor-paginated NFR-20).",
         "operationId": "list_access_requests_api_api_v1_documents_access_requests_get",
         "parameters": [
           {
@@ -6376,6 +6376,38 @@
               "default": "pending",
               "title": "Status",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
             }
           }
         ],
@@ -7794,7 +7826,7 @@
     },
     "/api/v1/governance/bot-approvals": {
       "get": {
-        "description": "FR-P4: List bot approval workflow records.",
+        "description": "FR-P4: List bot approval workflow records (cursor-paginated, NFR-20).",
         "operationId": "list_bot_approvals_api_api_v1_governance_bot_approvals_get",
         "parameters": [
           {
@@ -7812,6 +7844,38 @@
                 }
               ],
               "title": "Bot Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
             }
           }
         ],
@@ -9361,6 +9425,40 @@
       },
       "get": {
         "operationId": "list_api_api_v1_memory_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -9373,6 +9471,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List Api",
