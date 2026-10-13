@@ -7,6 +7,7 @@ import { I18nProvider } from "@/i18n/context";
 const apiMock = vi.hoisted(() => ({
   listBotApprovals: vi.fn(),
   decideBotApproval: vi.fn(),
+  requestBotApproval: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -27,6 +28,7 @@ describe("BotReleaseScreen", () => {
     apiMock.listBotApprovals.mockReset();
     apiMock.listBotApprovals.mockResolvedValue({ items: [], next_cursor: null });
     apiMock.decideBotApproval.mockReset();
+    apiMock.requestBotApproval.mockReset();
   });
 
   it("lists bot approval requests with risk tier and status", async () => {
@@ -161,5 +163,51 @@ describe("BotReleaseScreen", () => {
     renderBots("id");
     expect(await screen.findByRole("button", { name: /^setujui$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^tolak$/i })).toBeInTheDocument();
+  });
+
+  const BOT_ID = "3f2c8a52-1b7e-4c1d-9a55-0d2f6a9b7c11";
+
+  it("requests an approval for a bot id with an optional rationale and reloads", async () => {
+    const user = userEvent.setup();
+    apiMock.requestBotApproval.mockResolvedValue(approval("n1", "pending"));
+    renderBots();
+    await screen.findByText(/no approval requests yet/i);
+    await user.type(screen.getByLabelText(/bot id/i), BOT_ID);
+    await user.type(screen.getByLabelText(/rationale/i), "Handles HR data");
+    await user.click(screen.getByRole("button", { name: /request approval/i }));
+    await waitFor(() => expect(apiMock.requestBotApproval).toHaveBeenCalledWith(BOT_ID, "Handles HR data"));
+    await waitFor(() => expect(apiMock.listBotApprovals).toHaveBeenCalledTimes(2));
+  });
+
+  it("omits a blank rationale and disables request until the bot id is a UUID", async () => {
+    const user = userEvent.setup();
+    apiMock.requestBotApproval.mockResolvedValue(approval("n2", "pending"));
+    renderBots();
+    await screen.findByText(/no approval requests yet/i);
+    const button = screen.getByRole("button", { name: /request approval/i });
+    expect(button).toBeDisabled();
+    await user.type(screen.getByLabelText(/bot id/i), "nope");
+    expect(button).toBeDisabled();
+    await user.clear(screen.getByLabelText(/bot id/i));
+    await user.type(screen.getByLabelText(/bot id/i), BOT_ID);
+    await user.click(button);
+    await waitFor(() => expect(apiMock.requestBotApproval).toHaveBeenCalledWith(BOT_ID, undefined));
+  });
+
+  it("shows a generic error without server text when the request fails", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.requestBotApproval.mockRejectedValue(new ApiError(404, "Bot not found", "stack detail"));
+    renderBots();
+    await screen.findByText(/no approval requests yet/i);
+    await user.type(screen.getByLabelText(/bot id/i), BOT_ID);
+    await user.click(screen.getByRole("button", { name: /request approval/i }));
+    expect(await screen.findByText(/could not request the approval/i)).toBeInTheDocument();
+    expect(screen.queryByText(/stack detail/i)).not.toBeInTheDocument();
+  });
+
+  it("labels the request form in Indonesian", async () => {
+    renderBots("id");
+    expect(await screen.findByRole("button", { name: /minta persetujuan/i })).toBeInTheDocument();
   });
 });

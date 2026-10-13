@@ -2497,3 +2497,7 @@ HOW TO RESUME
   - TDD / RED: `pnpm vitest run src/components/build-screen.test.tsx` -> 4 failed. GREEN: full web suite `pnpm vitest run` -> 18 files / 220 passed; `pnpm run typecheck` ok; `pnpm lint` ok. API untouched; build and live browser run skipped.
   - Not done: run picker from the Test-stage run list (free-text UUID for now), lineage fields input, lineage view, load-more via `next_cursor`.
 
+- Release stage request-approval form (FR-P4/FR-RL2) (2026-10-14, cron):
+  - Hermes worked manually. Codex unused. A form above the approval list takes a bot ID (UUID-validated) and an optional rationale and calls `POST /api/v1/governance/bot-approvals` (bots scope; approval type defaults to `high_risk_release` on the server); blank rationale omitted; success clears the form and reloads the list; failures show a generic EN/ID message with no server text. Together with approve/reject, the approval workflow is now drivable from the UI.
+  - TDD / RED: `pnpm vitest run src/components/bot-release-screen.test.tsx` -> 4 failed. GREEN: full web suite `pnpm vitest run` -> 18 files / 224 passed; `pnpm run typecheck` ok; `pnpm lint` ok. API untouched; build and live browser run skipped.
+  - Not done: bot picker (free-text UUID; no bots list API), approval type selector, decision note input, load-more via `next_cursor`.

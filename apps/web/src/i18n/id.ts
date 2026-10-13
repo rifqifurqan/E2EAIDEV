@@ -115,6 +115,10 @@ const id: Dictionary = {
     approve: "Setujui",
     reject: "Tolak",
     decisionFailed: "Gagal mencatat keputusan.",
+    botId: "ID bot",
+    rationale: "Alasan (opsional)",
+    requestApproval: "Minta persetujuan",
+    requestFailed: "Gagal meminta persetujuan.",
   },
   admin: {
     title: "Admin",

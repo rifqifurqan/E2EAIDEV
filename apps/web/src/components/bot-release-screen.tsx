@@ -5,12 +5,35 @@ import { useI18n } from "@/i18n/context";
 import { api } from "@/lib/api-client";
 import { useAdminData } from "@/lib/use-admin-data";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function BotReleaseScreen() {
   const { t } = useI18n();
   const [reloadKey, setReloadKey] = useState(0);
   const approvals = useAdminData(() => api.listBotApprovals(), reloadKey);
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [decisionFailed, setDecisionFailed] = useState(false);
+
+  const [botId, setBotId] = useState("");
+  const [rationale, setRationale] = useState("");
+  const [requesting, setRequesting] = useState(false);
+  const [requestFailed, setRequestFailed] = useState(false);
+
+  async function requestApproval(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setRequestFailed(false);
+    setRequesting(true);
+    try {
+      await api.requestBotApproval(botId.trim(), rationale.trim() === "" ? undefined : rationale.trim());
+      setBotId("");
+      setRationale("");
+    } catch {
+      setRequestFailed(true);
+    } finally {
+      setRequesting(false);
+      setReloadKey((key) => key + 1);
+    }
+  }
 
   async function decide(id: string, decision: "approved" | "rejected") {
     setDecisionFailed(false);
@@ -72,6 +95,38 @@ export function BotReleaseScreen() {
 
       <div className="mt-6 rounded-lg border border-gray-200 p-4">
         <h2 className="mb-3 text-lg font-semibold">{t.bots.approvalsTitle}</h2>
+        <form onSubmit={requestApproval} className="mb-3 flex flex-wrap items-end gap-3 text-sm">
+          <label htmlFor="approval-bot-id">
+            <span className="mr-1">{t.bots.botId}</span>
+            <input
+              id="approval-bot-id"
+              value={botId}
+              onChange={(event) => setBotId(event.target.value)}
+              className="rounded border border-gray-300 px-2 py-1 font-mono text-sm"
+            />
+          </label>
+          <label htmlFor="approval-rationale">
+            <span className="mr-1">{t.bots.rationale}</span>
+            <input
+              id="approval-rationale"
+              value={rationale}
+              onChange={(event) => setRationale(event.target.value)}
+              className="rounded border border-gray-300 px-2 py-1 text-sm"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={requesting || !UUID_RE.test(botId.trim())}
+            className="rounded border border-blue-400 px-3 py-1 text-sm text-blue-700 disabled:opacity-50"
+          >
+            {t.bots.requestApproval}
+          </button>
+          {requestFailed ? (
+            <p role="alert" className="w-full text-sm text-red-700">
+              {t.bots.requestFailed}
+            </p>
+          ) : null}
+        </form>
         {approvals.kind === "loading" ? <p>{t.bots.approvalsLoading}</p> : null}
         {approvals.kind === "forbidden" ? (
           <p role="alert" className="rounded border border-yellow-300 bg-yellow-50 p-3 text-sm">

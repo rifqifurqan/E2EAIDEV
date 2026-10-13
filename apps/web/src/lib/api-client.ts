@@ -575,6 +575,11 @@ export const api = {
   listEvalRuns: () => apiFetch<EvalRunList>(ENDPOINTS.evalRuns),
 
   listBotApprovals: () => apiFetch<BotApprovalList>(ENDPOINTS.botApprovals),
+  requestBotApproval: (botId: string, rationale?: string) =>
+    apiFetch<BotApproval>(ENDPOINTS.botApprovals, {
+      method: "POST",
+      body: rationale === undefined ? { bot_id: botId } : { bot_id: botId, rationale },
+    }),
   decideBotApproval: (approvalId: string, decision: "approved" | "rejected") =>
     apiFetch<BotApproval>(ENDPOINTS.botApprovalDecision(approvalId), {
       method: "POST",

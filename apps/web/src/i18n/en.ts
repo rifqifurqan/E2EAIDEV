@@ -113,6 +113,10 @@ const en = {
     approve: "Approve",
     reject: "Reject",
     decisionFailed: "Could not record the decision.",
+    botId: "Bot ID",
+    rationale: "Rationale (optional)",
+    requestApproval: "Request approval",
+    requestFailed: "Could not request the approval.",
   },
   admin: {
     title: "Admin",
