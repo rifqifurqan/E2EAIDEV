@@ -346,6 +346,8 @@ export const ENDPOINTS = {
   modelRegistry: "/model-registry",
   modelDecision: (name: string, version: string) =>
     `/model-registry/${encodeURIComponent(name)}/${encodeURIComponent(version)}/decision`,
+  modelEvalRuns: (name: string, version: string) =>
+    `/model-registry/${encodeURIComponent(name)}/${encodeURIComponent(version)}/eval-runs`,
   botApprovals: "/governance/bot-approvals",
   botApprovalDecision: (approvalId: string) => `/governance/bot-approvals/${approvalId}/decisions`,
 } as const;
@@ -560,6 +562,11 @@ export const api = {
     apiFetch<ModelVersion>(ENDPOINTS.modelDecision(name, version), {
       method: "POST",
       body: { decision },
+    }),
+  attachEvalRun: (name: string, version: string, runId: string) =>
+    apiFetch<ModelVersion>(ENDPOINTS.modelEvalRuns(name, version), {
+      method: "POST",
+      body: { run_id: runId },
     }),
 
   // Release (scope enforced by the server)

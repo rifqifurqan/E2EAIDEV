@@ -8,6 +8,7 @@ const apiMock = vi.hoisted(() => ({
   listModels: vi.fn(),
   decideModel: vi.fn(),
   registerModel: vi.fn(),
+  attachEvalRun: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -28,6 +29,7 @@ describe("BuildScreen", () => {
     apiMock.listModels.mockReset();
     apiMock.decideModel.mockReset();
     apiMock.registerModel.mockReset();
+    apiMock.attachEvalRun.mockReset();
   });
 
   it("lists registered model versions with approval status", async () => {
@@ -177,5 +179,62 @@ describe("BuildScreen", () => {
     apiMock.listModels.mockResolvedValue({ models: [], next_cursor: null });
     renderBuild("id");
     expect(await screen.findByRole("button", { name: /daftarkan versi/i })).toBeInTheDocument();
+  });
+
+  const RUN_ID = "3f2c8a52-1b7e-4c1d-9a55-0d2f6a9b7c11";
+  const pendingModel = {
+    name: "support-llm",
+    version: "v3",
+    parent_version: null,
+    lineage: {},
+    eval_scores: {},
+    approval_status: "pending",
+    approved_by: null,
+  };
+
+  it("attaches an eval run to a pending model version and reloads", async () => {
+    const user = userEvent.setup();
+    apiMock.listModels.mockResolvedValue({ models: [pendingModel], next_cursor: null });
+    apiMock.attachEvalRun.mockResolvedValue({ ...pendingModel, eval_scores: { [RUN_ID]: {} } });
+    renderBuild();
+    await screen.findByText("support-llm");
+    await user.type(screen.getByLabelText(/eval run id/i), RUN_ID);
+    await user.click(screen.getByRole("button", { name: /attach eval run/i }));
+    await waitFor(() => expect(apiMock.attachEvalRun).toHaveBeenCalledWith("support-llm", "v3", RUN_ID));
+    await waitFor(() => expect(apiMock.listModels).toHaveBeenCalledTimes(2));
+  });
+
+  it("disables attach until a valid run id is entered", async () => {
+    const user = userEvent.setup();
+    apiMock.listModels.mockResolvedValue({ models: [pendingModel], next_cursor: null });
+    renderBuild();
+    await screen.findByText("support-llm");
+    const button = screen.getByRole("button", { name: /attach eval run/i });
+    expect(button).toBeDisabled();
+    await user.type(screen.getByLabelText(/eval run id/i), "not-a-uuid");
+    expect(button).toBeDisabled();
+  });
+
+  it("shows a generic error without server text when attaching fails", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.listModels.mockResolvedValue({ models: [pendingModel], next_cursor: null });
+    apiMock.attachEvalRun.mockRejectedValue(new ApiError(404, "Eval run not found", "internal detail"));
+    renderBuild();
+    await screen.findByText("support-llm");
+    await user.type(screen.getByLabelText(/eval run id/i), RUN_ID);
+    await user.click(screen.getByRole("button", { name: /attach eval run/i }));
+    expect(await screen.findByText(/could not attach the eval run/i)).toBeInTheDocument();
+    expect(screen.queryByText(/internal detail/i)).not.toBeInTheDocument();
+  });
+
+  it("does not offer attach on decided versions and labels it in Indonesian", async () => {
+    apiMock.listModels.mockResolvedValue({
+      models: [{ ...pendingModel, approval_status: "approved" }, { ...pendingModel, version: "v4" }],
+      next_cursor: null,
+    });
+    renderBuild("id");
+    await screen.findAllByText("support-llm");
+    expect(screen.getAllByRole("button", { name: /lampirkan hasil evaluasi/i })).toHaveLength(1);
   });
 });

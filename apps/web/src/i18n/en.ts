@@ -163,6 +163,9 @@ const en = {
     parentVersion: "Parent version (optional)",
     register: "Register version",
     registerFailed: "Could not register the model version.",
+    evalRunId: "Eval run ID",
+    attachRun: "Attach eval run",
+    attachFailed: "Could not attach the eval run.",
   },
   operate: {
     incidentsTitle: "AI Incidents",

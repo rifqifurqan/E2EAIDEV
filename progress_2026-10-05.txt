@@ -2491,3 +2491,9 @@ HOW TO RESUME
   - Hermes worked manually. Codex unused. Replaces the read-only "Evaluation target" line with a labelled select of the loaded datasets (name + version). It defaults to the newest dataset (the API lists newest first) and "Run Evaluation" runs the picked one with `ragas.local`; hidden when there are no datasets. Also ran `pnpm build` once for this run's web changes: compiled and generated 14/14 static pages, exit 0.
   - TDD / RED: `pnpm vitest run src/components/eval-screen.test.tsx` -> 3 failed. GREEN: full web suite `pnpm vitest run` -> 18 files / 215 passed; `pnpm run typecheck` ok; `pnpm lint` ok. API untouched; live browser run skipped.
   - Not done: adapter picker (only `ragas.local` is wired in the API), run progress/polling, load-more via `next_cursor`.
+
+- Build stage attach eval run to a model version (FR-M7) (2026-10-14, cron):
+  - Hermes worked manually. Codex unused. Each pending model version shows an "Eval run ID" input and an "Attach eval run" button calling `POST /api/v1/model-registry/{name}/{version}/eval-runs` (evals scope), so the approve button (which needs >= 1 eval score) can be unlocked from the UI. Button disabled until the input is a valid UUID; list reloads after every attempt; failures show a generic EN/ID message with no server text (API answers 404 for an unknown run). `ENDPOINTS.modelEvalRuns` is covered by the OpenAPI contract guard. Decided versions show no attach control.
+  - TDD / RED: `pnpm vitest run src/components/build-screen.test.tsx` -> 4 failed. GREEN: full web suite `pnpm vitest run` -> 18 files / 220 passed; `pnpm run typecheck` ok; `pnpm lint` ok. API untouched; build and live browser run skipped.
+  - Not done: run picker from the Test-stage run list (free-text UUID for now), lineage fields input, lineage view, load-more via `next_cursor`.
+

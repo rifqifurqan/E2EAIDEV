@@ -165,6 +165,9 @@ const id: Dictionary = {
     parentVersion: "Versi induk (opsional)",
     register: "Daftarkan versi",
     registerFailed: "Gagal mendaftarkan versi model.",
+    evalRunId: "ID hasil evaluasi",
+    attachRun: "Lampirkan hasil evaluasi",
+    attachFailed: "Gagal melampirkan hasil evaluasi.",
   },
   operate: {
     incidentsTitle: "Insiden AI",

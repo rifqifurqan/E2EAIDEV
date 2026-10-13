@@ -6,11 +6,30 @@ import { api, type ModelVersion } from "@/lib/api-client";
 import { useAdminData } from "@/lib/use-admin-data";
 import { WhyItMattersPanel } from "./why-it-matters-panel";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function ModelRow({ model, onDone }: { model: ModelVersion; onDone: () => void }) {
   const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const hasScores = Object.keys(model.eval_scores).length > 0;
+  const [runId, setRunId] = useState("");
+  const [attachFailed, setAttachFailed] = useState(false);
+  const runIdValid = UUID_RE.test(runId.trim());
+
+  async function attach() {
+    setAttachFailed(false);
+    setBusy(true);
+    try {
+      await api.attachEvalRun(model.name, model.version, runId.trim());
+      setRunId("");
+    } catch {
+      setAttachFailed(true);
+    } finally {
+      setBusy(false);
+      onDone();
+    }
+  }
 
   async function decide(decision: "approved" | "rejected") {
     setFailed(false);
@@ -51,9 +70,35 @@ function ModelRow({ model, onDone }: { model: ModelVersion; onDone: () => void }
           {!hasScores ? <span className="text-xs text-gray-500">{t.build.needsScore}</span> : null}
         </span>
       ) : null}
+      {model.approval_status === "pending" ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <label htmlFor={`run-${model.name}-${model.version}`}>
+            <span className="mr-1">{t.build.evalRunId}</span>
+            <input
+              id={`run-${model.name}-${model.version}`}
+              value={runId}
+              onChange={(event) => setRunId(event.target.value)}
+              className="rounded border border-gray-300 px-2 py-0.5 font-mono text-xs"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busy || !runIdValid}
+            onClick={attach}
+            className="rounded border border-blue-400 px-2 py-0.5 text-xs text-blue-700 disabled:opacity-50"
+          >
+            {t.build.attachRun}
+          </button>
+        </div>
+      ) : null}
       {failed ? (
         <p role="alert" className="mt-1 text-xs text-red-700">
           {t.build.decisionFailed}
+        </p>
+      ) : null}
+      {attachFailed ? (
+        <p role="alert" className="mt-1 text-xs text-red-700">
+          {t.build.attachFailed}
         </p>
       ) : null}
     </li>
