@@ -1,8 +1,35 @@
 "use client";
 
 import { useI18n } from "@/i18n/context";
-import { api } from "@/lib/api-client";
+import { api, type EvalRunSummary } from "@/lib/api-client";
 import { useAdminData } from "@/lib/use-admin-data";
+
+const LEAK_ADAPTER = "permission-leak.local";
+
+function LeakSummary({ runs }: { runs: EvalRunSummary[] }) {
+  const { t } = useI18n();
+  // The API lists runs newest first; the first permission-leak run is the latest.
+  const latest = runs.find((run) => run.adapter === LEAK_ADAPTER);
+  const leaks = latest === undefined ? Number.NaN : Number(latest.metrics.leaks);
+  if (latest === undefined || !Number.isFinite(leaks)) {
+    return <p className="text-sm text-gray-700">{t.eval.noLeakRun}</p>;
+  }
+  const probes = Number(latest.metrics.probes);
+  return (
+    <div data-testid="leak-summary-result">
+      {leaks === 0 ? (
+        <p className="text-sm text-green-700">{t.eval.noLeaks}</p>
+      ) : (
+        <p role="alert" className="text-sm font-semibold text-red-700">
+          {`${t.eval.leakCount}: ${leaks}`}
+        </p>
+      )}
+      {Number.isFinite(probes) ? (
+        <p className="text-xs text-gray-600">{`${t.eval.leakProbes}: ${probes}`}</p>
+      ) : null}
+    </div>
+  );
+}
 
 export function EvalScreen() {
   const { t } = useI18n();
@@ -95,12 +122,17 @@ export function EvalScreen() {
         </div>
       </div>
 
-      {/* Permission Leak Summary */}
+      {/* Permission Leak Summary (derived from the newest permission-leak run) */}
       <div className="mt-6 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
         <h2 className="mb-2 text-lg font-semibold text-yellow-800">
           {t.eval.leakSummary}
         </h2>
-        <p className="text-sm text-green-700">{t.eval.noLeaks}</p>
+        {runs.kind === "loading" ? <p className="text-sm">{t.eval.runsLoading}</p> : null}
+        {runs.kind === "forbidden" ? (
+          <p className="text-sm">{t.eval.runsAdminOnly}</p>
+        ) : null}
+        {runs.kind === "error" ? <p className="text-sm">{t.eval.runsLoadFailed}</p> : null}
+        {runs.kind === "ready" ? <LeakSummary runs={runs.data.runs} /> : null}
       </div>
     </section>
   );

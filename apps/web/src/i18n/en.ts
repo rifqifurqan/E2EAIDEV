@@ -80,6 +80,8 @@ const en = {
     runsLoading: "Loading...",
     runsAdminOnly: "Eval runs are available to administrators only.",
     runsLoadFailed: "Could not load data.",
+    noLeakRun: "No permission-leak run yet. Run the permission-leak suite to see results.",
+    leakProbes: "Probes",
   },
   bots: {
     title: "Bot Release",

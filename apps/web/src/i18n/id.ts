@@ -82,6 +82,8 @@ const id: Dictionary = {
     runsLoading: "Memuat...",
     runsAdminOnly: "Eksekusi evaluasi hanya tersedia untuk administrator.",
     runsLoadFailed: "Gagal memuat data.",
+    noLeakRun: "Belum ada eksekusi uji kebocoran izin. Jalankan suite kebocoran izin untuk melihat hasil.",
+    leakProbes: "Probe",
   },
   bots: {
     title: "Rilis Bot",

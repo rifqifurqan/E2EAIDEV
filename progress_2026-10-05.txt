@@ -2427,3 +2427,7 @@ HOW TO RESUME
   - Adjacent: `uv run pytest -q tests/test_eval_runs_list_fr_t2.py tests/test_us_eval_lab_p0.py tests/test_us_evaluator_transparency_p1.py tests/test_docs_fr_f22.py` -> 11 passed; `scripts/validate_docs.py` PASS; web `pnpm vitest run` -> 17 files / 114 passed; `pnpm run typecheck` ok; `pnpm lint` ok. Heavy gates skipped.
   - Not done: run-eval/new-dataset actions, load-more via `next_cursor`, permission-leak summary still static.
 
+- Test stage permission-leak summary from real runs (FR-T7, FR-T2) (2026-10-14, cron):
+  - Hermes worked manually. Codex unused. The Test stage showed a hardcoded "No leaks detected" even with no data - a false safety claim. `EvalScreen` now derives the summary from the newest `permission-leak.local` run in the already-loaded runs list: leak count + probes (alert styling when leaks > 0), "no leaks" only when the latest run has `leaks == 0`, and an explicit "no permission-leak run yet" notice otherwise (EN/ID: `eval.noLeakRun`, `eval.leakProbes`). No API change.
+  - TDD / RED: `pnpm vitest run src/components/eval-screen.test.tsx` -> 3 failed (leak count, no-run notice EN/ID). GREEN: 16 passed; full web suite `pnpm vitest run` -> 17 files / 118 passed; `pnpm run typecheck` ok; `pnpm lint` ok. API untouched; build and live browser run skipped.
+  - Not done: run-eval/new-dataset actions (buttons still inert), load-more via `next_cursor`.

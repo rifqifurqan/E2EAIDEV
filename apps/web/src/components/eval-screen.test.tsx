@@ -118,4 +118,40 @@ describe("EvalScreen", () => {
     renderEval();
     expect(screen.getByRole("heading", { name: /eval lab/i })).toBeInTheDocument();
   });
+  it("shows the leak count from the latest permission-leak run", async () => {
+    apiMock.listEvalRuns.mockResolvedValue({
+      runs: [
+        { id: "r2", dataset_id: "d1", adapter: "permission-leak.local", status: "completed", metrics: { leaks: 2, probes: 5, leak_rate: 0.4 }, created_at: "2026-10-14T00:00:00+00:00" },
+        { id: "r1", dataset_id: "d1", adapter: "permission-leak.local", status: "completed", metrics: { leaks: 0, probes: 5, leak_rate: 0 }, created_at: "2026-10-13T00:00:00+00:00" },
+      ],
+      next_cursor: null,
+    });
+    renderEval();
+    const summary = await screen.findByTestId("leak-summary-result");
+    expect(summary).toHaveTextContent(/leak count: 2/i);
+    expect(summary).toHaveTextContent(/5/);
+    expect(screen.queryByText(/no leaks detected/i)).not.toBeInTheDocument();
+  });
+
+  it("shows no leaks only when the latest permission-leak run has zero leaks", async () => {
+    apiMock.listEvalRuns.mockResolvedValue({
+      runs: [
+        { id: "r1", dataset_id: "d1", adapter: "permission-leak.local", status: "completed", metrics: { leaks: 0, probes: 3, leak_rate: 0 }, created_at: "2026-10-13T00:00:00+00:00" },
+      ],
+      next_cursor: null,
+    });
+    renderEval();
+    expect(await screen.findByText(/no leaks detected/i)).toBeInTheDocument();
+  });
+
+  it("does not claim no leaks when no permission-leak run exists", async () => {
+    renderEval();
+    expect(await screen.findByText(/no permission-leak run yet/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no leaks detected/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the no-leak-run notice in Indonesian", async () => {
+    renderEval("id");
+    expect(await screen.findByText(/belum ada eksekusi uji kebocoran izin/i)).toBeInTheDocument();
+  });
 });
