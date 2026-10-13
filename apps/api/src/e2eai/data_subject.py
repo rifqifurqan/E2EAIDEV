@@ -26,6 +26,7 @@ from .db import (
     Conversation,
     DataSubjectRequest,
     Document,
+    FlywheelItem,
     LocalCredential,
     Message,
     Notification,
@@ -230,6 +231,12 @@ async def erase_subject_data(session: AsyncSession, *, admin: User, subject_id: 
     async def _delete(model, *conds) -> int:
         return (await session.execute(delete(model).where(*conds))).rowcount or 0
 
+    # Flywheel items keep a PII-masked copy of the question, so they must go before the messages do
+    # (their message_id would otherwise just become NULL and the text would stay behind).
+    flywheel_items = 0
+    if conv_ids:
+        msg_ids = select(Message.id).where(Message.conversation_id.in_(conv_ids))
+        flywheel_items = await _delete(FlywheelItem, FlywheelItem.message_id.in_(msg_ids))
     # Messages, citations and feedback go with the conversation (ON DELETE CASCADE).
     conversations = await _delete(Conversation, Conversation.user_id == subject.id)
     memories = await _delete(UserMemory, UserMemory.user_id == subject.id)
@@ -246,6 +253,7 @@ async def erase_subject_data(session: AsyncSession, *, admin: User, subject_id: 
     result = {
         "conversations_deleted": conversations, "messages_deleted": messages,
         "memories_deleted": memories, "notifications_deleted": notifications, "api_keys_deleted": api_keys,
+        "flywheel_items_deleted": flywheel_items,
         "profile": "pseudonymised", "audit_log": "retained",
     }
     await audit.record(session, f"user:{admin.id}", "dsr.erase", f"user:{subject.id}", {

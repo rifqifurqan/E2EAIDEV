@@ -2286,3 +2286,10 @@ HOW TO RESUME
   - TDD / RED: `cd apps/api && uv run pytest -q tests/test_dsr_reminders_nfr10.py` -> 2 failed (function/route missing). GREEN: 2 passed (the test derives expected recipients from the DB because other tests grant extra admins).
   - Adjacent: `uv run pytest -q tests/test_dsr_reminders_nfr10.py tests/test_dsr_ledger_nfr10.py tests/test_data_subject_nfr10.py tests/test_us_notifications_fr_f11.py tests/test_no_plaintext_credentials_nfr7.py` -> 17 passed; app ok; API reference regenerated, `test_docs_fr_f22.py` 3 passed, `validate_docs.py` PASS. Heavy gates skipped.
   - Not done: scheduler that calls the reminder endpoint daily (needs the worker/beat), email delivery (P2).
+
+- Erase removes derived flywheel items (NFR-10, FR-I1) (2026-10-13, cron):
+  - Hermes worked manually. Codex unused. Privacy gap found while auditing data-subject erasure: `flywheel_items.message_id` is `ON DELETE SET NULL`, so deleting a person's chats left their PII-masked question/correction text behind in the triage queue.
+  - `erase_subject_data` now deletes `FlywheelItem` rows whose `message_id` belongs to the subject's conversations before the conversations go; the count is returned and audited as `flywheel_items_deleted`. Other people's items and reviewer-written items (no message) are untouched.
+  - TDD / RED: `cd apps/api && uv run pytest -q tests/test_dsr_erase_flywheel_nfr10.py` -> KeyError `flywheel_items_deleted`. GREEN: 1 passed.
+  - Adjacent: `uv run pytest -q tests/test_dsr_erase_flywheel_nfr10.py tests/test_data_subject_nfr10.py tests/test_dsr_ledger_nfr10.py tests/test_dsr_reminders_nfr10.py tests/test_data_flywheel_fr_i1.py` -> 17 passed. Heavy gates skipped.
+  - Not done: erasure of traces/vectors; exported EvalDataset items already built from accepted flywheel items (they are anonymised gold/fine-tune data, flagged for owner decision).
