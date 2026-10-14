@@ -11,6 +11,7 @@ const apiMock = vi.hoisted(() => ({
   requestBotApproval: vi.fn(),
   createBot: vi.fn(),
   grantBotAccess: vi.fn(),
+  setBotScope: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -35,6 +36,7 @@ describe("BotReleaseScreen", () => {
     apiMock.requestBotApproval.mockReset();
     apiMock.createBot.mockReset();
     apiMock.grantBotAccess.mockReset();
+    apiMock.setBotScope.mockReset();
   });
 
   it("lists bot approval requests with risk tier and status", async () => {
@@ -304,6 +306,63 @@ describe("BotReleaseScreen", () => {
     await screen.findByRole("status");
     expect(screen.getByLabelText(/bot target/i)).toHaveValue(BOT_ID);
     expect(screen.getByRole("button", { name: /^beri akses$/i })).toBeInTheDocument();
+  });
+
+  const DOC_A = "aaaaaaaa-1b7e-4c1d-9a55-0d2f6a9b7c11";
+  const DOC_B = "bbbbbbbb-1b7e-4c1d-9a55-0d2f6a9b7c11";
+  const FOLDER_A = "cccccccc-1b7e-4c1d-9a55-0d2f6a9b7c11";
+
+  it("sets the knowledge scope from document and folder id lists", async () => {
+    const user = userEvent.setup();
+    apiMock.setBotScope.mockResolvedValue({ status: "ok", documents: 2, folders: 1 });
+    renderBots();
+    await screen.findByText(/no approval requests yet/i);
+    await user.type(screen.getByLabelText(/scope bot/i), BOT_ID);
+    await user.type(screen.getByLabelText(/document ids/i), `${DOC_A}, ${DOC_B}`);
+    await user.type(screen.getByLabelText(/folder ids/i), FOLDER_A);
+    await user.click(screen.getByRole("button", { name: /^set scope$/i }));
+    await waitFor(() => expect(apiMock.setBotScope).toHaveBeenCalledWith(BOT_ID, [DOC_A, DOC_B], [FOLDER_A]));
+    expect(await screen.findByText(/scope saved.*2.*1/i)).toBeInTheDocument();
+  });
+
+  it("keeps set scope disabled for no ids or any malformed id, so a typo cannot clear the scope", async () => {
+    const user = userEvent.setup();
+    renderBots();
+    await screen.findByText(/no approval requests yet/i);
+    const button = screen.getByRole("button", { name: /^set scope$/i });
+    await user.type(screen.getByLabelText(/scope bot/i), BOT_ID);
+    expect(button).toBeDisabled();
+    await user.type(screen.getByLabelText(/document ids/i), `${DOC_A}, not-a-uuid`);
+    expect(button).toBeDisabled();
+    await user.clear(screen.getByLabelText(/document ids/i));
+    await user.type(screen.getByLabelText(/document ids/i), DOC_A);
+    expect(button).toBeEnabled();
+  });
+
+  it("shows a generic error without server text when setting the scope fails", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.setBotScope.mockRejectedValue(new ApiError(404, "Bot not found", "stack detail"));
+    renderBots();
+    await screen.findByText(/no approval requests yet/i);
+    await user.type(screen.getByLabelText(/scope bot/i), BOT_ID);
+    await user.type(screen.getByLabelText(/document ids/i), DOC_A);
+    await user.click(screen.getByRole("button", { name: /^set scope$/i }));
+    expect(await screen.findByText(/could not save the scope/i)).toBeInTheDocument();
+    expect(screen.queryByText(/stack detail/i)).not.toBeInTheDocument();
+  });
+
+  it("prefills the scope bot after creating a bot and labels the scope form in Indonesian", async () => {
+    const user = userEvent.setup();
+    apiMock.createBot.mockResolvedValue({ id: BOT_ID, name: "HR assistant" });
+    renderBots("id");
+    await screen.findByText(/belum ada permintaan persetujuan/i);
+    await user.click(screen.getByRole("button", { name: /^bot baru$/i }));
+    await user.type(screen.getByLabelText(/nama bot/i), "HR assistant");
+    await user.click(screen.getByRole("button", { name: /^buat bot$/i }));
+    await screen.findByRole("status");
+    expect(screen.getByLabelText(/bot cakupan/i)).toHaveValue(BOT_ID);
+    expect(screen.getByRole("button", { name: /^atur cakupan$/i })).toBeInTheDocument();
   });
 
   it("loads more approval requests with the next cursor", async () => {

@@ -2544,3 +2544,8 @@ HOW TO RESUME
   - TDD / RED: `pnpm vitest run src/components/bot-release-screen.test.tsx` -> 4 failed (no grant form). GREEN: that file + `api-client.test.ts` + `api-contract.test.ts` -> 85 passed; full web suite `pnpm vitest run` -> 20 files / 262 passed; `pnpm run typecheck` ok; `pnpm lint` ok. API untouched; build and live browser run skipped.
   - Not done: listing existing grants (no list API), revoke, level `admin` choice, scope panel, bundle Release/Rollback buttons.
 
+- Release stage Knowledge Scope form (FR-RL7) (2026-10-14, cron):
+  - Hermes worked manually. Codex unused. The "Knowledge Scope" panel was a static placeholder. It now has a form (scope bot UUID, document IDs, folder IDs; comma/space separated) calling `api.setBotScope` -> `PUT /api/v1/bots/{id}/scope`. Because the API replaces the whole scope, the button stays disabled unless the bot id is a UUID, at least one id is given, and every id is a well-formed UUID, so a typo or empty submit cannot silently clear a bot's scope. Success shows "Scope saved: documents N / folders M"; failures show a generic EN/ID message with no server text; the scope bot is prefilled after the New Bot form creates one.
+  - TDD / RED: `pnpm vitest run src/components/bot-release-screen.test.tsx` -> 4 failed (no scope form). GREEN: same file -> 30 passed; full web suite `pnpm vitest run` -> 20 files / 266 passed; `pnpm run typecheck` ok; `pnpm lint` ok. API untouched; build and live browser run skipped.
+  - Not done: showing the current scope (no read API), clearing a scope deliberately, bundle Release/Rollback buttons.
+

@@ -285,6 +285,8 @@ Rules for every cron tick:
 
 156. [x] [FR-RL7] Release web stage Access Grants form: grants a principal (`user:`/`team:`/`division:`/`role:`/`org:` id, format-validated) access to a bot via `POST /api/v1/bots/{id}/grants` (level `user`); target bot prefilled after New Bot; generic EN/ID errors. Also fixed the client `grantBotAccess` input type (was viewer/editor/owner; the API takes user/admin). Web suite 262 passed; see progress_2026-10-05.txt.
 
+157. [x] [FR-RL7] Release web stage Knowledge Scope form: sets a bot's document/folder scope via `PUT /api/v1/bots/{id}/scope`; the API replaces the whole scope, so submit requires a bot UUID, at least one id and only well-formed UUIDs (a typo cannot clear the scope); target bot prefilled after New Bot; generic EN/ID errors. Web suite 266 passed; see progress_2026-10-05.txt.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.

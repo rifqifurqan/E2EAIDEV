@@ -10,6 +10,13 @@ import { LoadMore } from "./load-more";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PRINCIPAL_RE = /^(user|team|division|role|org):\S+$/;
 
+function splitIds(value: string): string[] {
+  return value
+    .split(/[\s,;]+/)
+    .map((part) => part.trim())
+    .filter((part) => part !== "");
+}
+
 export function BotReleaseScreen() {
   const { t } = useI18n();
   const [reloadKey, setReloadKey] = useState(0);
@@ -38,6 +45,37 @@ export function BotReleaseScreen() {
   const [granting, setGranting] = useState(false);
   const [grantedPrincipal, setGrantedPrincipal] = useState<string | null>(null);
   const [grantFailed, setGrantFailed] = useState(false);
+
+  const [scopeBotId, setScopeBotId] = useState("");
+  const [scopeDocs, setScopeDocs] = useState("");
+  const [scopeFolders, setScopeFolders] = useState("");
+  const [scopeSaving, setScopeSaving] = useState(false);
+  const [scopeSaved, setScopeSaved] = useState<string | null>(null);
+  const [scopeFailed, setScopeFailed] = useState(false);
+
+  const scopeDocIds = splitIds(scopeDocs);
+  const scopeFolderIds = splitIds(scopeFolders);
+  // PUT replaces the whole scope: require at least one id and reject any malformed id so a typo cannot wipe it.
+  const scopeValid =
+    UUID_RE.test(scopeBotId.trim()) &&
+    scopeDocIds.length + scopeFolderIds.length > 0 &&
+    [...scopeDocIds, ...scopeFolderIds].every((id) => UUID_RE.test(id));
+
+  async function saveScope(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!scopeValid || scopeSaving) return;
+    setScopeFailed(false);
+    setScopeSaved(null);
+    setScopeSaving(true);
+    try {
+      await api.setBotScope(scopeBotId.trim(), scopeDocIds, scopeFolderIds);
+      setScopeSaved(`${t.bots.scopeDocuments} ${scopeDocIds.length} / ${t.bots.scopeFolders} ${scopeFolderIds.length}`);
+    } catch {
+      setScopeFailed(true);
+    } finally {
+      setScopeSaving(false);
+    }
+  }
 
   async function grantAccess(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,6 +107,7 @@ export function BotReleaseScreen() {
       setBotName("");
       setBotId(bot.id);
       setGrantBotId(bot.id);
+      setScopeBotId(bot.id);
       setCreatedName(bot.name);
     } catch {
       setCreateFailed(true);
@@ -215,7 +254,52 @@ export function BotReleaseScreen() {
         {/* Scope */}
         <div className="rounded-lg border border-gray-200 p-4">
           <h2 className="mb-3 text-lg font-semibold">{t.bots.scope}</h2>
-          <p className="text-sm text-gray-500">{t.bots.noBots}</p>
+          <form onSubmit={saveScope} className="flex flex-col gap-2 text-sm">
+            <label htmlFor="scope-bot-id">
+              <span className="mr-1">{t.bots.scopeBot}</span>
+              <input
+                id="scope-bot-id"
+                value={scopeBotId}
+                onChange={(event) => setScopeBotId(event.target.value)}
+                className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+              />
+            </label>
+            <label htmlFor="scope-doc-ids">
+              <span className="mr-1">{t.bots.scopeDocIds}</span>
+              <textarea
+                id="scope-doc-ids"
+                value={scopeDocs}
+                onChange={(event) => setScopeDocs(event.target.value)}
+                className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+              />
+            </label>
+            <label htmlFor="scope-folder-ids">
+              <span className="mr-1">{t.bots.scopeFolderIds}</span>
+              <textarea
+                id="scope-folder-ids"
+                value={scopeFolders}
+                onChange={(event) => setScopeFolders(event.target.value)}
+                className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={scopeSaving || !scopeValid}
+              className="self-start rounded border border-blue-400 px-3 py-1 text-sm text-blue-700 disabled:opacity-50"
+            >
+              {t.bots.setScope}
+            </button>
+            {scopeSaved !== null ? (
+              <p role="status" className="text-sm text-green-700">
+                {`${t.bots.scopeSaved}: ${scopeSaved}`}
+              </p>
+            ) : null}
+            {scopeFailed ? (
+              <p role="alert" className="text-sm text-red-700">
+                {t.bots.scopeFailed}
+              </p>
+            ) : null}
+          </form>
         </div>
       </div>
 
