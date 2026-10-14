@@ -63,6 +63,15 @@ async def _subject(session: AsyncSession, subject_id: uuid.UUID, admin: User) ->
     return subject
 
 
+async def _scope_to_org(session: AsyncSession, admin: User, stmt):
+    """Org admins only see requests about people of their own organization (NFR-18); install admins see all."""
+    from .org import is_install_admin
+
+    if await is_install_admin(session, admin):
+        return stmt
+    return stmt.join(User, User.id == DataSubjectRequest.subject_id).where(User.org_id == admin.org_id)
+
+
 DSR_KINDS = ("export", "erase")
 DSR_RESPONSE_DAYS = 30  # response deadline recorded on every request (UU PDP / GDPR-ready)
 
@@ -138,7 +147,7 @@ async def list_requests_page(
     """Keyset-paginated request ledger, newest first. Admin check runs before the page (cursors are not authz)."""
     await _require_admin(session, admin)
     size = clamp_limit(limit)
-    stmt = select(DataSubjectRequest)
+    stmt = await _scope_to_org(session, admin, select(DataSubjectRequest))
     if status:
         stmt = stmt.where(DataSubjectRequest.status == status)
     if overdue_only:
@@ -181,7 +190,8 @@ async def send_deadline_reminders(
     await _require_admin(session, admin)
     now = now or datetime.now(UTC)
     horizon = now + timedelta(days=max(0, within_days))
-    rows = (await session.scalars(select(DataSubjectRequest).where(
+    due = await _scope_to_org(session, admin, select(DataSubjectRequest))
+    rows = (await session.scalars(due.where(
         DataSubjectRequest.status == "open", DataSubjectRequest.due_at <= horizon,
     ).order_by(DataSubjectRequest.due_at, DataSubjectRequest.id))).all()
     admins = (await session.scalars(

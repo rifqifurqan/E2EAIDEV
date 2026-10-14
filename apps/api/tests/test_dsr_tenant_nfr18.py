@@ -105,3 +105,44 @@ def test_install_level_admin_can_export_across_organizations():
     ids = _setup()
     assert _as("platform", ids, "export_subject_data", "outsider") is not None
     assert _as("platform", ids, "open_request", "mate", kind="export")["kind"] == "export"
+
+
+def test_request_ledger_lists_only_the_admins_own_organization_unless_install_admin():
+    _migrate()
+    ids = _setup()
+    from e2eai import data_subject
+
+    async def run():
+        async with db_sessions()() as s:
+            platform = await s.get(User, ids["platform"])
+            org_admin = await s.get(User, ids["org_admin"])
+            mine = await data_subject.open_request(s, admin=platform, subject_id=ids["mate"], kind="export")
+            theirs = await data_subject.open_request(s, admin=platform, subject_id=ids["outsider"], kind="export")
+            seen_by_org_admin, _ = await data_subject.list_requests_page(s, admin=org_admin, limit=200)
+            seen_by_platform, _ = await data_subject.list_requests_page(s, admin=platform, limit=200)
+            return mine["id"], theirs["id"], {r["id"] for r in seen_by_org_admin}, {r["id"] for r in seen_by_platform}
+
+    mine, theirs, org_seen, platform_seen = asyncio.run(run())
+    assert mine in org_seen and theirs not in org_seen
+    assert {mine, theirs} <= platform_seen
+
+
+def test_deadline_reminders_skip_requests_of_other_organizations_for_org_admins():
+    _migrate()
+    ids = _setup()
+    from datetime import UTC, datetime, timedelta
+
+    from e2eai import data_subject
+
+    async def run():
+        async with db_sessions()() as s:
+            platform = await s.get(User, ids["platform"])
+            org_admin = await s.get(User, ids["org_admin"])
+            past = datetime.now(UTC) - timedelta(days=40)
+            mine = await data_subject.open_request(s, admin=platform, subject_id=ids["mate"], kind="export", received_at=past)
+            theirs = await data_subject.open_request(s, admin=platform, subject_id=ids["outsider"], kind="export", received_at=past)
+            result = await data_subject.send_deadline_reminders(s, admin=org_admin)
+            return mine["id"], theirs["id"], set(result["reminded"])
+
+    mine, theirs, reminded = asyncio.run(run())
+    assert mine in reminded and theirs not in reminded
