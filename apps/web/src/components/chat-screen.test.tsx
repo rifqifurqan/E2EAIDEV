@@ -117,6 +117,20 @@ describe("ChatScreen", () => {
     expect(within(region).getByText(/page 1/i)).toBeInTheDocument();
   });
 
+  it("restores the question and drops the unanswered bubble when sending fails, e.g. 429 (UAT-CHAT-007)", async () => {
+    apiMock.createConversation.mockResolvedValue({ id: "c1", title: "Quota?", created_at: "n", updated_at: "n" });
+    apiMock.sendMessage.mockRejectedValueOnce(Object.assign(new Error("429"), { status: 429, title: "Rate limit exceeded" }));
+    renderChat();
+    const input = screen.getByRole("textbox", { name: /ask/i });
+    await userEvent.type(input, "Quota?");
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+    expect(await screen.findByText(/rate limit exceeded/i)).toBeInTheDocument();
+    // the failed question is not left in the thread as an unanswered message...
+    expect(screen.queryByText("Quota?", { selector: "p, div, span" })).not.toBeInTheDocument();
+    // ...and is back in the input so the user can simply retry
+    expect(input).toHaveValue("Quota?");
+  });
+
   it("creates a new conversation from the button", async () => {
     apiMock.createConversation.mockResolvedValueOnce({ id: "conv1", title: "New Conversation", created_at: "now", updated_at: "now" });
     renderChat();

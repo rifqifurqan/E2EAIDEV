@@ -1,11 +1,19 @@
 # UAT Bug List — E2EAIDEV Live Web
 
-Date: 2026-10-14 (run 7)
+Date: 2026-10-14 (run 8)
 Latest result: full v5 **37/0**, mobile-nav **9/0**, and admin-mutation **9/0**. Evidence `e2eaidev-uat5-1791967780471`, `e2eaidev-uat-mobile-1791967554354`, and `e2eaidev-uat-admin-1791967877237` under Hermes scratch (`C:/Users/riqan/AppData/Local/hermes/cache/scratch/`). Previous: `e2eaidev-uat4-1791966120479`, `e2eaidev-uat-mobile-1791966218787`, `e2eaidev-uat-admin-1791966227548`. Previous passing evidence: `e2eaidev-uat4-1791963285993`, `e2eaidev-uat4-1791961850058`, `e2eaidev-uat3-1791960461338` and `e2eaidev-uat-1791960549558`. Before-fix evidence: `e2eaidev-uat2-1791957806874`.
 
 ## Open (prioritized)
 
-None verified open. Run 7 hardened one intermittent case (UAT-DOC-006 below). Candidates not yet exercised in a headed run: see "Not tested" in UAT_LIVE_WEB.md.
+None verified open. Run 8 fixed UAT-CHAT-007 (below). Run 7 hardened one intermittent case (UAT-DOC-006 below). Candidates not yet exercised in a headed run: see "Not tested" in UAT_LIVE_WEB.md.
+
+## Fixed in run 8
+
+| ID | Sev | Problem (observed live) | Fix | Proof |
+|---|---|---|---|---|
+| UAT-CHAT-007 | Medium | With a temporary per-user quota (1 req/min, then 1 token/day) the chat showed "Rate limit exceeded" / "Token quota exceeded", but the question stayed in the thread as a User bubble with no answer and the input was cleared, so the user had to retype it. | On a send failure the unanswered bubble is removed and the question is restored to the input (unless the user has typed something new). | `chat-screen.test.tsx` "restores the question and drops the unanswered bubble when sending fails" (RED then GREEN); headed `e2eaidev_uat_quota.js` 6/0 incl. `rate-limit-failed-question-restored-to-input`, `rate-limit-no-unanswered-bubble`. |
+
+Also verified OK in run 8 (no bug): storage quota 413 shows "Storage quota exceeded" in Documents and nothing is listed; request-rate 429 and token-quota 429 messages are readable and the input stays usable. Test-data hygiene: the quota script sets a temporary user policy on Andi and always clears it (policy rows 0 afterwards).
 
 ## Fixed in run 7
 

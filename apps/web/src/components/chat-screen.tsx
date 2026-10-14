@@ -96,6 +96,7 @@ export function ChatScreen() {
     setNotice("");
     const controller = new AbortController();
     abortRef.current = controller;
+    let optimisticAdded = false;
     try {
       let convId = activeId;
       if (!convId) {
@@ -106,6 +107,7 @@ export function ChatScreen() {
         setActiveId(conv.id);
       }
       setMessages((items) => [...items, { role: "user", content: trimmed }]);
+      optimisticAdded = true;
       setQuestion("");
       const response = await api.sendMessage(convId, trimmed, scope, undefined, controller.signal);
       if (controller.signal.aborted) {
@@ -118,7 +120,17 @@ export function ChatScreen() {
         { id: response.message_id, role: "assistant", content: response.answer, citations: response.citations ?? [] },
       ]);
     } catch (error) {
-      if (!controller.signal.aborted) setStatus(reason(error, t.chat.requestFailed));
+      if (!controller.signal.aborted) {
+        // Failed (e.g. 429 quota): drop the unanswered bubble and give the question back so the user can retry (UAT-CHAT-007).
+        if (optimisticAdded) {
+          setMessages((items) => {
+            const last = items[items.length - 1];
+            return last && last.role === "user" && last.content === trimmed ? items.slice(0, -1) : items;
+          });
+          setQuestion((current) => current || trimmed);
+        }
+        setStatus(reason(error, t.chat.requestFailed));
+      }
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
       setSending(false);

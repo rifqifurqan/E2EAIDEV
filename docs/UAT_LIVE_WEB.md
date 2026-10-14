@@ -64,6 +64,8 @@ Health
 
 ## Fixes made from this run (all TDD, see UAT_BUGS.md)
 
+Run 8: Quota UX (UAT-CHAT-007). Headed Chrome as Andi with temporary quota policies (script `e2eaidev_uat_quota.js`, 6 PASS / 0 FAIL): storage 413 -> "Storage quota exceeded" and no upload listed; request-rate 429 -> "Rate limit exceeded"; token budget 429 -> "Token quota exceeded". Bug found: after a failed send the question stayed as an unanswered bubble and the input was empty; now the bubble is removed and the question returned to the input. Evidence `e2eaidev-uat-quota-1791977593296` (before, `02-rate-429.png`) and `e2eaidev-uat-quota-1791978087965` (after).
+
 Run 6: Chat citations are per answer (UAT-CHAT-006). The Citations panel shows only the newest assistant answer's citations; older assistant answers display their own citations inline, so reopened history still shows them. Component tests: new RED/GREEN for the panel and for inline history citations (20 tests in `chat-screen.test.tsx`).
 
 Run 5: Admin login path for UAT. `e2eai-api reset-admin-password --creds-file <path>` resets or creates/migrates `admin@local.e2eai` with a random password and writes credentials to a scratch file outside the repo. No committed secret, no web backdoor; the CLI command refuses to write inside the repo tree. The headed admin UAT now covers admin login, organization snapshot, create division/team/user, add team member, and grant role. The original `admin@local` value was not browser/API-login compatible because Pydantic `EmailStr` rejects addresses without a dotted domain.
@@ -78,6 +80,8 @@ API: principal validation before share; minimum-relevance floor (0.30, `retrieva
 Web: Sign out and hidden login form; "Move to Trash" label, Trash tab with Restore; chat conversation list/history/feedback; localized status text; locale persistence; sign-in hint for signed-out visitors; API reason shown on share failure.
 
 ## Verification gates (this run)
+
+- Run 8: `cd apps/web && pnpm vitest run src/components/chat-screen.test.tsx` -> RED 1 failed, GREEN 21 passed; `pnpm vitest run` -> 21 files / 322 tests passed; `pnpm run typecheck` ok; `pnpm lint` clean; `pnpm run build` ok (then `.next` wiped, dev restarted, web/proxy 200). Headed v5 -> 37/0 (baseline and after fix, `e2eaidev-uat5-1791977966868`); quota script -> 6/0. API untouched, so API suites skipped on purpose.
 
 - Run 7: `cd apps/api && uv run pytest -q tests/test_resilient_http_nfr19.py` -> RED 2 failed, GREEN 7 passed; adjacent (resilience, circuit breaker, upload ingest, cited answer, vector store, semantic cache, chat conversations, doc lifecycle, UAT principal/relevance, documents list, quotas, retrieval metrics, metrics) -> 94 passed. Web untouched, so web typecheck/lint/build were not re-run. Live API process was not restarted (process kill blocked in the cron session), so the running server still has the old retry set until its next restart.
 - Run 6: `cd apps/web && pnpm vitest run src/components/chat-screen.test.tsx` -> RED 1 failed, then 20 passed; `pnpm vitest run` -> 21 files / 321 tests passed; `pnpm run typecheck` ok; `pnpm run lint` clean; `pnpm run build` ok (then `.next` wiped and dev restarted). Headed Playwright: v5 37/0, mobile 9/0, admin 9/0. Skipped on purpose: full API/CLI suites and `verify-phase-0` (web-only change).
@@ -103,4 +107,4 @@ Web: Sign out and hidden login form; "Move to Trash" label, Trash tab with Resto
 - Admin offboarding and flywheel triage actions: not exercised (empty queue). Incident report + transition (run 7) and admin org mutations (run 5) are covered.
 - Drag-and-drop upload, files over quota, real PDF/DOCX (Docling not installed), screen-reader walkthrough, concurrent sessions, session idle expiry.
 - Production server (`pnpm start`); UAT ran against `pnpm dev`.
-- Browser UX for rate-limit / token-quota 429 responses.
+- Quota 429/413 UX is covered since run 8. Not covered: countdown/Retry-After display (the UI shows only the API reason), 429 on login, and quota errors on share/search calls.
