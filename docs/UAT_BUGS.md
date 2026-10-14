@@ -1,11 +1,11 @@
 # UAT Bug List — E2EAIDEV Live Web
 
-Date: 2026-10-14 (run 11)
-Latest result: full v5 **37/0**, ops/admin **14/0**, session expiry **7/0**, admin-mutation **9/0**, mobile-nav **9/0**, and post-build full v5 **37/0**. Evidence `e2eaidev-uat5-1791981920261`, `e2eaidev-uat-ops-1791982038059`, `e2eaidev-uat-session-1791982068057`, `e2eaidev-uat-admin-1791982082606`, `e2eaidev-uat-mobile-1791982100106`, and `e2eaidev-uat5-1791982226206` under Hermes scratch (`C:/Users/riqan/AppData/Local/hermes/cache/scratch/`). No same-run product-code bug was found.
+Date: 2026-10-14 (run 12)
+Latest result: full v5 **37/0**, ops/admin **14/0**, session expiry **7/0**, admin-mutation **9/0**, mobile-nav **9/0**, and post-build full v5 **37/0**. Evidence `e2eaidev-uat5-1791983224006`, `e2eaidev-uat-ops-1791983336378`, `e2eaidev-uat-session-1791983366261`, `e2eaidev-uat-admin-1791983380919`, `e2eaidev-uat-mobile-1791983398382`, and `e2eaidev-uat5-1791983525635` under Hermes scratch (`C:/Users/riqan/AppData/Local/hermes/cache/scratch/`). No same-run product-code bug was found.
 
 ## Open (prioritized)
 
-None verified open. Run 11 found no product-code bug; the only local issue was that web :13000 was not running before the sweep, and starting `pnpm dev` restored health. Run 10 found no product-code bug after recovering the hung local web dev server. Run 9 fixed UAT-AUTH-002 (below); run 8 fixed UAT-CHAT-007 (below). Run 7 hardened one intermittent case (UAT-DOC-006 below). Candidates not yet exercised in a headed run: see "Not tested" in UAT_LIVE_WEB.md.
+None verified open. Run 12 found no product-code bug; web :13000 was not running at the start of the sweep, and starting `pnpm dev` after removing `.next` restored health. Run 11 also found no product-code bug. Run 10 found no product-code bug after recovering the hung local web dev server. Run 9 fixed UAT-AUTH-002 (below); run 8 fixed UAT-CHAT-007 (below). Run 7 hardened one intermittent case (UAT-DOC-006 below). Candidates not yet exercised in a headed run: see "Not tested" in UAT_LIVE_WEB.md.
 
 ## Fixed in run 9
 
@@ -75,6 +75,8 @@ Root cause is inferred, not captured: no LiteLLM/Ollama error was in the logs at
 Earlier fixed (run 1): UAT-DOC-001 (list lost on reload), UAT-DOC-002 (search not wired), UAT-DOC-003 (tabs not wired), UAT-OPS-001 (dead incident form for non-admin).
 
 ## Watch list
+
+- Run 12 environment note: web :13000 was not running at the start of the cron tick. Removing `.next` and starting `pnpm dev` restored web `/` and `/api/v1/health` to 200. No product bug was verified.
 
 - Run 11 environment note: web :13000 was simply down at the start of the cron tick. Starting `pnpm dev` in a PTY after removing `.next` restored web `/` and `/api/v1/health` to 200. No product bug was verified.
 
