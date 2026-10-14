@@ -71,6 +71,11 @@ export interface Document {
   scan_status: string;
 }
 
+export interface BotGrantInput {
+  principal: string;
+  level: "user" | "admin";
+}
+
 export interface ShareInput {
   principal: string;
   level: "viewer" | "editor" | "owner";
@@ -531,7 +536,7 @@ export const api = {
     apiFetch<BotBundle>(ENDPOINTS.botRollback(botId, bundleId), {
       method: "POST",
     }),
-  grantBotAccess: (botId: string, input: ShareInput) =>
+  grantBotAccess: (botId: string, input: BotGrantInput) =>
     apiFetch<{ principal: string; level: string }>(
       ENDPOINTS.botGrants(botId),
       { method: "POST", body: input },

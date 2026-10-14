@@ -127,6 +127,11 @@ const id: Dictionary = {
     createBot: "Buat bot",
     botCreated: "Bot dibuat",
     createFailed: "Gagal membuat bot.",
+    grantBot: "Bot target",
+    grantPrincipal: "Principal (id user:, team:, division:, role: atau org:)",
+    grantAccess: "Beri akses",
+    accessGranted: "Akses diberikan",
+    grantFailed: "Gagal memberi akses.",
   },
   admin: {
     title: "Admin",

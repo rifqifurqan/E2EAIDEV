@@ -8,6 +8,7 @@ import { useLoadMore } from "@/lib/use-load-more";
 import { LoadMore } from "./load-more";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PRINCIPAL_RE = /^(user|team|division|role|org):\S+$/;
 
 export function BotReleaseScreen() {
   const { t } = useI18n();
@@ -32,6 +33,30 @@ export function BotReleaseScreen() {
   const [createdName, setCreatedName] = useState<string | null>(null);
   const [createFailed, setCreateFailed] = useState(false);
 
+  const [grantBotId, setGrantBotId] = useState("");
+  const [principal, setPrincipal] = useState("");
+  const [granting, setGranting] = useState(false);
+  const [grantedPrincipal, setGrantedPrincipal] = useState<string | null>(null);
+  const [grantFailed, setGrantFailed] = useState(false);
+
+  async function grantAccess(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const target = principal.trim();
+    if (!UUID_RE.test(grantBotId.trim()) || !PRINCIPAL_RE.test(target) || granting) return;
+    setGrantFailed(false);
+    setGrantedPrincipal(null);
+    setGranting(true);
+    try {
+      const grant = await api.grantBotAccess(grantBotId.trim(), { principal: target, level: "user" });
+      setPrincipal("");
+      setGrantedPrincipal(grant.principal);
+    } catch {
+      setGrantFailed(true);
+    } finally {
+      setGranting(false);
+    }
+  }
+
   async function createBot(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = botName.trim();
@@ -43,6 +68,7 @@ export function BotReleaseScreen() {
       const bot = await api.createBot(name);
       setBotName("");
       setBotId(bot.id);
+      setGrantBotId(bot.id);
       setCreatedName(bot.name);
     } catch {
       setCreateFailed(true);
@@ -147,7 +173,43 @@ export function BotReleaseScreen() {
         {/* Grants */}
         <div className="rounded-lg border border-gray-200 p-4">
           <h2 className="mb-3 text-lg font-semibold">{t.bots.grants}</h2>
-          <p className="text-sm text-gray-500">{t.bots.noBots}</p>
+          <form onSubmit={grantAccess} className="flex flex-col gap-2 text-sm">
+            <label htmlFor="grant-bot-id">
+              <span className="mr-1">{t.bots.grantBot}</span>
+              <input
+                id="grant-bot-id"
+                value={grantBotId}
+                onChange={(event) => setGrantBotId(event.target.value)}
+                className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+              />
+            </label>
+            <label htmlFor="grant-principal">
+              <span className="mr-1">{t.bots.grantPrincipal}</span>
+              <input
+                id="grant-principal"
+                value={principal}
+                onChange={(event) => setPrincipal(event.target.value)}
+                className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={granting || !UUID_RE.test(grantBotId.trim()) || !PRINCIPAL_RE.test(principal.trim())}
+              className="self-start rounded border border-blue-400 px-3 py-1 text-sm text-blue-700 disabled:opacity-50"
+            >
+              {t.bots.grantAccess}
+            </button>
+            {grantedPrincipal !== null ? (
+              <p role="status" className="text-sm text-green-700">
+                {`${t.bots.accessGranted}: ${grantedPrincipal}`}
+              </p>
+            ) : null}
+            {grantFailed ? (
+              <p role="alert" className="text-sm text-red-700">
+                {t.bots.grantFailed}
+              </p>
+            ) : null}
+          </form>
         </div>
 
         {/* Scope */}

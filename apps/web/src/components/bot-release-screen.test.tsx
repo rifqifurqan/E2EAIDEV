@@ -10,6 +10,7 @@ const apiMock = vi.hoisted(() => ({
   decideBotApproval: vi.fn(),
   requestBotApproval: vi.fn(),
   createBot: vi.fn(),
+  grantBotAccess: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -33,6 +34,7 @@ describe("BotReleaseScreen", () => {
     apiMock.decideBotApproval.mockReset();
     apiMock.requestBotApproval.mockReset();
     apiMock.createBot.mockReset();
+    apiMock.grantBotAccess.mockReset();
   });
 
   it("lists bot approval requests with risk tier and status", async () => {
@@ -250,6 +252,58 @@ describe("BotReleaseScreen", () => {
     await user.click(await screen.findByRole("button", { name: /^bot baru$/i }));
     expect(screen.getByLabelText(/nama bot/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^buat bot$/i })).toBeInTheDocument();
+  });
+
+  it("grants a principal access to a bot with level user", async () => {
+    const user = userEvent.setup();
+    apiMock.grantBotAccess.mockResolvedValue({ principal: "team:t1", level: "user" });
+    renderBots();
+    await screen.findByText(/no approval requests yet/i);
+    await user.type(screen.getByLabelText(/target bot/i), BOT_ID);
+    await user.type(screen.getByLabelText(/principal/i), " team:t1 ");
+    await user.click(screen.getByRole("button", { name: /^grant access$/i }));
+    await waitFor(() => expect(apiMock.grantBotAccess).toHaveBeenCalledWith(BOT_ID, { principal: "team:t1", level: "user" }));
+    expect(await screen.findByText(/access granted.*team:t1/i)).toBeInTheDocument();
+  });
+
+  it("disables grant until the bot is a UUID and the principal has a known type prefix", async () => {
+    const user = userEvent.setup();
+    renderBots();
+    await screen.findByText(/no approval requests yet/i);
+    const button = screen.getByRole("button", { name: /^grant access$/i });
+    expect(button).toBeDisabled();
+    await user.type(screen.getByLabelText(/target bot/i), BOT_ID);
+    await user.type(screen.getByLabelText(/principal/i), "nobody");
+    expect(button).toBeDisabled();
+    await user.clear(screen.getByLabelText(/principal/i));
+    await user.type(screen.getByLabelText(/principal/i), "division:d1");
+    expect(button).toBeEnabled();
+  });
+
+  it("shows a generic error without server text when the grant fails", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.grantBotAccess.mockRejectedValue(new ApiError(404, "Bot not found", "stack detail"));
+    renderBots();
+    await screen.findByText(/no approval requests yet/i);
+    await user.type(screen.getByLabelText(/target bot/i), BOT_ID);
+    await user.type(screen.getByLabelText(/principal/i), "user:u1");
+    await user.click(screen.getByRole("button", { name: /^grant access$/i }));
+    expect(await screen.findByText(/could not grant access/i)).toBeInTheDocument();
+    expect(screen.queryByText(/stack detail/i)).not.toBeInTheDocument();
+  });
+
+  it("prefills the grant target bot after creating a bot, and labels the grant form in Indonesian", async () => {
+    const user = userEvent.setup();
+    apiMock.createBot.mockResolvedValue({ id: BOT_ID, name: "HR assistant" });
+    renderBots("id");
+    await screen.findByText(/belum ada permintaan persetujuan/i);
+    await user.click(screen.getByRole("button", { name: /^bot baru$/i }));
+    await user.type(screen.getByLabelText(/nama bot/i), "HR assistant");
+    await user.click(screen.getByRole("button", { name: /^buat bot$/i }));
+    await screen.findByRole("status");
+    expect(screen.getByLabelText(/bot target/i)).toHaveValue(BOT_ID);
+    expect(screen.getByRole("button", { name: /^beri akses$/i })).toBeInTheDocument();
   });
 
   it("loads more approval requests with the next cursor", async () => {

@@ -125,6 +125,11 @@ const en = {
     createBot: "Create bot",
     botCreated: "Bot created",
     createFailed: "Could not create the bot.",
+    grantBot: "Target bot",
+    grantPrincipal: "Principal (user:, team:, division:, role: or org: id)",
+    grantAccess: "Grant access",
+    accessGranted: "Access granted",
+    grantFailed: "Could not grant access.",
   },
   admin: {
     title: "Admin",
