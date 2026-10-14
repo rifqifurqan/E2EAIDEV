@@ -9,6 +9,9 @@ const apiMock = vi.hoisted(() => ({
   getOrgSnapshot: vi.fn(),
   createDivision: vi.fn(),
   createTeam: vi.fn(),
+  createOrgUser: vi.fn(),
+  addTeamMember: vi.fn(),
+  grantOrgRole: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -43,6 +46,9 @@ describe("AdminScreen", () => {
     apiMock.getOrgSnapshot.mockReset();
     apiMock.createDivision.mockReset();
     apiMock.createTeam.mockReset();
+    apiMock.createOrgUser.mockReset();
+    apiMock.addTeamMember.mockReset();
+    apiMock.grantOrgRole.mockReset();
     apiMock.getOrgSnapshot.mockResolvedValue(SNAPSHOT);
   });
 
@@ -232,5 +238,122 @@ describe("AdminScreen", () => {
     renderAdmin();
     await screen.findByText(/available to admins only/i);
     expect(screen.queryByRole("button", { name: /^add division$/i })).not.toBeInTheDocument();
+  });
+
+  it("creates a user in the admin's org with an optional division", async () => {
+    const user = userEvent.setup();
+    apiMock.createOrgUser.mockResolvedValue({ id: "u3" });
+    renderAdmin();
+    await screen.findByRole("region", { name: /organization/i });
+    const add = screen.getByRole("button", { name: /^add user$/i });
+    expect(add).toBeDisabled();
+    await user.type(screen.getByLabelText(/^email$/i), "citra@demo.e2eai");
+    await user.type(screen.getByLabelText(/display name/i), " Citra ");
+    await user.selectOptions(screen.getByLabelText(/user division/i), "d1");
+    await user.click(add);
+    await waitFor(() =>
+      expect(apiMock.createOrgUser).toHaveBeenCalledWith({
+        org_id: SNAPSHOT.org_id,
+        email: "citra@demo.e2eai",
+        display_name: "Citra",
+        division_id: "d1",
+      }),
+    );
+    await waitFor(() => expect(apiMock.getOrgSnapshot).toHaveBeenCalledTimes(2));
+  });
+
+  it("keeps add user disabled for an invalid email and omits the division when none is chosen", async () => {
+    const user = userEvent.setup();
+    apiMock.createOrgUser.mockResolvedValue({ id: "u3" });
+    renderAdmin();
+    await screen.findByRole("region", { name: /organization/i });
+    const add = screen.getByRole("button", { name: /^add user$/i });
+    await user.type(screen.getByLabelText(/display name/i), "Citra");
+    await user.type(screen.getByLabelText(/^email$/i), "not-an-email");
+    expect(add).toBeDisabled();
+    await user.clear(screen.getByLabelText(/^email$/i));
+    await user.type(screen.getByLabelText(/^email$/i), "citra@demo.e2eai");
+    await user.click(add);
+    await waitFor(() =>
+      expect(apiMock.createOrgUser).toHaveBeenCalledWith({
+        org_id: SNAPSHOT.org_id,
+        email: "citra@demo.e2eai",
+        display_name: "Citra",
+      }),
+    );
+  });
+
+  it("adds a user to a team chosen from the snapshot", async () => {
+    const user = userEvent.setup();
+    apiMock.addTeamMember.mockResolvedValue({ team_id: "t1", user_id: "u1" });
+    renderAdmin();
+    await screen.findByRole("region", { name: /organization/i });
+    const add = screen.getByRole("button", { name: /^add to team$/i });
+    expect(add).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText(/member team/i), "t1");
+    await user.selectOptions(screen.getByLabelText(/member user/i), "u1");
+    await user.click(add);
+    await waitFor(() => expect(apiMock.addTeamMember).toHaveBeenCalledWith({ team_id: "t1", user_id: "u1" }));
+    expect(await screen.findByText(/member added/i)).toBeInTheDocument();
+  });
+
+  it("grants an org-wide role to a user from the fixed role list", async () => {
+    const user = userEvent.setup();
+    apiMock.grantOrgRole.mockResolvedValue({ user_id: "u1", role_name: "evaluator", project_id: null });
+    renderAdmin();
+    await screen.findByRole("region", { name: /organization/i });
+    const grant = screen.getByRole("button", { name: /^grant role$/i });
+    expect(grant).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText(/role user/i), "u1");
+    await user.selectOptions(screen.getByLabelText(/^role$/i), "evaluator");
+    await user.click(grant);
+    await waitFor(() => expect(apiMock.grantOrgRole).toHaveBeenCalledWith({ user_id: "u1", role_name: "evaluator" }));
+    expect(await screen.findByText(/role granted/i)).toBeInTheDocument();
+  });
+
+  it("asks for an explicit confirmation before granting the admin role", async () => {
+    const user = userEvent.setup();
+    apiMock.grantOrgRole.mockResolvedValue({ user_id: "u1", role_name: "admin", project_id: null });
+    renderAdmin();
+    await screen.findByRole("region", { name: /organization/i });
+    await user.selectOptions(screen.getByLabelText(/role user/i), "u1");
+    await user.selectOptions(screen.getByLabelText(/^role$/i), "admin");
+    const grant = screen.getByRole("button", { name: /^grant role$/i });
+    expect(grant).toBeDisabled();
+    await user.click(screen.getByLabelText(/i understand.*full administrator/i));
+    expect(grant).toBeEnabled();
+    await user.click(grant);
+    await waitFor(() => expect(apiMock.grantOrgRole).toHaveBeenCalledWith({ user_id: "u1", role_name: "admin" }));
+  });
+
+  it("shows generic errors without server text for user, member and role failures", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.createOrgUser.mockRejectedValue(new ApiError(409, "user already exists LEAK1"));
+    apiMock.addTeamMember.mockRejectedValue(new ApiError(404, "team gone LEAK2"));
+    apiMock.grantOrgRole.mockRejectedValue(new ApiError(403, "nope LEAK3"));
+    renderAdmin();
+    await screen.findByRole("region", { name: /organization/i });
+    await user.type(screen.getByLabelText(/^email$/i), "citra@demo.e2eai");
+    await user.type(screen.getByLabelText(/display name/i), "Citra");
+    await user.click(screen.getByRole("button", { name: /^add user$/i }));
+    expect(await screen.findByText(/could not create the user/i)).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText(/member team/i), "t1");
+    await user.selectOptions(screen.getByLabelText(/member user/i), "u1");
+    await user.click(screen.getByRole("button", { name: /^add to team$/i }));
+    expect(await screen.findByText(/could not add the member/i)).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText(/role user/i), "u1");
+    await user.selectOptions(screen.getByLabelText(/^role$/i), "evaluator");
+    await user.click(screen.getByRole("button", { name: /^grant role$/i }));
+    expect(await screen.findByText(/could not grant the role/i)).toBeInTheDocument();
+    expect(screen.queryByText(/LEAK[123]/)).not.toBeInTheDocument();
+  });
+
+  it("labels the user, member and role forms in Indonesian", async () => {
+    renderAdmin("id");
+    await screen.findByRole("region", { name: /organisasi/i });
+    expect(screen.getByRole("button", { name: /^tambah pengguna$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^tambah ke tim$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^berikan peran$/i })).toBeInTheDocument();
   });
 });

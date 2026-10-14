@@ -404,6 +404,9 @@ export const ENDPOINTS = {
   orgSnapshot: "/admin/org/snapshot",
   orgDivisions: "/admin/org/divisions",
   orgTeams: "/admin/org/teams",
+  orgUsers: "/admin/org/users",
+  orgTeamMemberships: "/admin/org/team-memberships",
+  orgRoleGrants: "/admin/org/role-grants",
   incidents: "/incidents",
   incidentPostmortem: (incidentId: string) => `/incidents/${incidentId}/postmortem`,
   incidentTransition: (incidentId: string) => `/incidents/${incidentId}/transition`,
@@ -678,6 +681,15 @@ export const api = {
     apiFetch<OrgDivision>(ENDPOINTS.orgDivisions, { method: "POST", body: input }),
   createTeam: (input: { division_id: string; name: string }) =>
     apiFetch<OrgTeam>(ENDPOINTS.orgTeams, { method: "POST", body: input }),
+  createOrgUser: (input: { org_id: string; email: string; display_name: string; division_id?: string }) =>
+    apiFetch<OrgUser>(ENDPOINTS.orgUsers, { method: "POST", body: input }),
+  addTeamMember: (input: { team_id: string; user_id: string }) =>
+    apiFetch<{ team_id: string; user_id: string }>(ENDPOINTS.orgTeamMemberships, { method: "POST", body: input }),
+  grantOrgRole: (input: { user_id: string; role_name: string }) =>
+    apiFetch<{ user_id: string; role_name: string; project_id: string | null }>(ENDPOINTS.orgRoleGrants, {
+      method: "POST",
+      body: input,
+    }),
   deactivateUser: (userId: string, input: DeactivateInput) =>
     apiFetch<DeactivateResponse>(ENDPOINTS.deactivateUser(userId), {
       method: "POST",

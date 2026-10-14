@@ -134,6 +134,228 @@ function OrgForms({ snapshot, onCreated }: { snapshot: OrgSnapshot; onCreated: (
   );
 }
 
+const ROLE_NAMES = ["admin", "ai_engineer", "evaluator", "compliance", "business_user"] as const;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type AccessOutcome = "user-failed" | "member-added" | "member-failed" | "role-granted" | "role-failed" | null;
+
+function OrgAccessForms({ snapshot, onChanged }: { snapshot: OrgSnapshot; onChanged: () => void }) {
+  const { t } = useI18n();
+  const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [userDivision, setUserDivision] = useState("");
+  const [memberTeam, setMemberTeam] = useState("");
+  const [memberUser, setMemberUser] = useState("");
+  const [roleUser, setRoleUser] = useState("");
+  const [role, setRole] = useState("");
+  const [adminConfirmed, setAdminConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [outcome, setOutcome] = useState<AccessOutcome>(null);
+
+  const activeUsers = snapshot.users.filter((u) => u.status !== "disabled");
+  const emailTrimmed = email.trim();
+  const nameTrimmed = displayName.trim();
+  const userValid = EMAIL_RE.test(emailTrimmed) && nameTrimmed.length > 0;
+  const roleValid = roleUser !== "" && role !== "" && (role !== "admin" || adminConfirmed);
+
+  async function run(action: () => Promise<unknown>, ok: AccessOutcome, failed: AccessOutcome, reset: () => void) {
+    if (busy) return;
+    setOutcome(null);
+    setBusy(true);
+    try {
+      await action();
+      reset();
+      setOutcome(ok);
+      onChanged();
+    } catch {
+      setOutcome(failed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const field = "w-full rounded border border-gray-300 px-2 py-1";
+  const button = "self-start rounded bg-blue-600 px-3 py-1 text-white disabled:opacity-50";
+
+  return (
+    <div className="mb-4 grid gap-4 md:grid-cols-3 text-sm">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!userValid) return;
+          void run(
+            () =>
+              api.createOrgUser({
+                org_id: snapshot.org_id,
+                email: emailTrimmed,
+                display_name: nameTrimmed,
+                ...(userDivision ? { division_id: userDivision } : {}),
+              }),
+            null,
+            "user-failed",
+            () => {
+              setEmail("");
+              setDisplayName("");
+              setUserDivision("");
+            },
+          );
+        }}
+        className="flex flex-col gap-2"
+      >
+        <label htmlFor="org-user-email">
+          <span className="mr-1">{t.admin.userEmail}</span>
+          <input id="org-user-email" value={email} onChange={(e) => setEmail(e.target.value)} className={field} />
+        </label>
+        <label htmlFor="org-user-name">
+          <span className="mr-1">{t.admin.userDisplayName}</span>
+          <input id="org-user-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className={field} />
+        </label>
+        <label htmlFor="org-user-division">
+          <span className="mr-1">{t.admin.userDivision}</span>
+          <select id="org-user-division" value={userDivision} onChange={(e) => setUserDivision(e.target.value)} className={field}>
+            <option value="" />
+            {snapshot.divisions.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" disabled={busy || !userValid} className={button}>
+          {t.admin.addUser}
+        </button>
+        {outcome === "user-failed" ? (
+          <p role="alert" className="text-red-700">
+            {t.admin.userFailed}
+          </p>
+        ) : null}
+      </form>
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!memberTeam || !memberUser) return;
+          void run(
+            () => api.addTeamMember({ team_id: memberTeam, user_id: memberUser }),
+            "member-added",
+            "member-failed",
+            () => setMemberUser(""),
+          );
+        }}
+        className="flex flex-col gap-2"
+      >
+        <label htmlFor="org-member-team">
+          <span className="mr-1">{t.admin.memberTeam}</span>
+          <select id="org-member-team" value={memberTeam} onChange={(e) => setMemberTeam(e.target.value)} className={field}>
+            <option value="" />
+            {snapshot.teams.map((team) => (
+              <option key={team.id} value={team.id}>
+                {team.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label htmlFor="org-member-user">
+          <span className="mr-1">{t.admin.memberUser}</span>
+          <select id="org-member-user" value={memberUser} onChange={(e) => setMemberUser(e.target.value)} className={field}>
+            <option value="" />
+            {activeUsers.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.display_name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" disabled={busy || !memberTeam || !memberUser} className={button}>
+          {t.admin.addToTeam}
+        </button>
+        {outcome === "member-added" ? (
+          <p role="status" className="text-green-700">
+            {t.admin.memberAdded}
+          </p>
+        ) : null}
+        {outcome === "member-failed" ? (
+          <p role="alert" className="text-red-700">
+            {t.admin.memberFailed}
+          </p>
+        ) : null}
+      </form>
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!roleValid) return;
+          void run(
+            () => api.grantOrgRole({ user_id: roleUser, role_name: role }),
+            "role-granted",
+            "role-failed",
+            () => {
+              setAdminConfirmed(false);
+              setRole("");
+            },
+          );
+        }}
+        className="flex flex-col gap-2"
+      >
+        <label htmlFor="org-role-user">
+          <span className="mr-1">{t.admin.roleUser}</span>
+          <select id="org-role-user" value={roleUser} onChange={(e) => setRoleUser(e.target.value)} className={field}>
+            <option value="" />
+            {activeUsers.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.display_name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label htmlFor="org-role">
+          <span className="mr-1">{t.admin.role}</span>
+          <select
+            id="org-role"
+            value={role}
+            onChange={(e) => {
+              setRole(e.target.value);
+              setAdminConfirmed(false);
+            }}
+            className={field}
+          >
+            <option value="" />
+            {ROLE_NAMES.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {role === "admin" ? (
+          <label htmlFor="org-role-admin-confirm" className="flex items-center gap-2">
+            <input
+              id="org-role-admin-confirm"
+              type="checkbox"
+              checked={adminConfirmed}
+              onChange={(e) => setAdminConfirmed(e.target.checked)}
+            />
+            <span>{t.admin.adminRoleConfirm}</span>
+          </label>
+        ) : null}
+        <button type="submit" disabled={busy || !roleValid} className={button}>
+          {t.admin.grantRole}
+        </button>
+        {outcome === "role-granted" ? (
+          <p role="status" className="text-green-700">
+            {t.admin.roleGranted}
+          </p>
+        ) : null}
+        {outcome === "role-failed" ? (
+          <p role="alert" className="text-red-700">
+            {t.admin.roleFailed}
+          </p>
+        ) : null}
+      </form>
+    </div>
+  );
+}
+
 export function AdminScreen() {
   const { t } = useI18n();
   const [showDeactivate, setShowDeactivate] = useState(false);
@@ -262,6 +484,7 @@ export function AdminScreen() {
             </p>
           ) : null}
           {org.kind === "ready" ? <OrgForms snapshot={org.data} onCreated={() => setOrgReload((key) => key + 1)} /> : null}
+          {org.kind === "ready" ? <OrgAccessForms snapshot={org.data} onChanged={() => setOrgReload((key) => key + 1)} /> : null}
           {org.kind === "ready" ? (
             <div className="grid gap-4 md:grid-cols-3 text-sm">
               <div>
