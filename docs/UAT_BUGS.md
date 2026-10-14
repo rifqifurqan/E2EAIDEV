@@ -1,11 +1,11 @@
 # UAT Bug List — E2EAIDEV Live Web
 
-Date: 2026-10-14 (run 9)
-Latest result: full v5 **37/0**, mobile-nav **9/0**, and admin-mutation **9/0**. Evidence `e2eaidev-uat5-1791967780471`, `e2eaidev-uat-mobile-1791967554354`, and `e2eaidev-uat-admin-1791967877237` under Hermes scratch (`C:/Users/riqan/AppData/Local/hermes/cache/scratch/`). Previous: `e2eaidev-uat4-1791966120479`, `e2eaidev-uat-mobile-1791966218787`, `e2eaidev-uat-admin-1791966227548`. Previous passing evidence: `e2eaidev-uat4-1791963285993`, `e2eaidev-uat4-1791961850058`, `e2eaidev-uat3-1791960461338` and `e2eaidev-uat-1791960549558`. Before-fix evidence: `e2eaidev-uat2-1791957806874`.
+Date: 2026-10-14 (run 10)
+Latest result: full v5 **37/0**, ops/admin **14/0**, session expiry **7/0**, and admin-mutation **9/0**. Evidence `e2eaidev-uat5-1791980528893`, `e2eaidev-uat-ops-1791980648911`, `e2eaidev-uat-session-1791980679065`, and `e2eaidev-uat-admin-1791980694156` under Hermes scratch (`C:/Users/riqan/AppData/Local/hermes/cache/scratch/`). A same-run environment failure occurred before web recovery: `e2eaidev-uat5-1791980341000` timed out at `/documents` because the dev listener accepted TCP but never answered HTTP.
 
 ## Open (prioritized)
 
-None verified open. Run 9 fixed UAT-AUTH-002 (below); run 8 fixed UAT-CHAT-007 (below). Run 7 hardened one intermittent case (UAT-DOC-006 below). Candidates not yet exercised in a headed run: see "Not tested" in UAT_LIVE_WEB.md.
+None verified open. Run 10 found no product-code bug after recovering the hung local web dev server. Run 9 fixed UAT-AUTH-002 (below); run 8 fixed UAT-CHAT-007 (below). Run 7 hardened one intermittent case (UAT-DOC-006 below). Candidates not yet exercised in a headed run: see "Not tested" in UAT_LIVE_WEB.md.
 
 ## Fixed in run 9
 
@@ -75,6 +75,8 @@ Root cause is inferred, not captured: no LiteLLM/Ollama error was in the logs at
 Earlier fixed (run 1): UAT-DOC-001 (list lost on reload), UAT-DOC-002 (search not wired), UAT-DOC-003 (tabs not wired), UAT-OPS-001 (dead incident form for non-admin).
 
 ## Watch list
+
+- Run 10 environment note: the Next dev listener on :13000 can accept TCP and hang all HTTP requests after `.next` churn. Recovery remains: stop the stale listener, remove `.next`, restart `pnpm dev`, then verify web `/` and `/api/v1/health` before running UAT. This was an environment issue, not a verified product-code bug.
 
 - Run 7 test-data note: UAT probes created `probe*.txt` documents whose contents ("12 hari") polluted Andi's "everything I can access" scope and made the chat UAT fail until they were moved to Trash. UAT scripts should upload uniquely worded docs and trash their own uploads.
 - First upload after the embedding model is idle takes ~10 s (bge-m3 cold start); the UI shows no progress indicator during that time.

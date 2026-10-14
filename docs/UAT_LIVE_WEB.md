@@ -1,6 +1,6 @@
 # Live Web UAT — E2EAIDEV
 
-Date: 2026-10-14 (run 9)
+Date: 2026-10-14 (run 10)
 Tester: Hermes Agent + Claude Code review, headed Playwright / Chrome (non-headless, slowMo 50–60)
 Target web: http://127.0.0.1:13000 · Target API: http://127.0.0.1:8000
 Demo user: `andi@demo.e2eai` (not an org admin). Its local password lives only in Hermes scratch, never in the repo.
@@ -18,6 +18,7 @@ Admin user: `admin@local.e2eai` (org admin). Reset with `e2eai-api reset-admin-p
 - Run 6 after UAT-CHAT-006 fix: full v5 script `e2eaidev-uat5-1791967780471` (**37 pass / 0 fail**), mobile-nav script `e2eaidev-uat-mobile-1791967554354` (**9 pass / 0 fail**), admin-mutation script `e2eaidev-uat-admin-1791967877237` (**9 pass / 0 fail**). v5 = v4 with the citation check changed to assert the panel shows only the latest answer (`chat-citations-panel-shows-latest-answer-only`). Environment: web on :13000 was hung (accepting TCP, never answering HTTP); fixed by SIGTERM of the stale dev process, wiping `.next`, restarting `pnpm dev`.
 - Run 7: baseline v5 run -> 34/3 (one `500 POST /api/v1/documents` on upload; evidence `e2eaidev-uat5-1791975370681`); second run 34/3 (chat failed because leftover probe docs said "12 hari"; `e2eaidev-uat5-1791975714101`); after trashing probe docs: v5 **37/0** twice (`e2eaidev-uat5-1791975882751`, `e2eaidev-uat5-1791975981683`). New ops script `e2eaidev_uat_ops.js` (admin): **14/0** (`e2eaidev-uat-ops-1791976353799`) covering Operate incident report (empty-title disabled, create, appears in list, form cleared), incident transition, Improve/Admin pages as admin, empty-file upload (clear 400 message), binary upload (no crash), admin sign-out. The first ops run had 2 FAILs that were my script reading the page before the ~5.5 s report round trip finished; waiting for the form to clear made them pass.
 - Run 9 (session expiry, UAT-AUTH-002): first v5 run of the tick -> 10/2 (chat flow found the app on `/data`, signed out, mid-run; not reproduced: immediate rerun v5 **37/0**, `e2eaidev-uat5-1791978980164`; failing run `e2eaidev-uat5-1791978847050`). New script `e2eaidev_uat_session.js` (cookies cleared while chat is open): before fix header kept "Signed in as" over "Not authenticated" and Documents kept "Please sign in" after re-login (`e2eaidev-uat-session-1791979121346`, 3 FAIL). After fix: session script **8/0** (`e2eaidev-uat-session-1791979414092`), v5 **37/0** (`e2eaidev-uat5-1791979438101`), mobile-nav **9/0** (`e2eaidev-uat-mobile-1791979549815`), admin **9/0** (`e2eaidev-uat-admin-1791979560248`). Screenshots `01-chat-send-after-expiry.png`, `03-relogin.png`.
+- Run 10 (cron live UAT sweep): first v5 run found the web dev listener on :13000 accepting TCP but never answering HTTP; v5 failed early at `/documents` with a Playwright `networkidle` timeout (`e2eaidev-uat5-1791980341000`, 0/1). The stale listener PID 19404 could not be stopped with non-force `taskkill`; it was terminated via Windows API, `.next` was removed with Python, and `pnpm dev` was restarted. After recovery: v5 **37/0** (`e2eaidev-uat5-1791980528893`), ops/admin **14/0** (`e2eaidev-uat-ops-1791980648911`), session expiry **7/0** (`e2eaidev-uat-session-1791980679065`), and admin mutation **9/0** (`e2eaidev-uat-admin-1791980694156`). No verified product-code bug remained open.
 - Scripts: `e2eaidev_uat_session.js` (session expiry), `e2eaidev_uat_ops.js` (admin Operate/Improve/Admin/upload edge cases), `e2eaidev_uat_v5.js` (current full run), `e2eaidev_uat_live.js` (happy path), `e2eaidev_uat_v2.js` (negative paths, found run-2 bugs), `e2eaidev_uat_v3.js` (run-2 regression), `e2eaidev_uat_v4.js` (run-3 Stop regression). Not yet committed as a repo suite (they need the scratch-held demo password).
 
 ## Prerequisites verified
@@ -82,6 +83,8 @@ Web: Sign out and hidden login form; "Move to Trash" label, Trash tab with Resto
 
 ## Verification gates (this run)
 
+- Run 10: git `main` synced with `origin/main` (0/0 ahead/behind); Docker services up (postgres + valkey healthy, openfga, seaweedfs, litellm, e2eai-ollama). API `/api/v1/health`, web `/`, and web proxy `/api/v1/health` -> 200 after restarting the hung web dev server. Headed Playwright: v5 37/0, ops 14/0, session 7/0, admin 9/0. Web gate: `cd apps/web && pnpm vitest run && pnpm run typecheck && pnpm lint && pnpm run build` -> 21 files / 327 tests passed; typecheck ok; lint clean; production build ok. After build, `.next` was removed and `pnpm dev` restarted; health endpoints returned 200. No app code changed, so TDD/code fix was not needed and API/CLI suites were skipped.
+
 - Run 8: `cd apps/web && pnpm vitest run src/components/chat-screen.test.tsx` -> RED 1 failed, GREEN 21 passed; `pnpm vitest run` -> 21 files / 322 tests passed; `pnpm run typecheck` ok; `pnpm lint` clean; `pnpm run build` ok (then `.next` wiped, dev restarted, web/proxy 200). Headed v5 -> 37/0 (baseline and after fix, `e2eaidev-uat5-1791977966868`); quota script -> 6/0. API untouched, so API suites skipped on purpose.
 
 - Run 7: `cd apps/api && uv run pytest -q tests/test_resilient_http_nfr19.py` -> RED 2 failed, GREEN 7 passed; adjacent (resilience, circuit breaker, upload ingest, cited answer, vector store, semantic cache, chat conversations, doc lifecycle, UAT principal/relevance, documents list, quotas, retrieval metrics, metrics) -> 94 passed. Web untouched, so web typecheck/lint/build were not re-run. Live API process was not restarted (process kill blocked in the cron session), so the running server still has the old retry set until its next restart.
@@ -102,6 +105,8 @@ Web: Sign out and hidden login form; "Move to Trash" label, Trash tab with Resto
 - Intentionally skipped: full API suite, CLI suite, `verify-phase-0` (changes are confined to the touched modules).
 
 ## Not tested
+
+- Run 10: no new product behavior beyond the existing v5/ops/session/admin scripts. Drag-and-drop upload, real PDF/DOCX/Docling, production `pnpm start`, concurrent users, idle-timeout waiting for 8 hours, and admin revoke/edit flows remain out of scope.
 
 - Run 9: session expiry covered for chat send, Documents load and re-login (cookie cleared client-side). Not covered: server-side idle expiry after `session_idle_hours` (8 h), expiry during file upload/share, other lifecycle pages (Plan/Operate/Improve) after expiry, the unexplained one-off sign-out seen in the first v5 run (cause unknown; may have been a real expiry or a session invalidated by a parallel login).
 
