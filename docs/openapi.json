@@ -4429,7 +4429,7 @@
     },
     "/api/v1/admin/org/snapshot": {
       "get": {
-        "description": "Org snapshot; ``org_id`` defaults to the admin's own organization and may not name another.",
+        "description": "Org snapshot; ``org_id`` defaults to the admin's own organization (install admins: the install's main\norganization, i.e. the oldest one that is not \"System\"). Other admins may not name another org.",
         "operationId": "org_snapshot_route_api_v1_admin_org_snapshot_get",
         "parameters": [
           {
@@ -6143,6 +6143,49 @@
       }
     },
     "/api/v1/chat/conversations/{conversation_id}/messages": {
+      "get": {
+        "operationId": "list_messages_api_api_v1_chat_conversations__conversation_id__messages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Messages Api Api V1 Chat Conversations  Conversation Id  Messages Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Messages Api",
+        "tags": [
+          "chat"
+        ]
+      },
       "post": {
         "operationId": "send_message_api_api_v1_chat_conversations__conversation_id__messages_post",
         "parameters": [
@@ -6386,6 +6429,50 @@
       }
     },
     "/api/v1/documents": {
+      "get": {
+        "description": "Permission-filtered document metadata list for the web document library.",
+        "operationId": "list_documents_api_api_v1_documents_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "view",
+            "required": false,
+            "schema": {
+              "default": "my_documents",
+              "title": "View",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Documents Api Api V1 Documents Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Documents Api",
+        "tags": [
+          "documents"
+        ]
+      },
       "post": {
         "operationId": "upload_document_api_v1_documents_post",
         "requestBody": {

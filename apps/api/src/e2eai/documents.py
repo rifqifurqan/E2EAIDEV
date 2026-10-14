@@ -25,7 +25,7 @@ from .core.errors import AppError
 from .core.pagination import clamp_limit, decode_cursor, make_page
 from .db import AccessRequest, Chunk, DocPrincipal, Document, DocumentVersion, Folder, FolderPrincipal, Notification, User
 from .db import get_session
-from .share_policy import SENSITIVITIES, SharePolicy, share_block_reason
+from .share_policy import SENSITIVITIES, SharePolicy, share_block_reason, validate_principal
 
 
 def _document_object(document_id: uuid.UUID) -> str:
@@ -230,6 +230,7 @@ async def share_document(
 
     Optional ``expires_at`` (FR-S4) sets a time after which the share no longer grants visibility.
     """
+    validate_principal(principal)  # UAT-DOC-005: before any read or write
     policy = policy or SharePolicy()
     doc = await _load_document(session, document_id)
     reason = share_block_reason(doc.sensitivity, principal, policy)
@@ -500,7 +501,15 @@ async def list_documents_view(session: AsyncSession, *, user: User, view: str = 
     principal_list = sorted(user_principals)
     if not principal_list:
         return []
-    stmt = select(Document.id, Document.title, Document.owner_id, Document.sensitivity).where(
+    if view == "trash":  # UAT-DOC-006: only the owner's own trashed documents, so they can be restored
+        trash_stmt = select(Document.id, Document.title, Document.owner_id, Document.sensitivity, Document.status).where(
+            Document.status == "trashed", Document.owner_id == user.id,
+        ).order_by(Document.title)
+        return [
+            {"id": str(doc_id), "title": title, "owner_id": str(owner_id), "sensitivity": sensitivity, "status": status}
+            for doc_id, title, owner_id, sensitivity, status in (await session.execute(trash_stmt)).all()
+        ]
+    stmt = select(Document.id, Document.title, Document.owner_id, Document.sensitivity, Document.status).where(
         Document.status == "active",
         or_(Document.expires_at.is_(None), Document.expires_at > func.now()),  # FR-D8
         _visible_document_clause(principal_list),
@@ -527,8 +536,8 @@ async def list_documents_view(session: AsyncSession, *, user: User, view: str = 
         raise AppError(400, "Invalid document view")
     stmt = stmt.order_by(Document.title)
     return [
-        {"id": str(doc_id), "title": title, "owner_id": str(owner_id), "sensitivity": sensitivity}
-        for doc_id, title, owner_id, sensitivity in (await session.execute(stmt)).all()
+        {"id": str(doc_id), "title": title, "owner_id": str(owner_id), "sensitivity": sensitivity, "status": status}
+        for doc_id, title, owner_id, sensitivity, status in (await session.execute(stmt)).all()
     ]
 
 

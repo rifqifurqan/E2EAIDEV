@@ -477,4 +477,7 @@ async def me(sess: dict = Depends(current_session), db: AsyncSession = Depends(g
     user = await db.get(User, uuid.UUID(sess["user_id"]))
     if user is None or user.status != "active":
         raise AppError(401, "Not authenticated")
-    return {"user_id": str(user.id), "email": user.email, "display_name": user.display_name}
+    out = {"user_id": str(user.id), "email": user.email, "display_name": user.display_name}
+    if sess.get("csrf"):  # UAT-AUTH-001: lets the web sign out after a page reload (login response is gone)
+        out["csrf_token"] = sess["csrf"]
+    return out

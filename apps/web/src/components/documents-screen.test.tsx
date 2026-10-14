@@ -10,6 +10,7 @@ const apiMock = vi.hoisted(() => ({
   uploadDocument: vi.fn(),
   shareDocument: vi.fn(),
   trashDocument: vi.fn(),
+  restoreDocument: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", () => ({
@@ -33,6 +34,7 @@ describe("DocumentsScreen", () => {
     apiMock.uploadDocument.mockReset();
     apiMock.shareDocument.mockReset();
     apiMock.trashDocument.mockReset();
+    apiMock.restoreDocument.mockReset();
   });
 
   it("renders document view tabs", () => {
@@ -52,10 +54,10 @@ describe("DocumentsScreen", () => {
     expect(screen.getByRole("searchbox")).toBeInTheDocument();
   });
 
-  it("renders share and revoke buttons", () => {
+  it("renders share and trash buttons", () => {
     renderDocs();
     expect(screen.getByRole("button", { name: /share/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /revoke/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /move to trash/i })).toBeInTheDocument();
   });
 
   it("renders in Indonesian", () => {
@@ -110,7 +112,7 @@ describe("DocumentsScreen", () => {
     expect(await screen.findByText(/search-hit\.txt/i)).toBeInTheDocument();
   });
 
-  it("share and revoke actions call document APIs when a document exists", async () => {
+  it("share and trash actions call document APIs when a document exists", async () => {
     apiMock.uploadDocument.mockResolvedValueOnce({ document_id: "doc1", title: "policy.pdf", status: "ready", sensitivity: "internal", parse_status: "parsed", scan_status: "clean" });
     apiMock.shareDocument.mockResolvedValueOnce({ status: "ok" });
     apiMock.trashDocument.mockResolvedValueOnce({ status: "trashed" });
@@ -119,7 +121,54 @@ describe("DocumentsScreen", () => {
     await userEvent.type(screen.getByLabelText(/share principal/i), "user:andi");
     await userEvent.click(screen.getByRole("button", { name: /^share$/i }));
     expect(apiMock.shareDocument).toHaveBeenCalledWith("doc1", { principal: "user:andi", level: "viewer" });
-    await userEvent.click(screen.getByRole("button", { name: /revoke/i }));
+    await userEvent.click(screen.getByRole("button", { name: /move to trash/i }));
     expect(apiMock.trashDocument).toHaveBeenCalledWith("doc1");
+  });
+
+  it("tells a signed-out visitor to sign in instead of 'Could not load' (UAT-DOC-007)", async () => {
+    const { ApiError } = await vi.importActual<typeof import("@/lib/api-client")>("@/lib/api-client");
+    apiMock.listDocuments.mockReset();
+    apiMock.listDocuments.mockRejectedValue(new ApiError(401, "Not authenticated"));
+    renderDocs();
+    expect(await screen.findByText(/please sign in to see your documents/i)).toBeInTheDocument();
+    expect(screen.queryByText(/could not load documents/i)).not.toBeInTheDocument();
+  });
+
+  it("trash tab lists trashed documents with Restore (UAT-DOC-006)", async () => {
+    const user = userEvent.setup();
+    apiMock.listDocuments.mockImplementation(async (view: string) =>
+      view === "trash"
+        ? { documents: [{ document_id: "d9", title: "old-policy.txt", status: "trashed", sensitivity: "internal", parse_status: "ready", scan_status: "clean" }], next_cursor: null }
+        : { documents: [], next_cursor: null });
+    apiMock.restoreDocument.mockResolvedValueOnce({ status: "active" });
+    renderDocs();
+    await user.click(screen.getByRole("tab", { name: /trash/i }));
+    expect(await screen.findByText(/old-policy\.txt/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^restore$/i }));
+    expect(apiMock.restoreDocument).toHaveBeenCalledWith("d9");
+    await waitFor(() => expect(screen.queryByRole("button", { name: /old-policy\.txt/i })).not.toBeInTheDocument());
+    expect(screen.getByRole("status")).toHaveTextContent(/restored/i);
+  });
+
+  it("localizes upload status messages in Indonesian (UAT-I18N-001)", async () => {
+    const user = userEvent.setup();
+    apiMock.uploadDocument.mockResolvedValueOnce({ document_id: "d1", title: "cuti.txt", status: "active", sensitivity: "internal", parse_status: "ready", scan_status: "clean" });
+    renderDocs("id");
+    await user.upload(screen.getByLabelText(/unggah dokumen/i), new File(["x"], "cuti.txt", { type: "text/plain" }));
+    expect(await screen.findByText(/unggah selesai/i)).toBeInTheDocument();
+    expect(screen.queryByText(/upload complete/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the API's reason when sharing is rejected (UAT-DOC-005)", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await vi.importActual<typeof import("@/lib/api-client")>("@/lib/api-client");
+    apiMock.uploadDocument.mockResolvedValueOnce({ document_id: "d1", title: "a.txt", status: "active", sensitivity: "internal", parse_status: "ready", scan_status: "clean" });
+    apiMock.shareDocument.mockRejectedValueOnce(new ApiError(422, "Invalid principal", "Use user:<id>"));
+    renderDocs();
+    await user.upload(screen.getByLabelText(/upload document/i), new File(["x"], "a.txt", { type: "text/plain" }));
+    await user.type(screen.getByLabelText(/share principal/i), "user:not-a-uuid");
+    await user.click(screen.getByRole("button", { name: /^share$/i }));
+    expect(await screen.findByText(/invalid principal/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^shared a\.txt/i)).not.toBeInTheDocument();
   });
 });

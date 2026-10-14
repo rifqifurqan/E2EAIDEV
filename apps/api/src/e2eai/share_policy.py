@@ -6,7 +6,11 @@ restricted may never be shared company-wide. `share_block_reason` is pure so it 
 OpenFGA/doc_principal write; a blocked share creates no grant, only an audit row.
 """
 
+import re
+import uuid
 from dataclasses import dataclass
+
+from .core.errors import AppError
 
 SENSITIVITIES = ("public", "internal", "confidential", "restricted")
 DEFAULT_SENSITIVITY = "internal"  # FR-D5 upload/create default
@@ -48,3 +52,30 @@ def share_block_reason(sensitivity: str, principal: str, policy: SharePolicy) ->
     if ptype in _COMPANY_WIDE_TYPES and sensitivity in policy.no_company_wide:
         return f"{sensitivity} documents cannot be shared company-wide"
     return None
+
+
+_UUID_TYPES = frozenset({"user", "team", "division", "role", "org"})
+_EMAIL = re.compile(r"^[^@\s:]+@[^@\s:]+\.[^@\s:]+$")
+
+
+def validate_principal(principal: str) -> str:
+    """Reject a malformed principal *before* any OpenFGA/doc_principals write (UAT-DOC-005).
+
+    Accepted: ``user|team|division|role|org:<uuid>`` and ``guest:<email>``. Anything else would write a
+    junk tuple and report success while granting nobody anything, so it is a 422 instead.
+    """
+    ptype, sep, ident = (principal or "").partition(":")
+    ok = False
+    if sep:
+        if ptype in _UUID_TYPES:
+            try:
+                uuid.UUID(ident)
+                ok = True
+            except ValueError:
+                ok = False
+        elif ptype in _EXTERNAL_TYPES:
+            ok = bool(_EMAIL.match(ident))
+    if not ok:
+        raise AppError(422, "Invalid principal",
+                       "Use user:<id>, team:<id>, division:<id>, role:<id>, org:<id> or guest:<email>.")
+    return principal

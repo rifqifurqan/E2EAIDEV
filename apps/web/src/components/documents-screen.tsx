@@ -4,14 +4,21 @@ import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/i18n/context";
 import { api, type Document } from "@/lib/api-client";
 
-type DocView = "my" | "shared" | "team";
-type ApiDocView = "my_documents" | "shared_with_me" | "my_team";
+type DocView = "my" | "shared" | "team" | "trash";
+type ApiDocView = "my_documents" | "shared_with_me" | "my_team" | "trash";
 
 const VIEW_TO_API: Record<DocView, ApiDocView> = {
   my: "my_documents",
   shared: "shared_with_me",
   team: "my_team",
+  trash: "trash",
 };
+
+/** Error title from the API's problem+json (never the stack/detail), else the fallback. */
+function reason(error: unknown, fallback: string): string {
+  const title = (error as { title?: unknown } | null)?.title;
+  return typeof title === "string" && title ? title : fallback;
+}
 
 export function DocumentsScreen() {
   const { t } = useI18n();
@@ -20,6 +27,7 @@ export function DocumentsScreen() {
   const [selectedId, setSelectedId] = useState("");
   const [sharePrincipal, setSharePrincipal] = useState("");
   const [status, setStatus] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -29,8 +37,10 @@ export function DocumentsScreen() {
     { key: "my", label: t.documents.myDocuments },
     { key: "shared", label: t.documents.sharedWithMe },
     { key: "team", label: t.documents.myTeam },
+    { key: "trash", label: t.documents.trash },
   ];
 
+  const inTrash = activeView === "trash";
   const selectedDocument = documents.find((doc) => doc.document_id === selectedId) ?? documents[0];
 
   useEffect(() => {
@@ -39,8 +49,9 @@ export function DocumentsScreen() {
       const view = VIEW_TO_API[activeView];
       const trimmed = query.trim();
       setLoading(true);
-      setStatus((current) => (current === "Could not load documents" ? "" : current));
-      const task = trimmed === "" ? api.listDocuments(view) : api.searchDocuments(trimmed, view);
+      setLoadError("");
+      // The trash list is not searchable (search only covers active documents).
+      const task = trimmed === "" || view === "trash" ? api.listDocuments(view) : api.searchDocuments(trimmed, view);
       task
         .then((result) => {
           if (requestId !== requestIdRef.current) return;
@@ -48,55 +59,72 @@ export function DocumentsScreen() {
           setDocuments(nextDocs);
           setSelectedId((current) => (nextDocs.some((doc) => doc.document_id === current) ? current : ""));
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (requestId !== requestIdRef.current) return;
           setDocuments([]);
           setSelectedId("");
-          setStatus("Could not load documents");
+          // A signed-out visitor is not an error worth alarming about: say what to do.
+          setLoadError((error as { status?: number } | null)?.status === 401 ? t.documents.signInRequired : t.documents.loadFailed);
         })
         .finally(() => {
           if (requestId === requestIdRef.current) setLoading(false);
         });
     }, trimmedDelay(query));
     return () => window.clearTimeout(timer);
-  }, [activeView, query]);
+  }, [activeView, query, t.documents.signInRequired, t.documents.loadFailed]);
 
   async function handleUpload(file: File | undefined) {
     if (!file) return;
-    setStatus("Uploading...");
+    setStatus(t.documents.uploading);
     try {
       const doc = await api.uploadDocument(file);
-      setDocuments((items) => [doc, ...items.filter((item) => item.document_id !== doc.document_id)]);
-      setSelectedId(doc.document_id);
-      setStatus("Upload complete");
+      if (activeView === "my") {
+        setDocuments((items) => [doc, ...items.filter((item) => item.document_id !== doc.document_id)]);
+        setSelectedId(doc.document_id);
+      }
+      setStatus(t.documents.uploadComplete);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Upload failed");
+      setStatus(reason(error, t.documents.uploadFailed));
     }
   }
 
   async function handleShare() {
     if (!selectedDocument || !sharePrincipal.trim()) return;
-    setStatus("Sharing...");
+    setStatus(t.documents.sharing);
     try {
       await api.shareDocument(selectedDocument.document_id, { principal: sharePrincipal.trim(), level: "viewer" });
-      setStatus(`Shared ${selectedDocument.title}`);
+      setStatus(`${t.documents.shared} ${selectedDocument.title}`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Share failed");
+      setStatus(reason(error, t.documents.shareFailed));
     }
   }
 
-  async function handleRevoke() {
+  async function handleTrash() {
     if (!selectedDocument) return;
-    setStatus("Revoking...");
+    setStatus(t.documents.movingToTrash);
     try {
       await api.trashDocument(selectedDocument.document_id);
       setDocuments((items) => items.filter((doc) => doc.document_id !== selectedDocument.document_id));
       setSelectedId("");
-      setStatus(`Revoked access to ${selectedDocument.title}`);
+      setStatus(`${t.documents.trashed}: ${selectedDocument.title}`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Revoke failed");
+      setStatus(reason(error, t.documents.trashFailed));
     }
   }
+
+  async function handleRestore() {
+    if (!selectedDocument) return;
+    try {
+      await api.restoreDocument(selectedDocument.document_id);
+      setDocuments((items) => items.filter((doc) => doc.document_id !== selectedDocument.document_id));
+      setSelectedId("");
+      setStatus(`${t.documents.restored}: ${selectedDocument.title}`);
+    } catch (error) {
+      setStatus(reason(error, t.documents.restoreFailed));
+    }
+  }
+
+  const message = loadError || status;
 
   return (
     <section>
@@ -148,37 +176,50 @@ export function DocumentsScreen() {
           className="sr-only"
           onChange={(event) => void handleUpload(event.target.files?.[0])}
         />
-        <label className="sr-only" htmlFor="share-principal">Share principal</label>
-        <input
-          id="share-principal"
-          aria-label="Share principal"
-          value={sharePrincipal}
-          onChange={(event) => setSharePrincipal(event.target.value)}
-          placeholder={t.documents.shareWith}
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
-        />
-        <button
-          type="button"
-          onClick={handleShare}
-          disabled={!selectedDocument || !sharePrincipal.trim()}
-          className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-        >
-          {t.documents.share}
-        </button>
-        <button
-          type="button"
-          onClick={handleRevoke}
-          disabled={!selectedDocument}
-          className="rounded border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-        >
-          {t.documents.revoke}
-        </button>
+        {inTrash ? (
+          <button
+            type="button"
+            onClick={handleRestore}
+            disabled={!selectedDocument}
+            className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            {t.documents.restore}
+          </button>
+        ) : (
+          <>
+            <label className="sr-only" htmlFor="share-principal">Share principal</label>
+            <input
+              id="share-principal"
+              aria-label="Share principal"
+              value={sharePrincipal}
+              onChange={(event) => setSharePrincipal(event.target.value)}
+              placeholder={t.documents.shareWith}
+              className="rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={handleShare}
+              disabled={!selectedDocument || !sharePrincipal.trim()}
+              className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {t.documents.share}
+            </button>
+            <button
+              type="button"
+              onClick={handleTrash}
+              disabled={!selectedDocument}
+              className="rounded border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+            >
+              {t.documents.moveToTrash}
+            </button>
+          </>
+        )}
       </div>
 
-      {status ? <p role="status" className="mb-3 text-sm text-gray-700">{status}</p> : null}
+      {message ? <p role="status" className="mb-3 text-sm text-gray-700">{message}</p> : null}
 
       <div className="rounded-lg border border-gray-200 p-8 text-center text-gray-500">
-        {loading ? <p>Loading documents...</p> : null}
+        {loading ? <p>{t.documents.loading}</p> : null}
         {!loading && documents.length ? (
           <ul className="space-y-2 text-left">
             {documents.map((doc) => (
@@ -195,7 +236,7 @@ export function DocumentsScreen() {
             ))}
           </ul>
         ) : null}
-        {!loading && documents.length === 0 ? t.documents.noDocuments : null}
+        {!loading && documents.length === 0 && !loadError ? (inTrash ? t.documents.trashEmpty : t.documents.noDocuments) : null}
       </div>
     </section>
   );

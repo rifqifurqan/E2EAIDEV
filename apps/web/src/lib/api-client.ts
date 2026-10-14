@@ -16,6 +16,8 @@ export interface MeResponse {
   user_id: string;
   email: string;
   display_name: string;
+  /** Session CSRF token, so Sign out still works after a page reload (the login response is gone). */
+  csrf_token?: string;
 }
 
 export interface LoginInput {
@@ -47,6 +49,17 @@ export interface Citation {
 
 export interface MessageResponse {
   answer: string;
+  citations: Citation[];
+  /** Assistant message id (conversation endpoints only); feedback and stop need it. */
+  message_id?: string;
+}
+
+export interface HistoryMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  stop_reason: string | null;
+  created_at: string;
   citations: Citation[];
 }
 
@@ -81,7 +94,7 @@ export interface DocumentSearchResponse {
   next_cursor: string | null;
 }
 
-export type DocViewParam = "my_documents" | "shared_with_me" | "my_team" | "all" | "everything";
+export type DocViewParam = "my_documents" | "shared_with_me" | "my_team" | "trash" | "all" | "everything";
 
 export interface BotGrantInput {
   principal: string;
@@ -491,6 +504,8 @@ export const api = {
       method: "POST",
       body: { question, scope, document_id: documentId },
     }),
+  listMessages: (convId: string) =>
+    apiFetch<{ messages: HistoryMessage[] }>(ENDPOINTS.messages(convId)),
   recordFeedback: (msgId: string, input: FeedbackInput) =>
     apiFetch<{ status: string; rating: string }>(ENDPOINTS.feedback(msgId), {
       method: "POST",

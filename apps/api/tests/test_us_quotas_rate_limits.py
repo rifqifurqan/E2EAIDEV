@@ -253,6 +253,13 @@ def test_quota_policy_crud_and_lookup():
                 effective3 = await get_effective_policy(session, user=andi)
                 assert effective3.requests_per_minute == 5  # user overrides division
 
+            # UAT-QUOTA-001: leave no policy behind. This suite shares the live dev DB, and a leftover
+            # 5 req/min + 500 token/day policy for Andi made every later chat/UAT call fail with 429.
+            await session.execute(delete(QuotaPolicyRow))
+            await session.commit()
+            cleaned = await get_effective_policy(session, user=andi)
+            assert cleaned.requests_per_minute > 5
+
     asyncio.run(run())
 
 

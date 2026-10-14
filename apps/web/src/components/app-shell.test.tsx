@@ -6,6 +6,7 @@ import { I18nProvider } from "@/i18n/context";
 
 const apiMock = vi.hoisted(() => ({
   login: vi.fn(),
+  logout: vi.fn(),
   me: vi.fn(),
 }));
 
@@ -26,6 +27,7 @@ function renderShell(locale: "en" | "id" = "en") {
 describe("AppShell", () => {
   beforeEach(() => {
     apiMock.login.mockReset();
+    apiMock.logout.mockReset();
     apiMock.me.mockReset();
     apiMock.me.mockRejectedValue(new Error("not authenticated"));
   });
@@ -128,5 +130,36 @@ describe("AppShell", () => {
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
     expect(apiMock.login).toHaveBeenCalledWith({ email: "admin@local", password: "secret-password" });
     expect(await screen.findByText(/signed in/i)).toBeInTheDocument();
+  });
+
+  it("hides the sign-in form once signed in and offers Sign out (UAT-AUTH-001)", async () => {
+    apiMock.login.mockResolvedValueOnce({ user_id: "u1", csrf_token: "csrf-1" });
+    renderShell();
+    await userEvent.type(screen.getByLabelText(/email/i), "andi@demo.e2eai");
+    await userEvent.type(screen.getByLabelText(/password/i), "secret-password");
+    await userEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+    expect(await screen.findByText(/signed in as andi@demo\.e2eai/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^sign in$/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
+  });
+
+  it("signs out with the CSRF token from the restored session and shows the form again", async () => {
+    apiMock.me.mockReset();
+    apiMock.me.mockResolvedValue({ user_id: "u1", email: "andi@demo.e2eai", display_name: "Andi", csrf_token: "csrf-from-me" });
+    apiMock.logout.mockResolvedValueOnce({ status: "ok" });
+    renderShell();
+    await userEvent.click(await screen.findByRole("button", { name: /sign out/i }));
+    expect(apiMock.logout).toHaveBeenCalledWith("csrf-from-me");
+    expect(await screen.findByRole("button", { name: /^sign in$/i })).toBeInTheDocument();
+    expect(screen.queryByText(/signed in as/i)).not.toBeInTheDocument();
+  });
+
+  it("localizes the signed-in status and sign-out in Indonesian", async () => {
+    apiMock.me.mockReset();
+    apiMock.me.mockResolvedValue({ user_id: "u1", email: "andi@demo.e2eai", display_name: "Andi", csrf_token: "c" });
+    renderShell("id");
+    expect(await screen.findByText(/masuk sebagai andi@demo\.e2eai/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /keluar/i })).toBeInTheDocument();
   });
 });

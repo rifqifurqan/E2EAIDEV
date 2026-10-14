@@ -38,6 +38,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authStatus, setAuthStatus] = useState("");
+  const [session, setSession] = useState<{ email: string; csrf: string } | null>(null);
 
   // Restore the signed-in state when a valid session cookie already exists (page reload / new route).
   useEffect(() => {
@@ -45,7 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     api
       .me()
       .then((me) => {
-        if (!cancelled) setAuthStatus(`Signed in as ${me.email}`);
+        if (!cancelled) setSession({ email: me.email, csrf: me.csrf_token ?? "" });
       })
       .catch(() => {
         /* not signed in: leave the login form as is */
@@ -74,46 +75,69 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {session ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-600">{`${t.auth.signedInAs} ${session.email}`}</span>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await api.logout(session.csrf);
+                    setSession(null);
+                    setAuthStatus("");
+                  } catch {
+                    setAuthStatus(t.auth.signOutFailed);
+                  }
+                }}
+                className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
+              >
+                {t.auth.signOut}
+              </button>
+              {authStatus ? <span className="text-xs text-red-700">{authStatus}</span> : null}
+            </div>
+          ) : (
           <form
             className="flex flex-wrap items-center gap-2"
             onSubmit={async (event) => {
               event.preventDefault();
-              setAuthStatus("Signing in...");
+              setAuthStatus(t.auth.signingIn);
               try {
-                await api.login({ email, password });
+                const res = await api.login({ email, password });
                 setPassword("");
-                setAuthStatus(`Signed in as ${email}`);
+                setAuthStatus("");
+                setSession({ email, csrf: res?.csrf_token ?? "" });
               } catch (error) {
-                setAuthStatus(error instanceof Error ? error.message : "Sign in failed");
+                setAuthStatus(error instanceof Error ? error.message : t.auth.signInFailed);
               }
             }}
           >
-            <label className="sr-only" htmlFor="login-email">Email</label>
+            <label className="sr-only" htmlFor="login-email">{t.auth.email}</label>
             <input
               id="login-email"
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="Email"
+              placeholder={t.auth.email}
               className="w-40 rounded border border-gray-300 px-2 py-1 text-sm"
             />
-            <label className="sr-only" htmlFor="login-password">Password</label>
+            <label className="sr-only" htmlFor="login-password">{t.auth.password}</label>
             <input
               id="login-password"
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="Password"
+              placeholder={t.auth.password}
               className="w-40 rounded border border-gray-300 px-2 py-1 text-sm"
             />
             <button
               type="submit"
               className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700"
             >
-              Sign in
+              {t.auth.signIn}
             </button>
             {authStatus ? <span className="text-xs text-gray-600">{authStatus}</span> : null}
           </form>
+          )}
           <button
             type="button"
             onClick={() => setLocale((locale === "en" ? "id" : "en") as Locale)}

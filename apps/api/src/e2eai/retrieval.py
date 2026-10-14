@@ -481,6 +481,25 @@ def _visible_document_clause(principal_list: list[str]):
     )
 
 
+DEFAULT_MIN_RELEVANCE = 0.30
+
+
+def min_relevance() -> float:
+    """Minimum cosine similarity for a chunk to count as context (UAT-CHAT-002).
+
+    Without a floor the nearest chunk is always returned, so an unrelated question ("president of
+    Mars") was answered with an unrelated document and a citation. Operators can tune it with
+    ``retrieval.min_relevance`` in e2eai.yaml (0 disables the floor).
+    """
+    try:
+        import yaml
+
+        cfg = yaml.safe_load((repo_root() / "e2eai.yaml").read_text(encoding="utf-8")) or {}
+        return float((cfg.get("retrieval") or {}).get("min_relevance", DEFAULT_MIN_RELEVANCE))
+    except (FileNotFoundError, TypeError, ValueError):
+        return DEFAULT_MIN_RELEVANCE
+
+
 async def answer_question(
     session: AsyncSession,
     *,
@@ -578,6 +597,9 @@ async def answer_question(
         scoped_folder_ids=scoped_folder_ids,
         mode=retrieval_mode,
     )
+    if retrieval_mode == "dense":  # hybrid scores are rank-fusion values, not cosine similarities
+        floor = min_relevance()
+        chunks = [c for c in chunks if c.get("score", 1.0) >= floor]
     safe_chunks: list[dict] = []
     blocked_count = 0
     blocked_reasons: set[str] = set()
@@ -669,6 +691,8 @@ async def answer_question(
         "answer": answer_text,
         "answer_language": answer_lang,
         "citations": citations,
+        # ids parallel to `citations` so chat history can link a stored citation to its document
+        "citation_document_ids": ([top_doc["document_id"]] if safe_chunks and top_doc and top_doc.get("document_id") else []),
     }
     result["memory"] = {"used": bool(memory_chunks), "count": len(memory_chunks)}
     if include_explainability:

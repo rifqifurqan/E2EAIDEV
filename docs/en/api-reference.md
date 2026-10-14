@@ -7,7 +7,7 @@ Requirement: FR-F22 (P1 API reference).
 API title: E2EAIDEV API
 API version: 0.1.0
 Total paths: 163
-Total operations: 179
+Total operations: 181
 
 ## How to regenerate
 
@@ -307,6 +307,12 @@ Most application routes require a scoped session or API key. This generated refe
 - Operation ID: `delete_conversation_api_api_v1_chat_conversations__conversation_id__delete`
 - Response status codes: 200, 422
 
+#### GET /api/v1/chat/conversations/{conversation_id}/messages
+
+- Summary: List Messages Api
+- Operation ID: `list_messages_api_api_v1_chat_conversations__conversation_id__messages_get`
+- Response status codes: 200, 422
+
 #### POST /api/v1/chat/conversations/{conversation_id}/messages
 
 - Summary: Send Message Api
@@ -354,6 +360,12 @@ Most application routes require a scoped session or API key. This generated refe
 - Response status codes: 200, 422
 
 ### documents
+
+#### GET /api/v1/documents
+
+- Summary: List Documents Api
+- Operation ID: `list_documents_api_api_v1_documents_get`
+- Response status codes: 200, 422
 
 #### POST /api/v1/documents
 

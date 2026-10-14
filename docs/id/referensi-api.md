@@ -7,7 +7,7 @@ Requirement: FR-F22 (referensi API P1).
 Judul API: E2EAIDEV API
 Versi API: 0.1.0
 Total path: 163
-Total operasi: 179
+Total operasi: 181
 
 ## Cara generate ulang
 
@@ -307,6 +307,12 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 - Operation ID: `delete_conversation_api_api_v1_chat_conversations__conversation_id__delete`
 - Kode status respons: 200, 422
 
+#### GET /api/v1/chat/conversations/{conversation_id}/messages
+
+- Ringkasan: List Messages Api
+- Operation ID: `list_messages_api_api_v1_chat_conversations__conversation_id__messages_get`
+- Kode status respons: 200, 422
+
 #### POST /api/v1/chat/conversations/{conversation_id}/messages
 
 - Ringkasan: Send Message Api
@@ -354,6 +360,12 @@ Sebagian besar route aplikasi memerlukan sesi atau API key berscope. Referensi g
 - Kode status respons: 200, 422
 
 ### documents
+
+#### GET /api/v1/documents
+
+- Ringkasan: List Documents Api
+- Operation ID: `list_documents_api_api_v1_documents_get`
+- Kode status respons: 200, 422
 
 #### POST /api/v1/documents
 

@@ -17,7 +17,7 @@ from . import audit
 from .auth import current_session, require_scope
 from .core.errors import AppError
 from .core.pagination import clamp_limit, decode_cursor, make_page
-from .db import Conversation, Message, MessageCitation, MessageFeedback, User, get_session
+from .db import Conversation, Document, Message, MessageCitation, MessageFeedback, User, get_session
 from .pii import mask_text
 from .retrieval import AnswerGenerator, Embedder, answer_question
 
@@ -153,9 +153,11 @@ async def send_message(
     await session.flush()
 
     # Store citations linked to the assistant message
-    for cite in result.get("citations", []):
+    doc_ids = result.get("citation_document_ids", [])
+    for i, cite in enumerate(result.get("citations", [])):
         session.add(MessageCitation(
             message_id=asst_msg.id,
+            document_id=uuid.UUID(doc_ids[i]) if i < len(doc_ids) else None,
             page=cite.get("page"),
             section=cite.get("section"),
         ))
@@ -176,6 +178,7 @@ async def send_message(
             )
 
     await session.commit()
+    result["message_id"] = str(asst_msg.id)  # UAT-CHAT-003: feedback/stop need the message id
     result["tool_calls"] = tool_calls
 
     # FR-X6: build combined citations from document citations + live tool-call results.
@@ -188,6 +191,31 @@ async def send_message(
     )
 
     return result
+
+
+async def list_messages(
+    session: AsyncSession, *, user: User, conversation_id: uuid.UUID
+) -> list[dict]:
+    """Chat history of one conversation, oldest first (UAT-CHAT-004). Owner-scoped: another user's
+    conversation answers 404 with no existence hint (FR-C12)."""
+    conv = await _own_conversation(session, user, conversation_id)
+    rows = (await session.execute(
+        select(Message).where(Message.conversation_id == conv.id).order_by(Message.created_at, Message.id)
+    )).scalars().all()
+    cites: dict[uuid.UUID, list[dict]] = {}
+    if rows:
+        for c in (await session.execute(
+            select(MessageCitation, Document.title)
+            .outerjoin(Document, Document.id == MessageCitation.document_id)
+            .where(MessageCitation.message_id.in_([m.id for m in rows]))
+        )).all():
+            cites.setdefault(c[0].message_id, []).append(
+                {"document": c[1], "page": c[0].page, "section": c[0].section})
+    return [
+        {"id": str(m.id), "role": m.role, "content": m.content, "stop_reason": m.stop_reason,
+         "created_at": m.created_at.isoformat(), "citations": cites.get(m.id, [])}
+        for m in rows
+    ]
 
 
 async def record_feedback(
@@ -348,6 +376,17 @@ async def delete_conversation_api(
     user = await _current_user(db, sess)
     await delete_conversation(db, user=user, conversation_id=conversation_id)
     return {"status": "deleted"}
+
+
+@router.get("/chat/conversations/{conversation_id}/messages")
+async def list_messages_api(
+    conversation_id: uuid.UUID,
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    require_scope(sess, "chat")
+    user = await _current_user(db, sess)
+    return {"messages": await list_messages(db, user=user, conversation_id=conversation_id)}
 
 
 @router.post("/chat/conversations/{conversation_id}/messages")

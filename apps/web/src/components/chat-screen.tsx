@@ -1,13 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "@/i18n/context";
-import { api, type ChatScope, type Citation } from "@/lib/api-client";
+import { api, type ChatScope, type Citation, type Conversation } from "@/lib/api-client";
 
 interface ChatMessage {
+  id?: string;
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
+}
+
+/** Error title from the API's problem+json (never the stack/detail), else the fallback. */
+function reason(error: unknown, fallback: string): string {
+  const title = (error as { title?: unknown } | null)?.title;
+  return typeof title === "string" && title ? title : fallback;
 }
 
 // Chat screen shell — internal component boundary.
@@ -18,8 +25,10 @@ export function ChatScreen() {
   const [scope, setScope] = useState<ChatScope>("all");
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [conversations, setConversations] = useState<string[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
+  const [notice, setNotice] = useState("");
   const [sending, setSending] = useState(false);
 
   const scopes: { value: ChatScope; label: string }[] = [
@@ -30,15 +39,49 @@ export function ChatScreen() {
     { value: "this_document", label: t.chat.scopeDocument },
   ];
 
+  // Saved conversations survive a reload (UAT-CHAT-001); a signed-out visitor just sees none.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .listConversations()
+      .then((result) => {
+        if (!cancelled) setConversations(result.conversations ?? []);
+      })
+      .catch(() => {
+        /* not signed in: leave the list empty */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant" && m.id)?.id;
+
   async function handleNewConversation() {
     setStatus("");
+    setNotice("");
     try {
       const conv = await api.createConversation(t.chat.newConversation);
-      setConversations((items) => [conv.id, ...items]);
+      setConversations((items) => [conv, ...items]);
+      setActiveId(conv.id);
       setMessages([]);
       setQuestion("");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Could not create conversation");
+      setStatus(reason(error, t.chat.requestFailed));
+    }
+  }
+
+  async function handleOpen(id: string) {
+    setStatus("");
+    setNotice("");
+    setActiveId(id);
+    try {
+      const history = await api.listMessages(id);
+      setMessages(
+        history.messages.map((m) => ({ id: m.id, role: m.role, content: m.content, citations: m.citations })),
+      );
+    } catch (error) {
+      setStatus(reason(error, t.chat.requestFailed));
     }
   }
 
@@ -47,18 +90,38 @@ export function ChatScreen() {
     if (!trimmed || sending) return;
     setSending(true);
     setStatus("");
-    setMessages((items) => [...items, { role: "user", content: trimmed }]);
-    setQuestion("");
+    setNotice("");
     try {
-      const response = await api.ask(trimmed, scope, undefined);
+      let convId = activeId;
+      if (!convId) {
+        // The first question starts a conversation named after it, so history is saved and findable.
+        const conv = await api.createConversation(trimmed.slice(0, 60));
+        convId = conv.id;
+        setConversations((items) => [conv, ...items]);
+        setActiveId(conv.id);
+      }
+      setMessages((items) => [...items, { role: "user", content: trimmed }]);
+      setQuestion("");
+      const response = await api.sendMessage(convId, trimmed, scope, undefined);
       setMessages((items) => [
         ...items,
-        { role: "assistant", content: response.answer, citations: response.citations ?? [] },
+        { id: response.message_id, role: "assistant", content: response.answer, citations: response.citations ?? [] },
       ]);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Chat request failed");
+      setStatus(reason(error, t.chat.requestFailed));
     } finally {
       setSending(false);
+    }
+  }
+
+  async function handleFeedback(rating: "up" | "down") {
+    if (!lastAssistantId) return;
+    setStatus("");
+    try {
+      await api.recordFeedback(lastAssistantId, { rating });
+      setNotice(t.chat.feedbackThanks);
+    } catch {
+      setStatus(t.chat.feedbackFailed);
     }
   }
 
@@ -82,9 +145,16 @@ export function ChatScreen() {
           <div className="flex-1 overflow-y-auto text-sm text-gray-500">
             {conversations.length ? (
               <ul className="space-y-1">
-                {conversations.map((id) => (
-                  <li key={id} className="rounded bg-gray-50 px-2 py-1 text-gray-700">
-                    {id}
+                {conversations.map((conv) => (
+                  <li key={conv.id}>
+                    <button
+                      type="button"
+                      onClick={() => void handleOpen(conv.id)}
+                      aria-current={conv.id === activeId ? "true" : undefined}
+                      className={`w-full rounded px-2 py-1 text-left text-gray-700 hover:bg-gray-100 ${conv.id === activeId ? "bg-blue-50 font-medium" : "bg-gray-50"}`}
+                    >
+                      {conv.title}
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -120,7 +190,7 @@ export function ChatScreen() {
               <ol className="space-y-3">
                 {messages.map((message, index) => (
                   <li
-                    key={`${message.role}-${index}`}
+                    key={`${message.id ?? message.role}-${index}`}
                     className={message.role === "assistant" ? "rounded bg-white p-3" : "rounded bg-blue-50 p-3"}
                   >
                     <p className="text-sm font-semibold capitalize">{message.role}</p>
@@ -159,7 +229,7 @@ export function ChatScreen() {
               disabled={sending || !question.trim()}
               className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              Send
+              {t.chat.send}
             </button>
             <button
               type="button"
@@ -171,18 +241,23 @@ export function ChatScreen() {
           </div>
 
           {status ? <p role="status" className="mt-2 text-sm text-red-700">{status}</p> : null}
+          {notice ? <p role="status" className="mt-2 text-sm text-green-700">{notice}</p> : null}
 
           <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
             <span>{t.chat.feedback}</span>
             <button
               type="button"
-              className="rounded border border-green-300 px-2 py-1 text-green-700 hover:bg-green-50"
+              disabled={!lastAssistantId}
+              onClick={() => void handleFeedback("up")}
+              className="rounded border border-green-300 px-2 py-1 text-green-700 hover:bg-green-50 disabled:opacity-50"
             >
               {t.chat.thumbsUp}
             </button>
             <button
               type="button"
-              className="rounded border border-red-300 px-2 py-1 text-red-700 hover:bg-red-50"
+              disabled={!lastAssistantId}
+              onClick={() => void handleFeedback("down")}
+              className="rounded border border-red-300 px-2 py-1 text-red-700 hover:bg-red-50 disabled:opacity-50"
             >
               {t.chat.thumbsDown}
             </button>
