@@ -6,6 +6,7 @@ import { I18nProvider } from "@/i18n/context";
 
 const apiMock = vi.hoisted(() => ({
   deactivateUser: vi.fn(),
+  getOrgSnapshot: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -15,6 +16,16 @@ vi.mock("@/lib/api-client", async () => {
 
 const TARGET = "3f2c8a52-1b7e-4c1d-9a55-0d2f6a9b7c11";
 const MANAGER = "9a1d4e07-2c3b-4f6a-8b10-5e7d9c0a1f22";
+
+const SNAPSHOT = {
+  org_id: "11111111-1111-4111-8111-111111111111",
+  divisions: [{ id: "d1", org_id: "o", name: "Finance" }],
+  teams: [{ id: "t1", division_id: "d1", name: "Payroll Team" }],
+  users: [
+    { id: "u1", org_id: "o", email: "andi@demo.e2eai", display_name: "Andi", status: "active", division_id: "d1", manager_id: null },
+    { id: "u2", org_id: "o", email: "budi@demo.e2eai", display_name: "Budi", status: "disabled", division_id: null, manager_id: null },
+  ],
+};
 
 function renderAdmin(locale: "en" | "id" = "en") {
   return render(
@@ -27,6 +38,8 @@ function renderAdmin(locale: "en" | "id" = "en") {
 describe("AdminScreen", () => {
   beforeEach(() => {
     apiMock.deactivateUser.mockReset();
+    apiMock.getOrgSnapshot.mockReset();
+    apiMock.getOrgSnapshot.mockResolvedValue(SNAPSHOT);
   });
 
   it("renders offboarding section", () => {
@@ -127,5 +140,38 @@ describe("AdminScreen", () => {
   it("has accessible heading", () => {
     renderAdmin();
     expect(screen.getByRole("heading", { name: /admin/i })).toBeInTheDocument();
+  });
+
+  it("lists divisions, teams and users from the org snapshot", async () => {
+    renderAdmin();
+    const org = await screen.findByRole("region", { name: /organization/i });
+    expect(org).toHaveTextContent("Finance");
+    expect(org).toHaveTextContent("Payroll Team");
+    expect(org).toHaveTextContent("Andi");
+    expect(org).toHaveTextContent("andi@demo.e2eai");
+    expect(org).toHaveTextContent(/disabled/i);
+    expect(apiMock.getOrgSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an admin-only notice when the org snapshot is forbidden", async () => {
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.getOrgSnapshot.mockRejectedValue(new ApiError(403, "Not allowed"));
+    renderAdmin();
+    expect(await screen.findByText(/organization view is available to admins only/i)).toBeInTheDocument();
+    expect(screen.queryByText("Finance")).not.toBeInTheDocument();
+  });
+
+  it("shows a generic error without server text when the org snapshot fails", async () => {
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.getOrgSnapshot.mockRejectedValue(new ApiError(500, "db exploded", "trace"));
+    renderAdmin();
+    expect(await screen.findByText(/could not load the organization/i)).toBeInTheDocument();
+    expect(screen.queryByText(/db exploded|trace/i)).not.toBeInTheDocument();
+  });
+
+  it("renders the organization panel in Indonesian", async () => {
+    renderAdmin("id");
+    const org = await screen.findByRole("region", { name: /organisasi/i });
+    expect(org).toHaveTextContent("Payroll Team");
   });
 });

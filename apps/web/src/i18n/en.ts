@@ -178,6 +178,12 @@ const en = {
     users: "Users",
     divisions: "Divisions",
     teams: "Teams",
+    organization: "Organization",
+    orgLoading: "Loading...",
+    orgAdminOnly: "The organization view is available to admins only.",
+    orgLoadFailed: "Could not load the organization.",
+    orgEmpty: "None yet.",
+    statusDisabled: "disabled",
   },
   data: {
     title: "Documents due for review",

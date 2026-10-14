@@ -52,7 +52,7 @@ def _ids():
                 await s.flush()
                 s.add(UserRole(user_id=admin.id, role_id=role.id))
                 await s.commit()
-            return org.id, andi.id, admin.id
+            return admin.org_id, andi.id, admin.id
 
     return asyncio.run(run())
 
@@ -103,3 +103,15 @@ def test_admin_succeeds_and_audit_actor_is_the_session_user_not_the_body():
             )
 
     assert asyncio.run(audited()) == f"user:{admin_id}"
+
+
+def test_snapshot_defaults_to_the_admins_own_org_and_rejects_another_org():
+    _migrate()
+    org_id, _, admin_id = _ids()
+    c = _app(admin_id)
+    r = c.get("/api/v1/admin/org/snapshot")
+    assert r.status_code == 200, r.text
+    assert r.json()["org_id"] == str(org_id)
+    assert {"divisions", "teams", "users"} <= set(r.json())
+    other = c.get("/api/v1/admin/org/snapshot", params={"org_id": str(uuid.uuid4())})
+    assert other.status_code == 403

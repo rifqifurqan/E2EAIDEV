@@ -180,6 +180,12 @@ const id: Dictionary = {
     users: "Pengguna",
     divisions: "Divisi",
     teams: "Tim",
+    organization: "Organisasi",
+    orgLoading: "Memuat...",
+    orgAdminOnly: "Tampilan organisasi hanya tersedia untuk admin.",
+    orgLoadFailed: "Tidak dapat memuat organisasi.",
+    orgEmpty: "Belum ada.",
+    statusDisabled: "nonaktif",
   },
   data: {
     title: "Dokumen yang jatuh tempo ditinjau",

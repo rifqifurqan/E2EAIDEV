@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useI18n } from "@/i18n/context";
-import { api } from "@/lib/api-client";
+import { api, type OrgSnapshot } from "@/lib/api-client";
+import { useAdminData } from "@/lib/use-admin-data";
 
 const RUNBOOK_BASE = "/docs/runbooks";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -25,6 +26,7 @@ export function AdminScreen() {
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const org = useAdminData<OrgSnapshot>(() => api.getOrgSnapshot());
 
   const target = targetId.trim();
   const owner = ownerId.trim();
@@ -125,6 +127,67 @@ export function AdminScreen() {
             </form>
           ) : null}
         </div>
+
+        {/* Organization */}
+        <section aria-labelledby="admin-org-title" className="rounded-lg border border-gray-200 p-4 lg:col-span-2">
+          <h2 id="admin-org-title" className="mb-3 text-lg font-semibold">
+            {t.admin.organization}
+          </h2>
+          {org.kind === "loading" ? <p className="text-sm text-gray-600">{t.admin.orgLoading}</p> : null}
+          {org.kind === "forbidden" ? (
+            <p role="alert" className="text-sm text-amber-700">
+              {t.admin.orgAdminOnly}
+            </p>
+          ) : null}
+          {org.kind === "error" ? (
+            <p role="alert" className="text-sm text-red-700">
+              {t.admin.orgLoadFailed}
+            </p>
+          ) : null}
+          {org.kind === "ready" ? (
+            <div className="grid gap-4 md:grid-cols-3 text-sm">
+              <div>
+                <h3 className="mb-1 font-medium">{t.admin.divisions}</h3>
+                {org.data.divisions.length === 0 ? (
+                  <p className="text-gray-600">{t.admin.orgEmpty}</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {org.data.divisions.map((d) => (
+                      <li key={d.id}>{d.name}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <h3 className="mb-1 font-medium">{t.admin.teams}</h3>
+                {org.data.teams.length === 0 ? (
+                  <p className="text-gray-600">{t.admin.orgEmpty}</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {org.data.teams.map((team) => (
+                      <li key={team.id}>{team.name}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <h3 className="mb-1 font-medium">{t.admin.users}</h3>
+                {org.data.users.length === 0 ? (
+                  <p className="text-gray-600">{t.admin.orgEmpty}</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {org.data.users.map((u) => (
+                      <li key={u.id}>
+                        {u.display_name} <span className="text-gray-600">({u.email})</span>
+                        {u.status === "disabled" ? <span className="ml-1 text-red-700">[{t.admin.statusDisabled}]</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </section>
 
         {/* Runbooks */}
         <div className="rounded-lg border border-gray-200 p-4">

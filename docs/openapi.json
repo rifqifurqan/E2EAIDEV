@@ -4429,16 +4429,24 @@
     },
     "/api/v1/admin/org/snapshot": {
       "get": {
+        "description": "Org snapshot; ``org_id`` defaults to the admin's own organization and may not name another.",
         "operationId": "org_snapshot_route_api_v1_admin_org_snapshot_get",
         "parameters": [
           {
             "in": "query",
             "name": "org_id",
-            "required": true,
+            "required": false,
             "schema": {
-              "format": "uuid",
-              "title": "Org Id",
-              "type": "string"
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Org Id"
             }
           },
           {

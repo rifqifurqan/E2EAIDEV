@@ -250,6 +250,35 @@ export interface AIInventoryEntry {
   approval_status: string;
 }
 
+export interface OrgDivision {
+  id: string;
+  org_id: string;
+  name: string;
+}
+
+export interface OrgTeam {
+  id: string;
+  division_id: string;
+  name: string;
+}
+
+export interface OrgUser {
+  id: string;
+  org_id: string;
+  email: string;
+  display_name: string;
+  status: string;
+  division_id: string | null;
+  manager_id: string | null;
+}
+
+export interface OrgSnapshot {
+  org_id: string;
+  divisions: OrgDivision[];
+  teams: OrgTeam[];
+  users: OrgUser[];
+}
+
 export interface AIInventoryList {
   items: AIInventoryEntry[];
   next_cursor: string | null;
@@ -372,6 +401,7 @@ export const ENDPOINTS = {
   botRiskClassification: (botId: string) => `/bots/${botId}/risk-classification`,
   botAsk: (botId: string) => `/bots/${botId}/ask`,
   deactivateUser: (userId: string) => `/users/${userId}/deactivate`,
+  orgSnapshot: "/admin/org/snapshot",
   incidents: "/incidents",
   incidentPostmortem: (incidentId: string) => `/incidents/${incidentId}/postmortem`,
   incidentTransition: (incidentId: string) => `/incidents/${incidentId}/transition`,
@@ -641,6 +671,7 @@ export const api = {
     }),
 
   // Admin
+  getOrgSnapshot: () => apiFetch<OrgSnapshot>(ENDPOINTS.orgSnapshot),
   deactivateUser: (userId: string, input: DeactivateInput) =>
     apiFetch<DeactivateResponse>(ENDPOINTS.deactivateUser(userId), {
       method: "POST",

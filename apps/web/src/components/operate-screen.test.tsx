@@ -10,6 +10,7 @@ const apiMock = vi.hoisted(() => ({
   transitionIncident: vi.fn(),
   recordPostmortem: vi.fn(),
   reportIncident: vi.fn(),
+  getOrgSnapshot: vi.fn().mockResolvedValue({ org_id: "o", divisions: [], teams: [], users: [] }),
 }));
 
 vi.mock("@/lib/api-client", async () => {

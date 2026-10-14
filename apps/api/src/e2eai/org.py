@@ -349,8 +349,8 @@ class ProjectOwnerIn(BaseModel):
 router = APIRouter(prefix="/api/v1/admin/org", tags=["admin"])
 
 
-async def _org_admin(sess: dict = Depends(current_session), session: AsyncSession = Depends(get_session)) -> str:
-    """Authenticate and require the admin role (FR-F2); returns the audit actor derived from the session."""
+async def _org_admin_user(sess: dict = Depends(current_session), session: AsyncSession = Depends(get_session)) -> User:
+    """Authenticate and require an org-wide admin role (FR-F2)."""
     require_scope(sess, "admin")
     user = await session.get(User, uuid.UUID(sess["user_id"]))
     if user is None or user.status != "active":
@@ -361,6 +361,11 @@ async def _org_admin(sess: dict = Depends(current_session), session: AsyncSessio
     )
     if not granted:
         raise AppError(403, "Not allowed")
+    return user
+
+
+async def _org_admin(user: User = Depends(_org_admin_user)) -> str:
+    """Audit actor derived from the session, never from the request body."""
     return f"user:{user.id}"
 
 
@@ -445,5 +450,13 @@ async def update_project_owner_route(
 
 
 @router.get("/snapshot")
-async def org_snapshot_route(org_id: uuid.UUID, project_id: uuid.UUID | None = None, session: AsyncSession = Depends(get_session), actor: str = Depends(_org_admin)) -> dict:
-    return await org_snapshot(session, org_id=org_id, project_id=project_id)
+async def org_snapshot_route(
+    org_id: uuid.UUID | None = None,
+    project_id: uuid.UUID | None = None,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(_org_admin_user),
+) -> dict:
+    """Org snapshot; ``org_id`` defaults to the admin's own organization and may not name another."""
+    if org_id is not None and org_id != admin.org_id:
+        raise AppError(403, "Not allowed")
+    return await org_snapshot(session, org_id=admin.org_id, project_id=project_id)
