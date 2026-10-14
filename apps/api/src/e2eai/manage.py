@@ -4,6 +4,7 @@ import asyncio
 import subprocess
 import uuid
 from pathlib import Path
+from typing import Optional
 
 import typer
 
@@ -59,6 +60,49 @@ def seed_demo_cmd() -> None:
         return
     typer.secho("Demo org seeded (Andi, Budi, Intern).", fg=typer.colors.GREEN)
     typer.secho(f"Demo user password (shown once): {password}", fg=typer.colors.YELLOW)
+
+
+def _run_reset_admin() -> str:
+    """Run reset_admin_password against the live DB; returns the plaintext password."""
+    from .seed import reset_admin_password
+
+    return _run(reset_admin_password)
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[4]  # e2eai -> src -> api -> apps -> repo root
+
+
+@app.command("reset-admin-password")
+def reset_admin_password_cmd(
+    creds_file: Optional[str] = typer.Option(None, "--creds-file", help="Write email and password to this file (must be outside the repo)."),
+) -> None:
+    """Reset the browser-login admin password (or create the admin if missing) and print or save it.
+
+    For UAT: pass --creds-file to a path OUTSIDE the repo so the credential never gets committed.
+    """
+    from .seed import ADMIN_EMAIL
+
+    if creds_file:
+        creds_path = Path(creds_file).resolve()
+        repo = _repo_root()
+        try:
+            creds_path.relative_to(repo)
+            # If relative_to succeeds, the path is inside the repo — reject.
+            typer.secho(f"Refused: {creds_path} is inside the repo ({repo}). Use a path outside the repo.", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        except ValueError:
+            pass  # Outside the repo — safe.
+
+    password = _run_reset_admin()
+    typer.secho(f"Admin password reset: {ADMIN_EMAIL}", fg=typer.colors.GREEN)
+    if creds_file:
+        creds_path = Path(creds_file).resolve()
+        creds_path.parent.mkdir(parents=True, exist_ok=True)
+        creds_path.write_text(f"{ADMIN_EMAIL}\n{password}\n")
+        typer.echo(f"Credentials written to {creds_path}")
+    else:
+        typer.secho(f"Password (shown once — store it now): {password}", fg=typer.colors.YELLOW)
 
 
 @app.command("bootstrap-authz")

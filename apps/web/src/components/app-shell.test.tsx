@@ -137,10 +137,10 @@ describe("AppShell", () => {
   it("lets a user sign in from the shell header", async () => {
     apiMock.login.mockResolvedValueOnce({ user_id: "u1", csrf_token: "csrf" });
     renderShell();
-    await userEvent.type(screen.getByLabelText(/email/i), "admin@local");
+    await userEvent.type(screen.getByLabelText(/email/i), "admin@local.e2eai");
     await userEvent.type(screen.getByLabelText(/password/i), "secret-password");
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
-    expect(apiMock.login).toHaveBeenCalledWith({ email: "admin@local", password: "secret-password" });
+    expect(apiMock.login).toHaveBeenCalledWith({ email: "admin@local.e2eai", password: "secret-password" });
     expect(await screen.findByText(/signed in/i)).toBeInTheDocument();
   });
 

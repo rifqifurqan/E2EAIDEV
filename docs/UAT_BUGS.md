@@ -1,12 +1,17 @@
 # UAT Bug List — E2EAIDEV Live Web
 
-Date: 2026-10-14 (run 4)
-Latest result: full v4 **37/0** plus mobile-nav **9/0**. Evidence `e2eaidev-uat4-1791963285993` and `e2eaidev-uat-mobile-1791963402626` under Hermes scratch (`C:/Users/riqan/AppData/Local/hermes/cache/scratch/`). Previous passing evidence: `e2eaidev-uat4-1791961850058`, `e2eaidev-uat3-1791960461338` and `e2eaidev-uat-1791960549558`. Before-fix evidence: `e2eaidev-uat2-1791957806874`.
+Date: 2026-10-14 (run 5)
+Latest result: full v4 **37/0**, mobile-nav **9/0**, and admin-mutation **9/0**. Evidence `e2eaidev-uat4-1791966120479`, `e2eaidev-uat-mobile-1791966218787`, and `e2eaidev-uat-admin-1791966227548` under Hermes scratch (`C:/Users/riqan/AppData/Local/hermes/cache/scratch/`). Previous passing evidence: `e2eaidev-uat4-1791963285993`, `e2eaidev-uat4-1791961850058`, `e2eaidev-uat3-1791960461338` and `e2eaidev-uat-1791960549558`. Before-fix evidence: `e2eaidev-uat2-1791957806874`.
 
 ## Open (prioritized)
 
-1. **UAT-ADMIN-001 — No admin demo account, so admin mutation flows cannot be UAT'd.** Severity: Medium (coverage gap). Add a documented admin login path for UAT.
-2. **UAT-CHAT-006 — Citations panel is a flat list across the whole conversation.** Severity: Low. After several answers it repeats documents; it should be per answer. (The "no citation for an unrelated question" case is correct and verified.)
+1. **UAT-CHAT-006 — Citations panel is a flat list across the whole conversation.** Severity: Low. After several answers it repeats documents; it should be per answer. (The "no citation for an unrelated question" case is correct and verified.)
+
+## Fixed in run 5
+
+| ID | Sev | Problem (reproduced live) | Fix | Proof |
+|---|---|---|---|---|
+| UAT-ADMIN-001 | Medium | No admin demo account existed, so admin mutation flows could not be UAT'd; the legacy `admin@local` address was also rejected by the API login schema | Added `e2eai-api reset-admin-password [--creds-file PATH]` CLI command: resets or creates/migrates `admin@local.e2eai` with a random password; `--creds-file` writes credentials to a file outside the repo (rejects in-repo paths); no committed secret, no web backdoor | `test_reset_admin_password.py` + adjacent auth/seed tests: 17 passed; `app-shell.test.tsx`: 15 passed; live admin UAT `e2eaidev-uat-admin-1791966227548`: 9/0 |
 
 ## Fixed in run 4
 

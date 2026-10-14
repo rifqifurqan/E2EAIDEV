@@ -1,9 +1,10 @@
 # Live Web UAT — E2EAIDEV
 
-Date: 2026-10-14 (run 4, cron)
+Date: 2026-10-14 (run 5)
 Tester: Hermes Agent + Claude Code review, headed Playwright / Chrome (non-headless, slowMo 50–60)
 Target web: http://127.0.0.1:13000 · Target API: http://127.0.0.1:8000
 Demo user: `andi@demo.e2eai` (not an org admin). Its local password lives only in Hermes scratch, never in the repo.
+Admin user: `admin@local.e2eai` (org admin). Reset with `e2eai-api reset-admin-password --creds-file <path-outside-repo>`. The generated password is never committed.
 
 ## Evidence (Hermes scratch, `C:/Users/riqan/AppData/Local/hermes/cache/scratch/`)
 
@@ -13,6 +14,7 @@ Demo user: `andi@demo.e2eai` (not an org admin). Its local password lives only i
 - Run 2 after fixes, original script: `e2eaidev-uat-1791960549558` (**22 pass / 0 fail**)
 - Run 3 after UAT-CHAT-005 fix, v4 script: `e2eaidev-uat4-1791961850058` (**37 pass / 0 fail**), screenshots `01-…25-*.png`; visual spot-check `08-chat-stop.png` shows the green "Generation stopped." notice and the expected `cuti-uat.txt · page 1` citation.
 - Run 4 after UAT-NAV-001 fix: full v4 script `e2eaidev-uat4-1791963285993` (**37 pass / 0 fail**) plus mobile-nav script `e2eaidev-uat-mobile-1791963402626` (**9 pass / 0 fail**), screenshots `01-mobile-home-nav.png` through `04-mobile-admin.png`; visual spot-check `01-mobile-home-nav.png` shows Documents / Chat / Admin visible on a 390 px-wide viewport.
+- Run 5 after UAT-ADMIN-001 fix: full v4 script `e2eaidev-uat4-1791966120479` (**37 pass / 0 fail**), mobile-nav script `e2eaidev-uat-mobile-1791966218787` (**9 pass / 0 fail**), and admin-mutation script `e2eaidev-uat-admin-1791966227548` (**9 pass / 0 fail**). Admin evidence includes login as `admin@local.e2eai`, org snapshot load, create division, create team, create user, add team member, and grant evaluator role.
 - Scripts: `e2eaidev_uat_live.js` (happy path), `e2eaidev_uat_v2.js` (negative paths, found run-2 bugs), `e2eaidev_uat_v3.js` (run-2 regression), `e2eaidev_uat_v4.js` (run-3 Stop regression). Not yet committed as a repo suite (they need the scratch-held demo password).
 
 ## Prerequisites verified
@@ -59,6 +61,8 @@ Health
 
 ## Fixes made from this run (all TDD, see UAT_BUGS.md)
 
+Run 5: Admin login path for UAT. `e2eai-api reset-admin-password --creds-file <path>` resets or creates/migrates `admin@local.e2eai` with a random password and writes credentials to a scratch file outside the repo. No committed secret, no web backdoor; the CLI command refuses to write inside the repo tree. The headed admin UAT now covers admin login, organization snapshot, create division/team/user, add team member, and grant role. The original `admin@local` value was not browser/API-login compatible because Pydantic `EmailStr` rejects addresses without a dotted domain.
+
 Run 4: Mobile feature navigation is now reachable below the `md` breakpoint. App shell renders a dedicated mobile feature nav for Documents / Chat / Admin above the main content while keeping the desktop sidebar at `md` and up; EN/ID landmark labels and link labels are covered by component tests and a headed 390 px Playwright UAT.
 
 Run 3: Chat Stop is now wired to real behavior. The web client creates an `AbortController` for each send, disables Stop when nothing can be stopped, drops a late answer after an abort, calls `api.stopMessage(message_id)` when a stopped/finished assistant message id exists, and uses localized EN/ID status text.
@@ -86,7 +90,7 @@ Web: Sign out and hidden login form; "Move to Trash" label, Trash tab with Resto
 
 ## Not tested
 
-- Admin mutations (org forms, offboarding, flywheel triage, incident report): Andi is not an admin and no admin demo login exists, so only the admin-only notices were verified.
+- Admin offboarding, flywheel triage, incident report: still not exercised in a headed UAT run. Admin org mutations (create division/team/user, add team member, grant role) are now covered.
 - Drag-and-drop upload, files over quota, real PDF/DOCX (Docling not installed), screen-reader walkthrough, concurrent sessions, session idle expiry.
 - Production server (`pnpm start`); UAT ran against `pnpm dev`.
 - Browser UX for rate-limit / token-quota 429 responses.
