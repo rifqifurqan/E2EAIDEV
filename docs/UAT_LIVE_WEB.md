@@ -1,6 +1,6 @@
 # Live Web UAT — E2EAIDEV
 
-Date: 2026-10-14 (run 6)
+Date: 2026-10-14 (run 7)
 Tester: Hermes Agent + Claude Code review, headed Playwright / Chrome (non-headless, slowMo 50–60)
 Target web: http://127.0.0.1:13000 · Target API: http://127.0.0.1:8000
 Demo user: `andi@demo.e2eai` (not an org admin). Its local password lives only in Hermes scratch, never in the repo.
@@ -16,7 +16,8 @@ Admin user: `admin@local.e2eai` (org admin). Reset with `e2eai-api reset-admin-p
 - Run 4 after UAT-NAV-001 fix: full v4 script `e2eaidev-uat4-1791963285993` (**37 pass / 0 fail**) plus mobile-nav script `e2eaidev-uat-mobile-1791963402626` (**9 pass / 0 fail**), screenshots `01-mobile-home-nav.png` through `04-mobile-admin.png`; visual spot-check `01-mobile-home-nav.png` shows Documents / Chat / Admin visible on a 390 px-wide viewport.
 - Run 5 after UAT-ADMIN-001 fix: full v4 script `e2eaidev-uat4-1791966120479` (**37 pass / 0 fail**), mobile-nav script `e2eaidev-uat-mobile-1791966218787` (**9 pass / 0 fail**), and admin-mutation script `e2eaidev-uat-admin-1791966227548` (**9 pass / 0 fail**). Admin evidence includes login as `admin@local.e2eai`, org snapshot load, create division, create team, create user, add team member, and grant evaluator role.
 - Run 6 after UAT-CHAT-006 fix: full v5 script `e2eaidev-uat5-1791967780471` (**37 pass / 0 fail**), mobile-nav script `e2eaidev-uat-mobile-1791967554354` (**9 pass / 0 fail**), admin-mutation script `e2eaidev-uat-admin-1791967877237` (**9 pass / 0 fail**). v5 = v4 with the citation check changed to assert the panel shows only the latest answer (`chat-citations-panel-shows-latest-answer-only`). Environment: web on :13000 was hung (accepting TCP, never answering HTTP); fixed by SIGTERM of the stale dev process, wiping `.next`, restarting `pnpm dev`.
-- Scripts: `e2eaidev_uat_v5.js` (current full run), `e2eaidev_uat_live.js` (happy path), `e2eaidev_uat_v2.js` (negative paths, found run-2 bugs), `e2eaidev_uat_v3.js` (run-2 regression), `e2eaidev_uat_v4.js` (run-3 Stop regression). Not yet committed as a repo suite (they need the scratch-held demo password).
+- Run 7: baseline v5 run -> 34/3 (one `500 POST /api/v1/documents` on upload; evidence `e2eaidev-uat5-1791975370681`); second run 34/3 (chat failed because leftover probe docs said "12 hari"; `e2eaidev-uat5-1791975714101`); after trashing probe docs: v5 **37/0** twice (`e2eaidev-uat5-1791975882751`, `e2eaidev-uat5-1791975981683`). New ops script `e2eaidev_uat_ops.js` (admin): **14/0** (`e2eaidev-uat-ops-1791976353799`) covering Operate incident report (empty-title disabled, create, appears in list, form cleared), incident transition, Improve/Admin pages as admin, empty-file upload (clear 400 message), binary upload (no crash), admin sign-out. The first ops run had 2 FAILs that were my script reading the page before the ~5.5 s report round trip finished; waiting for the form to clear made them pass.
+- Scripts: `e2eaidev_uat_ops.js` (admin Operate/Improve/Admin/upload edge cases), `e2eaidev_uat_v5.js` (current full run), `e2eaidev_uat_live.js` (happy path), `e2eaidev_uat_v2.js` (negative paths, found run-2 bugs), `e2eaidev_uat_v3.js` (run-2 regression), `e2eaidev_uat_v4.js` (run-3 Stop regression). Not yet committed as a repo suite (they need the scratch-held demo password).
 
 ## Prerequisites verified
 
@@ -78,6 +79,7 @@ Web: Sign out and hidden login form; "Move to Trash" label, Trash tab with Resto
 
 ## Verification gates (this run)
 
+- Run 7: `cd apps/api && uv run pytest -q tests/test_resilient_http_nfr19.py` -> RED 2 failed, GREEN 7 passed; adjacent (resilience, circuit breaker, upload ingest, cited answer, vector store, semantic cache, chat conversations, doc lifecycle, UAT principal/relevance, documents list, quotas, retrieval metrics, metrics) -> 94 passed. Web untouched, so web typecheck/lint/build were not re-run. Live API process was not restarted (process kill blocked in the cron session), so the running server still has the old retry set until its next restart.
 - Run 6: `cd apps/web && pnpm vitest run src/components/chat-screen.test.tsx` -> RED 1 failed, then 20 passed; `pnpm vitest run` -> 21 files / 321 tests passed; `pnpm run typecheck` ok; `pnpm run lint` clean; `pnpm run build` ok (then `.next` wiped and dev restarted). Headed Playwright: v5 37/0, mobile 9/0, admin 9/0. Skipped on purpose: full API/CLI suites and `verify-phase-0` (web-only change).
 
 - Run 4: TDD RED `cd apps/web && pnpm vitest run src/components/app-shell.test.tsx` -> 1 failed (`mobile feature navigation` missing). GREEN after the fix -> 15 passed.
@@ -96,7 +98,9 @@ Web: Sign out and hidden login form; "Move to Trash" label, Trash tab with Resto
 
 ## Not tested
 
-- Admin offboarding, flywheel triage, incident report: still not exercised in a headed UAT run. Admin org mutations (create division/team/user, add team member, grant role) are now covered.
+- Run 7: Admin offboarding and flywheel *triage actions* (queue was empty, so only page load was verified). Cold-start progress UI for slow first upload.
+
+- Admin offboarding and flywheel triage actions: not exercised (empty queue). Incident report + transition (run 7) and admin org mutations (run 5) are covered.
 - Drag-and-drop upload, files over quota, real PDF/DOCX (Docling not installed), screen-reader walkthrough, concurrent sessions, session idle expiry.
 - Production server (`pnpm start`); UAT ran against `pnpm dev`.
 - Browser UX for rate-limit / token-quota 429 responses.

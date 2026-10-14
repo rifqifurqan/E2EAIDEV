@@ -117,7 +117,8 @@ def reset_breakers() -> None:
     _NAMES.clear()
 
 
-RETRY_STATUS = frozenset({429, 502, 503, 504})
+# 500 included: LiteLLM answers 500 while a local model runner reloads or crashes (seen in live UAT); the call is idempotent.
+RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 
 
 class _RetryableStatus(Exception):

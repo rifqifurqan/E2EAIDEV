@@ -92,3 +92,19 @@ def test_answer_generator_gets_503_when_gateway_stays_down():
     with pytest.raises(AppError) as e:
         asyncio.run(gen.generate("q", [], "en"))
     assert e.value.status == 503
+
+
+def test_embedder_retries_gateway_500_then_succeeds():
+    """UAT: a model runner that just crashed/reloaded makes LiteLLM answer 500; one retry should recover."""
+    ok = Resp(200, {"data": [{"embedding": [0.1, 0.2]}]})
+    factory, calls = factory_for([Resp(500), ok])
+    emb = LiteLLMEmbedder(base_url="http://x", api_key="k" * 20, model="m", client_factory=factory)
+    assert asyncio.run(emb.embed(["hello"])) == [[0.1, 0.2]] and calls["n"] == 2
+
+
+def test_embedder_persistent_gateway_error_is_a_clear_502_not_unhandled():
+    factory, calls = factory_for([Resp(500)] * 3)
+    emb = LiteLLMEmbedder(base_url="http://x", api_key="k" * 20, model="m", client_factory=factory)
+    with pytest.raises(AppError) as e:
+        asyncio.run(emb.embed(["hello"]))
+    assert e.value.status in (502, 503) and "Bearer" not in str(e.value.detail)

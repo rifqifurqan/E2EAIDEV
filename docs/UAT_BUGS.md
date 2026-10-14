@@ -1,11 +1,19 @@
 # UAT Bug List — E2EAIDEV Live Web
 
-Date: 2026-10-14 (run 6)
+Date: 2026-10-14 (run 7)
 Latest result: full v5 **37/0**, mobile-nav **9/0**, and admin-mutation **9/0**. Evidence `e2eaidev-uat5-1791967780471`, `e2eaidev-uat-mobile-1791967554354`, and `e2eaidev-uat-admin-1791967877237` under Hermes scratch (`C:/Users/riqan/AppData/Local/hermes/cache/scratch/`). Previous: `e2eaidev-uat4-1791966120479`, `e2eaidev-uat-mobile-1791966218787`, `e2eaidev-uat-admin-1791966227548`. Previous passing evidence: `e2eaidev-uat4-1791963285993`, `e2eaidev-uat4-1791961850058`, `e2eaidev-uat3-1791960461338` and `e2eaidev-uat-1791960549558`. Before-fix evidence: `e2eaidev-uat2-1791957806874`.
 
 ## Open (prioritized)
 
-None verified open. Candidates not yet exercised in a headed run: see "Not tested" in UAT_LIVE_WEB.md.
+None verified open. Run 7 hardened one intermittent case (UAT-DOC-006 below). Candidates not yet exercised in a headed run: see "Not tested" in UAT_LIVE_WEB.md.
+
+## Fixed in run 7
+
+| ID | Sev | Problem (observed live) | Fix | Proof |
+|---|---|---|---|---|
+| UAT-DOC-006 | Medium | One headed run showed `500 POST /api/v1/documents` ("Internal Server Error" in the Documents status line). Not reproducible afterwards (3 API probes, 2 more headed runs, a forced bge-m3 cold start that took ~10 s but returned 200). Most likely LiteLLM answered 500 while the Ollama embedding runner reloaded; `post_json_with_retry` only retried 429/502/503/504, so the 500 surfaced as an unhandled error | `RETRY_STATUS` now includes 500 (embedding/chat/rerank calls are idempotent); persistent failure ends as the existing clear 503 | `test_resilient_http_nfr19.py::test_embedder_retries_gateway_500_then_succeeds` (RED: HTTPStatusError, GREEN) and `::test_embedder_persistent_gateway_error_is_a_clear_502_not_unhandled` |
+
+Root cause is inferred, not captured: no LiteLLM/Ollama error was in the logs at the time of the check. Treat as hardening; re-open if a 500 on upload recurs.
 
 ## Fixed in run 6
 
@@ -51,6 +59,9 @@ None verified open. Candidates not yet exercised in a headed run: see "Not teste
 Earlier fixed (run 1): UAT-DOC-001 (list lost on reload), UAT-DOC-002 (search not wired), UAT-DOC-003 (tabs not wired), UAT-OPS-001 (dead incident form for non-admin).
 
 ## Watch list
+
+- Run 7 test-data note: UAT probes created `probe*.txt` documents whose contents ("12 hari") polluted Andi's "everything I can access" scope and made the chat UAT fail until they were moved to Trash. UAT scripts should upload uniquely worded docs and trash their own uploads.
+- First upload after the embedding model is idle takes ~10 s (bge-m3 cold start); the UI shows no progress indicator during that time.
 
 - Convert the scratch UAT scripts into a repo-maintained Playwright suite with a credential-free way to obtain a demo login.
 - The relevance floor (0.30) was chosen from observed bge-m3 scores (related ≈ 0.71, unrelated Mars ≈ 0.24). Re-tune with the retrieval-metrics lab if recall drops on a real corpus; set `retrieval.min_relevance: 0` to disable.
