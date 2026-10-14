@@ -1,7 +1,7 @@
 # Live Web UAT — E2EAIDEV
 
-Date: 2026-10-14 (run 15)
-Tester: Hermes Agent + Claude Code review, headed Playwright / Chrome (non-headless, slowMo 50–60)
+Date: 2026-10-14 (run 16)
+Tester: Hermes Agent, headed Playwright / Chrome (non-headless, slowMo 50–60)
 Target web: http://127.0.0.1:13000 · Target API: http://127.0.0.1:8000
 Demo user: `andi@demo.e2eai` (not an org admin). Its local password lives only in Hermes scratch, never in the repo.
 Admin user: `admin@local.e2eai` (org admin). Reset with `e2eai-api reset-admin-password --creds-file <path-outside-repo>`. The generated password is never committed.
@@ -24,6 +24,7 @@ Admin user: `admin@local.e2eai` (org admin). Reset with `e2eai-api reset-admin-p
 - Run 13 (cron live UAT sweep): stack was healthy except web :13000 was not running, so `.next` was removed and `pnpm dev` was started. Headed Playwright before build: v5 **37/0** (`e2eaidev-uat5-1791984518788`), ops/admin **14/0** (`e2eaidev-uat-ops-1791984663816`), session expiry **7/0** (`e2eaidev-uat-session-1791984701576`), admin mutation **9/0** (`e2eaidev-uat-admin-1791984725133`), and mobile-nav **9/0** (`e2eaidev-uat-mobile-1791984747747`). Web gate passed; after `pnpm build`, `.next` was removed, dev restarted, health endpoints returned 200, and v5 reran **37/0** (`e2eaidev-uat5-1791985017177`). No same-run product-code bug was found.
 - Run 14 (cron live UAT sweep): stack was healthy except web :13000 was not running, so `.next` was removed and `pnpm dev` was started. Headed Playwright before build: v5 **37/0** (`e2eaidev-uat5-1791986045196`), ops/admin **14/0** (`e2eaidev-uat-ops-1791986161370`), session **7/0** (`e2eaidev-uat-session-1791986197056`), admin mutation **9/0** (`e2eaidev-uat-admin-1791986218207`), and mobile-nav **9/0** (`e2eaidev-uat-mobile-1791986240229`). Web gate passed; after `pnpm build`, `.next` was removed, dev restarted, health endpoints returned 200, and v5 reran **37/0** (`e2eaidev-uat5-1791986468896`). No same-run product-code bug was found.
 - Run 15 (cron live UAT sweep): stack was healthy at start: API `/health` + `/ready`, web `/`, and web proxy `/api/v1/health` all returned 200. Headed Playwright before build: v5 **37/0** (`e2eaidev-uat5-1791987529700`), ops/admin **14/0** (`e2eaidev-uat-ops-1791987646915`), session expiry **7/0** (`e2eaidev-uat-session-1791987681703`), admin mutation **9/0** (`e2eaidev-uat-admin-1791987701442`), and mobile-nav **9/0** (`e2eaidev-uat-mobile-1791987722794`). Web gate passed; after `pnpm build`, `.next` was removed, dev restarted, health endpoints returned 200, and v5 reran **37/0** (`e2eaidev-uat5-1791987854746`). No same-run product-code bug was found.
+- Run 16 (cron live UAT sweep): web :13000 was down at the start while API/Docker were healthy, so `.next` was removed and `pnpm dev` was started. Headed Playwright before build: v5 **37/0** (`e2eaidev-uat5-1791988839078`), ops/admin **14/0** (`e2eaidev-uat-ops-1791988944227`), session expiry **7/0** (`e2eaidev-uat-session-1791988975672`), admin mutation **9/0** (`e2eaidev-uat-admin-1791988995355`), and mobile-nav **9/0** (`e2eaidev-uat-mobile-1791989016023`). Web gate passed; after `pnpm build`, `.next` was removed, dev restarted, health endpoints returned 200, and v5 reran **37/0** (`e2eaidev-uat5-1791989128480`). No same-run product-code bug was found.
 - Scripts: `e2eaidev_uat_session.js` (session expiry), `e2eaidev_uat_ops.js` (admin Operate/Improve/Admin/upload edge cases), `e2eaidev_uat_v5.js` (current full run), `e2eaidev_uat_live.js` (happy path), `e2eaidev_uat_v2.js` (negative paths, found run-2 bugs), `e2eaidev_uat_v3.js` (run-2 regression), `e2eaidev_uat_v4.js` (run-3 Stop regression). Not yet committed as a repo suite (they need the scratch-held demo password).
 
 ## Prerequisites verified
@@ -88,6 +89,8 @@ Web: Sign out and hidden login form; "Move to Trash" label, Trash tab with Resto
 
 ## Verification gates (this run)
 
+- Run 16: git `main` synced with `origin/main` (0/0 ahead/behind); Docker services up (postgres + valkey healthy, openfga, seaweedfs, litellm, e2eai-ollama). API `/api/v1/health` and `/api/v1/ready` -> 200; web `/` and web proxy `/api/v1/health` -> 200 after starting `pnpm dev`. Headed Playwright: v5 37/0, ops 14/0, session 7/0, admin 9/0, mobile 9/0; after web build/restart, v5 37/0 again. Web gate: `cd apps/web && pnpm vitest run && pnpm run typecheck && pnpm lint && pnpm run build` -> 21 files / 327 tests passed; typecheck ok; lint clean; production build ok. No product-code bug was verified, so TDD/code fix and API/CLI suites were not needed.
+
 - Run 15: git `main` synced with `origin/main` (0/0 ahead/behind); Docker services up (postgres + valkey healthy, openfga, seaweedfs, litellm, e2eai-ollama). API `/api/v1/health` and `/api/v1/ready` -> 200; web `/` and web proxy `/api/v1/health` -> 200. Headed Playwright: v5 37/0, ops 14/0, session 7/0, admin 9/0, mobile 9/0; after web build/restart, v5 37/0 again. Web gate: `cd apps/web && pnpm vitest run && pnpm run typecheck && pnpm lint && pnpm run build` -> 21 files / 327 tests passed; typecheck ok; lint clean; production build ok. No product-code bug was verified, so TDD/code fix and API/CLI suites were not needed.
 
 - Run 14: git `main` synced with `origin/main` (0/0 ahead/behind); Docker services up (postgres + valkey healthy, openfga, seaweedfs, litellm, e2eai-ollama). API `/api/v1/health` and `/api/v1/ready` -> 200; web `/` and web proxy `/api/v1/health` -> 200 after starting `pnpm dev`. Headed Playwright: v5 37/0, ops 14/0, session 7/0, admin 9/0, mobile 9/0; after web build/restart, v5 37/0 again. Web gate: `cd apps/web && pnpm vitest run && pnpm run typecheck && pnpm lint && pnpm run build` -> 21 files / 327 tests passed; typecheck ok; lint clean; production build ok. No product-code bug was verified, so TDD/code fix and API/CLI suites were not needed.
@@ -120,6 +123,8 @@ Web: Sign out and hidden login form; "Move to Trash" label, Trash tab with Resto
 - Intentionally skipped: full API suite, CLI suite, `verify-phase-0` (changes are confined to the touched modules).
 
 ## Not tested
+
+- Run 16: no new product behavior beyond the existing v5/ops/session/admin/mobile scripts. Drag-and-drop upload, real PDF/DOCX/Docling, production `pnpm start`, concurrent users, idle-timeout waiting for 8 hours, admin revoke/edit flows, and screen-reader walkthrough remain out of scope.
 
 - Run 15: no new product behavior beyond the existing v5/ops/session/admin/mobile scripts. Drag-and-drop upload, real PDF/DOCX/Docling, production `pnpm start`, concurrent users, idle-timeout waiting for 8 hours, admin revoke/edit flows, and screen-reader walkthrough remain out of scope.
 
