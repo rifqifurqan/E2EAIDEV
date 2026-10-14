@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { ENDPOINTS } from "./api-client";
+import { ENDPOINTS, SESSION_EXPIRED_EVENT, api } from "./api-client";
 import nextConfig from "../../next.config";
 import { middleware } from "../middleware";
 import { NextRequest } from "next/server";
@@ -124,5 +124,44 @@ describe("Data and Build endpoints", () => {
   it("match backend routes", () => {
     expect(ENDPOINTS.dueReviews).toBe("/documents/reviews/due");
     expect(ENDPOINTS.modelRegistry).toBe("/model-registry");
+  });
+});
+
+describe("session expiry signal (UAT-AUTH-002)", () => {
+  function stubFetch(status: number) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ title: "Not authenticated" }), { status })),
+    );
+  }
+
+  it("announces an expired session when a data call returns 401", async () => {
+    stubFetch(401);
+    const listener = vi.fn();
+    window.addEventListener(SESSION_EXPIRED_EVENT, listener);
+    await expect(api.listConversations()).rejects.toMatchObject({ status: 401 });
+    window.removeEventListener(SESSION_EXPIRED_EVENT, listener);
+    vi.unstubAllGlobals();
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not announce expiry for a wrong-password login 401", async () => {
+    stubFetch(401);
+    const listener = vi.fn();
+    window.addEventListener(SESSION_EXPIRED_EVENT, listener);
+    await expect(api.login({ email: "a@b.co", password: "x" })).rejects.toMatchObject({ status: 401 });
+    window.removeEventListener(SESSION_EXPIRED_EVENT, listener);
+    vi.unstubAllGlobals();
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("does not announce expiry for the initial /me probe", async () => {
+    stubFetch(401);
+    const listener = vi.fn();
+    window.addEventListener(SESSION_EXPIRED_EVENT, listener);
+    await expect(api.me()).rejects.toMatchObject({ status: 401 });
+    window.removeEventListener(SESSION_EXPIRED_EVENT, listener);
+    vi.unstubAllGlobals();
+    expect(listener).not.toHaveBeenCalled();
   });
 });

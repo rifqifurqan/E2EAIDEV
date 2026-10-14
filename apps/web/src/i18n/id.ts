@@ -26,6 +26,7 @@ const id: Dictionary = {
     signingIn: "Sedang masuk...",
     signInFailed: "Gagal masuk",
     signOutFailed: "Tidak bisa keluar",
+    sessionExpired: "Sesi berakhir. Silakan masuk lagi.",
     email: "Email",
     password: "Kata sandi",
   },

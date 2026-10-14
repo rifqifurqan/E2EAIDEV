@@ -1,11 +1,19 @@
 # UAT Bug List — E2EAIDEV Live Web
 
-Date: 2026-10-14 (run 8)
+Date: 2026-10-14 (run 9)
 Latest result: full v5 **37/0**, mobile-nav **9/0**, and admin-mutation **9/0**. Evidence `e2eaidev-uat5-1791967780471`, `e2eaidev-uat-mobile-1791967554354`, and `e2eaidev-uat-admin-1791967877237` under Hermes scratch (`C:/Users/riqan/AppData/Local/hermes/cache/scratch/`). Previous: `e2eaidev-uat4-1791966120479`, `e2eaidev-uat-mobile-1791966218787`, `e2eaidev-uat-admin-1791966227548`. Previous passing evidence: `e2eaidev-uat4-1791963285993`, `e2eaidev-uat4-1791961850058`, `e2eaidev-uat3-1791960461338` and `e2eaidev-uat-1791960549558`. Before-fix evidence: `e2eaidev-uat2-1791957806874`.
 
 ## Open (prioritized)
 
-None verified open. Run 8 fixed UAT-CHAT-007 (below). Run 7 hardened one intermittent case (UAT-DOC-006 below). Candidates not yet exercised in a headed run: see "Not tested" in UAT_LIVE_WEB.md.
+None verified open. Run 9 fixed UAT-AUTH-002 (below); run 8 fixed UAT-CHAT-007 (below). Run 7 hardened one intermittent case (UAT-DOC-006 below). Candidates not yet exercised in a headed run: see "Not tested" in UAT_LIVE_WEB.md.
+
+## Fixed in run 9
+
+| ID | Sev | Problem (reproduced live) | Fix | Proof |
+|---|---|---|---|---|
+| UAT-AUTH-002 | Medium | When the session cookie expired while a page was open, the header kept saying "Signed in as andi@…" and chat showed a bare "Not authenticated"; after signing in again Documents still said "Please sign in to see your documents." until a manual reload | `apiFetch` (and upload) dispatch `e2eai:session-expired` on a 401 from an authenticated call (not login/logout//me); `AppShell` drops the session, shows the login form with "Session expired. Please sign in again." (EN/ID) and remounts page content after the next successful sign-in | `api-client.test.ts` (3 new, RED then GREEN), `app-shell.test.tsx` (2 new, RED then GREEN); headed `e2eaidev_uat_session.js` 3 FAIL -> 8/0 |
+
+One-off unexplained: the first v5 run of the tick ended signed out on `/data` mid-chat (10/2); the immediate rerun was 37/0 and nothing reproduced it. Logged, not claimed as fixed. The session-expiry fix at least makes that situation self-explanatory in the UI.
 
 ## Fixed in run 8
 

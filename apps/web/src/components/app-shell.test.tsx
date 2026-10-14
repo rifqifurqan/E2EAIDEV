@@ -3,6 +3,9 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppShell } from "./app-shell";
 import { I18nProvider } from "@/i18n/context";
+import { SESSION_EXPIRED_EVENT } from "@/lib/api-client";
+import { act } from "@testing-library/react";
+import { useEffect } from "react";
 
 const apiMock = vi.hoisted(() => ({
   login: vi.fn(),
@@ -12,6 +15,7 @@ const apiMock = vi.hoisted(() => ({
 
 vi.mock("@/lib/api-client", () => ({
   api: apiMock,
+  SESSION_EXPIRED_EVENT: "e2eai:session-expired",
 }));
 
 function renderShell(locale: "en" | "id" = "en") {
@@ -173,5 +177,42 @@ describe("AppShell", () => {
     renderShell("id");
     expect(await screen.findByText(/masuk sebagai andi@demo\.e2eai/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /keluar/i })).toBeInTheDocument();
+  });
+
+  it("drops the signed-in header and explains when the session expires mid-use (UAT-AUTH-002)", async () => {
+    apiMock.me.mockReset();
+    apiMock.me.mockResolvedValue({ user_id: "u1", email: "andi@demo.e2eai", display_name: "Andi" });
+    renderShell();
+    expect(await screen.findByText(/signed in as andi@demo\.e2eai/i)).toBeInTheDocument();
+    act(() => {
+      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+    });
+    expect(screen.queryByText(/signed in as/i)).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Email")).toBeInTheDocument();
+    expect(screen.getByText(/session expired/i)).toBeInTheDocument();
+  });
+
+  it("reloads the page content after signing in again so stale 'please sign in' states clear", async () => {
+    let mounts = 0;
+    function Probe() {
+      useEffect(() => {
+        mounts += 1;
+      }, []);
+      return <div>probe</div>;
+    }
+    apiMock.login.mockResolvedValue({ user_id: "u1", csrf_token: "c" });
+    render(
+      <I18nProvider defaultLocale="en">
+        <AppShell>
+          <Probe />
+        </AppShell>
+      </I18nProvider>,
+    );
+    expect(mounts).toBe(1);
+    await userEvent.type(screen.getByPlaceholderText("Email"), "andi@demo.e2eai");
+    await userEvent.type(screen.getByPlaceholderText("Password"), "pw");
+    await userEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+    expect(await screen.findByText(/signed in as andi@demo\.e2eai/i)).toBeInTheDocument();
+    expect(mounts).toBe(2);
   });
 });

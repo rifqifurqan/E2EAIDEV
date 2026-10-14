@@ -358,6 +358,18 @@ interface FetchOptions {
   signal?: AbortSignal;
 }
 
+/** Fired on window when an authenticated call gets 401, i.e. the session cookie expired mid-use (UAT-AUTH-002). */
+export const SESSION_EXPIRED_EVENT = "e2eai:session-expired";
+
+// Login (wrong password) and the initial /me probe legitimately return 401 without meaning "expired".
+const SESSION_PROBE_PATHS = new Set(["/auth/login", "/auth/logout", "/me"]);
+
+function announceSessionExpiry(status: number, path: string) {
+  if (status === 401 && !SESSION_PROBE_PATHS.has(path) && typeof window !== "undefined") {
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+  }
+}
+
 async function apiFetch<T>(path: string, opts: FetchOptions = {}): Promise<T> {
   const { method = "GET", body, headers = {}, csrfToken, signal } = opts;
 
@@ -382,6 +394,7 @@ async function apiFetch<T>(path: string, opts: FetchOptions = {}): Promise<T> {
   });
 
   if (!res.ok) {
+    announceSessionExpiry(res.status, path);
     const problem = await res.json().catch(() => ({}));
     throw new ApiError(
       res.status,
@@ -541,6 +554,7 @@ export const api = {
       credentials: "same-origin",
     });
     if (!res.ok) {
+      announceSessionExpiry(res.status, ENDPOINTS.documents);
       const problem = await res.json().catch(() => ({}));
       throw new ApiError(
         res.status,

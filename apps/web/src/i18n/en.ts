@@ -24,6 +24,7 @@ const en = {
     signingIn: "Signing in...",
     signInFailed: "Sign in failed",
     signOutFailed: "Could not sign out",
+    sessionExpired: "Session expired. Please sign in again.",
     email: "Email",
     password: "Password",
   },

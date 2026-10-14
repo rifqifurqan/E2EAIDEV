@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useI18n } from "@/i18n/context";
 import type { Locale } from "@/i18n";
-import { api } from "@/lib/api-client";
+import { SESSION_EXPIRED_EVENT, api } from "@/lib/api-client";
 
 const LIFECYCLE_STAGES = [
   "plan",
@@ -39,6 +39,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [password, setPassword] = useState("");
   const [authStatus, setAuthStatus] = useState("");
   const [session, setSession] = useState<{ email: string; csrf: string } | null>(null);
+  // Bumped on every sign-in so page content remounts and reloads with the new session (no stale "please sign in").
+  const [contentKey, setContentKey] = useState(0);
 
   // Restore the signed-in state when a valid session cookie already exists (page reload / new route).
   useEffect(() => {
@@ -55,6 +57,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // A data call got 401 mid-use: show the login form with a reason instead of a "Signed in" header over a broken page.
+  useEffect(() => {
+    const onExpired = () => {
+      setSession(null);
+      setAuthStatus(t.auth.sessionExpired);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, [t.auth.sessionExpired]);
 
   const lifecycleLabel = locale === "id" ? "Navigasi siklus hidup" : "Lifecycle navigation";
   const featuresLabel = t.nav.features;
@@ -107,6 +119,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 setPassword("");
                 setAuthStatus("");
                 setSession({ email, csrf: res?.csrf_token ?? "" });
+                setContentKey((key) => key + 1);
               } catch (error) {
                 setAuthStatus(error instanceof Error ? error.message : t.auth.signInFailed);
               }
@@ -198,7 +211,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         <main id="main-content" tabIndex={-1} className="flex-1 p-4 md:p-6">
-          {children}
+          <Fragment key={contentKey}>{children}</Fragment>
         </main>
       </div>
     </div>
