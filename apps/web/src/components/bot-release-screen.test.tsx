@@ -9,6 +9,7 @@ const apiMock = vi.hoisted(() => ({
   listBotApprovalsPage: vi.fn(),
   decideBotApproval: vi.fn(),
   requestBotApproval: vi.fn(),
+  createBot: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -31,6 +32,7 @@ describe("BotReleaseScreen", () => {
     apiMock.listBotApprovals.mockResolvedValue({ items: [], next_cursor: null });
     apiMock.decideBotApproval.mockReset();
     apiMock.requestBotApproval.mockReset();
+    apiMock.createBot.mockReset();
   });
 
   it("lists bot approval requests with risk tier and status", async () => {
@@ -211,6 +213,43 @@ describe("BotReleaseScreen", () => {
   it("labels the request form in Indonesian", async () => {
     renderBots("id");
     expect(await screen.findByRole("button", { name: /minta persetujuan/i })).toBeInTheDocument();
+  });
+
+  it("creates a bot from the New Bot form and prefills the approval bot id", async () => {
+    const user = userEvent.setup();
+    apiMock.createBot.mockResolvedValue({ id: BOT_ID, name: "HR assistant" });
+    renderBots();
+    await screen.findByText(/no approval requests yet/i);
+    expect(screen.queryByLabelText(/bot name/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^new bot$/i }));
+    const create = screen.getByRole("button", { name: /^create bot$/i });
+    expect(create).toBeDisabled();
+    await user.type(screen.getByLabelText(/bot name/i), "  HR assistant ");
+    await user.click(create);
+    await waitFor(() => expect(apiMock.createBot).toHaveBeenCalledWith("HR assistant"));
+    expect(await screen.findByRole("status")).toHaveTextContent(/bot created.*HR assistant/i);
+    expect(screen.getByLabelText(/^bot id/i)).toHaveValue(BOT_ID);
+  });
+
+  it("shows a generic error without server text when bot creation fails", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.createBot.mockRejectedValue(new ApiError(403, "Forbidden", "secret scope detail"));
+    renderBots();
+    await screen.findByText(/no approval requests yet/i);
+    await user.click(screen.getByRole("button", { name: /^new bot$/i }));
+    await user.type(screen.getByLabelText(/bot name/i), "X");
+    await user.click(screen.getByRole("button", { name: /^create bot$/i }));
+    expect(await screen.findByText(/could not create the bot/i)).toBeInTheDocument();
+    expect(screen.queryByText(/secret scope detail/i)).not.toBeInTheDocument();
+  });
+
+  it("labels the New Bot form in Indonesian", async () => {
+    const user = userEvent.setup();
+    renderBots("id");
+    await user.click(await screen.findByRole("button", { name: /^bot baru$/i }));
+    expect(screen.getByLabelText(/nama bot/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^buat bot$/i })).toBeInTheDocument();
   });
 
   it("loads more approval requests with the next cursor", async () => {

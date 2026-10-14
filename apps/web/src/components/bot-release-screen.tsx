@@ -26,6 +26,31 @@ export function BotReleaseScreen() {
   const [requesting, setRequesting] = useState(false);
   const [requestFailed, setRequestFailed] = useState(false);
 
+  const [showNewBot, setShowNewBot] = useState(false);
+  const [botName, setBotName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createdName, setCreatedName] = useState<string | null>(null);
+  const [createFailed, setCreateFailed] = useState(false);
+
+  async function createBot(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = botName.trim();
+    if (name === "" || creating) return;
+    setCreateFailed(false);
+    setCreatedName(null);
+    setCreating(true);
+    try {
+      const bot = await api.createBot(name);
+      setBotName("");
+      setBotId(bot.id);
+      setCreatedName(bot.name);
+    } catch {
+      setCreateFailed(true);
+    } finally {
+      setCreating(false);
+    }
+  }
+
   async function requestApproval(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setRequestFailed(false);
@@ -62,6 +87,7 @@ export function BotReleaseScreen() {
       <div className="mb-4 flex flex-wrap gap-2">
         <button
           type="button"
+          onClick={() => setShowNewBot((open) => !open)}
           className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           {t.bots.newBot}
@@ -79,6 +105,37 @@ export function BotReleaseScreen() {
           {t.bots.rollback}
         </button>
       </div>
+
+      {showNewBot ? (
+        <form onSubmit={createBot} className="mb-4 flex flex-wrap items-end gap-3 text-sm">
+          <label htmlFor="new-bot-name">
+            <span className="mr-1">{t.bots.botName}</span>
+            <input
+              id="new-bot-name"
+              value={botName}
+              onChange={(event) => setBotName(event.target.value)}
+              className="rounded border border-gray-300 px-2 py-1 text-sm"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={creating || botName.trim() === ""}
+            className="rounded border border-blue-400 px-3 py-1 text-sm text-blue-700 disabled:opacity-50"
+          >
+            {t.bots.createBot}
+          </button>
+          {createdName !== null ? (
+            <p role="status" className="w-full text-sm text-green-700">
+              {`${t.bots.botCreated}: ${createdName}`}
+            </p>
+          ) : null}
+          {createFailed ? (
+            <p role="alert" className="w-full text-sm text-red-700">
+              {t.bots.createFailed}
+            </p>
+          ) : null}
+        </form>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Bundles */}

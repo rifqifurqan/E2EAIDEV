@@ -123,6 +123,10 @@ const id: Dictionary = {
     rationale: "Alasan (opsional)",
     requestApproval: "Minta persetujuan",
     requestFailed: "Gagal meminta persetujuan.",
+    botName: "Nama bot",
+    createBot: "Buat bot",
+    botCreated: "Bot dibuat",
+    createFailed: "Gagal membuat bot.",
   },
   admin: {
     title: "Admin",

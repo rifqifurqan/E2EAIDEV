@@ -121,6 +121,10 @@ const en = {
     rationale: "Rationale (optional)",
     requestApproval: "Request approval",
     requestFailed: "Could not request the approval.",
+    botName: "Bot name",
+    createBot: "Create bot",
+    botCreated: "Bot created",
+    createFailed: "Could not create the bot.",
   },
   admin: {
     title: "Admin",
