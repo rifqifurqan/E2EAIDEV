@@ -18,6 +18,122 @@ const RUNBOOK_FILES: { key: keyof typeof import("@/i18n/en").default.admin.runbo
   { key: "leakedKey", file: "leaked-key" },
 ];
 
+function OrgForms({ snapshot, onCreated }: { snapshot: OrgSnapshot; onCreated: () => void }) {
+  const { t } = useI18n();
+  const [divisionName, setDivisionName] = useState("");
+  const [teamName, setTeamName] = useState("");
+  const [teamDivision, setTeamDivision] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<"division" | "team" | null>(null);
+
+  async function run(kind: "division" | "team", action: () => Promise<unknown>, reset: () => void) {
+    if (busy) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await action();
+      reset();
+      onCreated();
+    } catch {
+      setError(kind);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const divisionTrimmed = divisionName.trim();
+  const teamTrimmed = teamName.trim();
+
+  return (
+    <div className="mb-4 grid gap-4 md:grid-cols-2 text-sm">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!divisionTrimmed) return;
+          void run(
+            "division",
+            () => api.createDivision({ org_id: snapshot.org_id, name: divisionTrimmed }),
+            () => setDivisionName(""),
+          );
+        }}
+        className="flex flex-col gap-2"
+      >
+        <label htmlFor="org-division-name">
+          <span className="mr-1">{t.admin.divisionName}</span>
+          <input
+            id="org-division-name"
+            value={divisionName}
+            onChange={(event) => setDivisionName(event.target.value)}
+            className="w-full rounded border border-gray-300 px-2 py-1"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={busy || !divisionTrimmed}
+          className="self-start rounded bg-blue-600 px-3 py-1 text-white disabled:opacity-50"
+        >
+          {t.admin.addDivision}
+        </button>
+        {error === "division" ? (
+          <p role="alert" className="text-red-700">
+            {t.admin.divisionFailed}
+          </p>
+        ) : null}
+      </form>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!teamTrimmed || !teamDivision) return;
+          void run(
+            "team",
+            () => api.createTeam({ division_id: teamDivision, name: teamTrimmed }),
+            () => setTeamName(""),
+          );
+        }}
+        className="flex flex-col gap-2"
+      >
+        <label htmlFor="org-team-name">
+          <span className="mr-1">{t.admin.teamName}</span>
+          <input
+            id="org-team-name"
+            value={teamName}
+            onChange={(event) => setTeamName(event.target.value)}
+            className="w-full rounded border border-gray-300 px-2 py-1"
+          />
+        </label>
+        <label htmlFor="org-team-division">
+          <span className="mr-1">{t.admin.teamDivision}</span>
+          <select
+            id="org-team-division"
+            value={teamDivision}
+            onChange={(event) => setTeamDivision(event.target.value)}
+            className="w-full rounded border border-gray-300 px-2 py-1"
+          >
+            <option value="" />
+            {snapshot.divisions.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="submit"
+          disabled={busy || !teamTrimmed || !teamDivision}
+          className="self-start rounded bg-blue-600 px-3 py-1 text-white disabled:opacity-50"
+        >
+          {t.admin.addTeam}
+        </button>
+        {error === "team" ? (
+          <p role="alert" className="text-red-700">
+            {t.admin.teamFailed}
+          </p>
+        ) : null}
+      </form>
+    </div>
+  );
+}
+
 export function AdminScreen() {
   const { t } = useI18n();
   const [showDeactivate, setShowDeactivate] = useState(false);
@@ -26,7 +142,8 @@ export function AdminScreen() {
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
-  const org = useAdminData<OrgSnapshot>(() => api.getOrgSnapshot());
+  const [orgReload, setOrgReload] = useState(0);
+  const org = useAdminData<OrgSnapshot>(() => api.getOrgSnapshot(), orgReload);
 
   const target = targetId.trim();
   const owner = ownerId.trim();
@@ -144,6 +261,7 @@ export function AdminScreen() {
               {t.admin.orgLoadFailed}
             </p>
           ) : null}
+          {org.kind === "ready" ? <OrgForms snapshot={org.data} onCreated={() => setOrgReload((key) => key + 1)} /> : null}
           {org.kind === "ready" ? (
             <div className="grid gap-4 md:grid-cols-3 text-sm">
               <div>

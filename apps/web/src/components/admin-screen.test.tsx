@@ -7,6 +7,8 @@ import { I18nProvider } from "@/i18n/context";
 const apiMock = vi.hoisted(() => ({
   deactivateUser: vi.fn(),
   getOrgSnapshot: vi.fn(),
+  createDivision: vi.fn(),
+  createTeam: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -39,6 +41,8 @@ describe("AdminScreen", () => {
   beforeEach(() => {
     apiMock.deactivateUser.mockReset();
     apiMock.getOrgSnapshot.mockReset();
+    apiMock.createDivision.mockReset();
+    apiMock.createTeam.mockReset();
     apiMock.getOrgSnapshot.mockResolvedValue(SNAPSHOT);
   });
 
@@ -173,5 +177,60 @@ describe("AdminScreen", () => {
     renderAdmin("id");
     const org = await screen.findByRole("region", { name: /organisasi/i });
     expect(org).toHaveTextContent("Payroll Team");
+  });
+
+  it("creates a division in the admin's org and reloads the org panel", async () => {
+    const user = userEvent.setup();
+    apiMock.createDivision.mockResolvedValue({ id: "d2", org_id: SNAPSHOT.org_id, name: "Legal" });
+    renderAdmin();
+    await screen.findByRole("region", { name: /organization/i });
+    const add = screen.getByRole("button", { name: /^add division$/i });
+    expect(add).toBeDisabled();
+    await user.type(screen.getByLabelText(/division name/i), "  Legal ");
+    await user.click(add);
+    await waitFor(() => expect(apiMock.createDivision).toHaveBeenCalledWith({ org_id: SNAPSHOT.org_id, name: "Legal" }));
+    await waitFor(() => expect(apiMock.getOrgSnapshot).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText(/division name/i)).toHaveValue("");
+  });
+
+  it("creates a team under a chosen division", async () => {
+    const user = userEvent.setup();
+    apiMock.createTeam.mockResolvedValue({ id: "t2", division_id: "d1", name: "Audit" });
+    renderAdmin();
+    await screen.findByRole("region", { name: /organization/i });
+    const add = screen.getByRole("button", { name: /^add team$/i });
+    expect(add).toBeDisabled();
+    await user.type(screen.getByLabelText(/team name/i), "Audit");
+    await user.selectOptions(screen.getByLabelText(/^division$/i), "d1");
+    await user.click(add);
+    await waitFor(() => expect(apiMock.createTeam).toHaveBeenCalledWith({ division_id: "d1", name: "Audit" }));
+    await waitFor(() => expect(apiMock.getOrgSnapshot).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows a generic error without server text when creating a division fails", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.createDivision.mockRejectedValue(new ApiError(409, "duplicate secret detail"));
+    renderAdmin();
+    await screen.findByRole("region", { name: /organization/i });
+    await user.type(screen.getByLabelText(/division name/i), "Legal");
+    await user.click(screen.getByRole("button", { name: /^add division$/i }));
+    expect(await screen.findByText(/could not create the division/i)).toBeInTheDocument();
+    expect(screen.queryByText(/duplicate secret detail/i)).not.toBeInTheDocument();
+  });
+
+  it("labels the organization forms in Indonesian and hides them from non-admins", async () => {
+    renderAdmin("id");
+    await screen.findByRole("region", { name: /organisasi/i });
+    expect(screen.getByRole("button", { name: /^tambah divisi$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^tambah tim$/i })).toBeInTheDocument();
+  });
+
+  it("does not render the create forms when the org view is forbidden", async () => {
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.getOrgSnapshot.mockRejectedValue(new ApiError(403, "no"));
+    renderAdmin();
+    await screen.findByText(/available to admins only/i);
+    expect(screen.queryByRole("button", { name: /^add division$/i })).not.toBeInTheDocument();
   });
 });

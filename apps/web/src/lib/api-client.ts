@@ -402,6 +402,8 @@ export const ENDPOINTS = {
   botAsk: (botId: string) => `/bots/${botId}/ask`,
   deactivateUser: (userId: string) => `/users/${userId}/deactivate`,
   orgSnapshot: "/admin/org/snapshot",
+  orgDivisions: "/admin/org/divisions",
+  orgTeams: "/admin/org/teams",
   incidents: "/incidents",
   incidentPostmortem: (incidentId: string) => `/incidents/${incidentId}/postmortem`,
   incidentTransition: (incidentId: string) => `/incidents/${incidentId}/transition`,
@@ -672,6 +674,10 @@ export const api = {
 
   // Admin
   getOrgSnapshot: () => apiFetch<OrgSnapshot>(ENDPOINTS.orgSnapshot),
+  createDivision: (input: { org_id: string; name: string }) =>
+    apiFetch<OrgDivision>(ENDPOINTS.orgDivisions, { method: "POST", body: input }),
+  createTeam: (input: { division_id: string; name: string }) =>
+    apiFetch<OrgTeam>(ENDPOINTS.orgTeams, { method: "POST", body: input }),
   deactivateUser: (userId: string, input: DeactivateInput) =>
     apiFetch<DeactivateResponse>(ENDPOINTS.deactivateUser(userId), {
       method: "POST",

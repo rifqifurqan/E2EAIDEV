@@ -184,6 +184,13 @@ const en = {
     orgLoadFailed: "Could not load the organization.",
     orgEmpty: "None yet.",
     statusDisabled: "disabled",
+    divisionName: "Division name",
+    addDivision: "Add division",
+    divisionFailed: "Could not create the division.",
+    teamName: "Team name",
+    teamDivision: "Division",
+    addTeam: "Add team",
+    teamFailed: "Could not create the team.",
   },
   data: {
     title: "Documents due for review",

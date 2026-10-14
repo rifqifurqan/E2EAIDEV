@@ -186,6 +186,13 @@ const id: Dictionary = {
     orgLoadFailed: "Tidak dapat memuat organisasi.",
     orgEmpty: "Belum ada.",
     statusDisabled: "nonaktif",
+    divisionName: "Nama divisi",
+    addDivision: "Tambah divisi",
+    divisionFailed: "Gagal membuat divisi.",
+    teamName: "Nama tim",
+    teamDivision: "Divisi",
+    addTeam: "Tambah tim",
+    teamFailed: "Gagal membuat tim.",
   },
   data: {
     title: "Dokumen yang jatuh tempo ditinjau",
