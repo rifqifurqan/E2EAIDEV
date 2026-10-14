@@ -1,16 +1,21 @@
 # UAT Bug List — E2EAIDEV Live Web
 
-Date: 2026-10-14 (run 2)
-Latest result: **v3 36/0, baseline 22/0**. Evidence `e2eaidev-uat3-1791960461338` and `e2eaidev-uat-1791960549558` under Hermes scratch (`C:/Users/riqan/AppData/Local/hermes/cache/scratch/`). Before-fix evidence: `e2eaidev-uat2-1791957806874`.
+Date: 2026-10-14 (run 3)
+Latest result: **v4 37/0**. Evidence `e2eaidev-uat4-1791961850058` under Hermes scratch (`C:/Users/riqan/AppData/Local/hermes/cache/scratch/`). Previous passing evidence: `e2eaidev-uat3-1791960461338` and `e2eaidev-uat-1791960549558`. Before-fix evidence: `e2eaidev-uat2-1791957806874`.
 
 ## Open (prioritized)
 
-1. **UAT-CHAT-005 — Stop button does nothing real.** Severity: Medium. It sets the text "Stopped" locally; it neither aborts the request nor calls `POST /messages/{id}/stop`. Needs request cancellation (AbortController) plus the stop call once a message id exists.
-2. **UAT-ADMIN-001 — No admin demo account, so admin mutation flows cannot be UAT'd.** Severity: Medium (coverage gap). Add a documented admin login path for UAT.
-3. **UAT-NAV-001 — Sidebar and conversation list are hidden below the `md` breakpoint.** Severity: Low–Medium (not exercised on a phone this run). Documents/Chat/Admin links disappear on narrow screens.
-4. **UAT-CHAT-006 — Citations panel is a flat list across the whole conversation.** Severity: Low. After several answers it repeats documents; it should be per answer. (The "no citation for an unrelated question" case is correct and verified.)
+1. **UAT-ADMIN-001 — No admin demo account, so admin mutation flows cannot be UAT'd.** Severity: Medium (coverage gap). Add a documented admin login path for UAT.
+2. **UAT-NAV-001 — Sidebar and conversation list are hidden below the `md` breakpoint.** Severity: Low–Medium (not exercised on a phone this run). Documents/Chat/Admin links disappear on narrow screens.
+3. **UAT-CHAT-006 — Citations panel is a flat list across the whole conversation.** Severity: Low. After several answers it repeats documents; it should be per answer. (The "no citation for an unrelated question" case is correct and verified.)
 
-## Fixed in this run
+## Fixed in run 3
+
+| ID | Sev | Problem (reproduced live) | Fix | Proof |
+|---|---|---|---|---|
+| UAT-CHAT-005 | Medium | Stop button only set local English text (`Stopped`); it did not cancel an in-flight request or call `POST /messages/{id}/stop` for an assistant message | Chat now creates an `AbortController` for each send, disables Stop when there is nothing to stop, drops an aborted late answer, calls `api.stopMessage(message_id)` when a stopped/finished assistant message id exists, and shows localized EN/ID notices | `chat-screen.test.tsx` (in-flight abort/drop + finished-answer stop), `api-client.test.ts`, and live v4 `chat-stop-calls-stop-endpoint-and-shows-notice` (POST observed, green notice visible) |
+
+## Fixed in run 2
 
 | ID | Sev | Problem (reproduced live) | Fix | Proof |
 |---|---|---|---|---|

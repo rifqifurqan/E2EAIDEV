@@ -11,6 +11,7 @@ const apiMock = vi.hoisted(() => ({
   listMessages: vi.fn(),
   sendMessage: vi.fn(),
   recordFeedback: vi.fn(),
+  stopMessage: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", () => ({
@@ -35,6 +36,7 @@ describe("ChatScreen", () => {
     apiMock.listMessages.mockResolvedValue({ messages: [] });
     apiMock.sendMessage.mockReset();
     apiMock.recordFeedback.mockReset();
+    apiMock.stopMessage.mockReset();
   });
 
   it("renders conversation list area", () => {
@@ -95,7 +97,7 @@ describe("ChatScreen", () => {
     await userEvent.type(screen.getByRole("textbox", { name: /ask/i }), "How many leave days?");
     await userEvent.click(screen.getByRole("button", { name: /send/i }));
     expect(apiMock.createConversation).toHaveBeenCalledWith("How many leave days?");
-    expect(apiMock.sendMessage).toHaveBeenCalledWith("c1", "How many leave days?", "all", undefined);
+    expect(apiMock.sendMessage).toHaveBeenCalledWith("c1", "How many leave days?", "all", undefined, expect.any(AbortSignal));
     expect(await screen.findByText(/policy says 12 days/i)).toBeInTheDocument();
     expect(screen.getByText(/doc1/i)).toBeInTheDocument();
   });
@@ -156,7 +158,7 @@ describe("ChatScreen", () => {
     await userEvent.click(screen.getByRole("button", { name: /send/i }));
     await waitFor(() => expect(apiMock.sendMessage).toHaveBeenCalledTimes(2));
     expect(apiMock.createConversation).toHaveBeenCalledTimes(1);
-    expect(apiMock.sendMessage).toHaveBeenLastCalledWith("c1", "Q2", "all", undefined);
+    expect(apiMock.sendMessage).toHaveBeenLastCalledWith("c1", "Q2", "all", undefined, expect.any(AbortSignal));
   });
 
   it("thumbs buttons send feedback for the latest assistant message (UAT-CHAT-003)", async () => {
@@ -170,5 +172,45 @@ describe("ChatScreen", () => {
     await userEvent.click(screen.getByRole("button", { name: /^yes$/i }));
     expect(apiMock.recordFeedback).toHaveBeenCalledWith("msg-42", { rating: "up" });
     expect(await screen.findByText(/thanks for your feedback/i)).toBeInTheDocument();
+  });
+
+  it("Stop is disabled when there is nothing to stop (UAT-CHAT-005)", () => {
+    renderChat();
+    expect(screen.getByRole("button", { name: /stop/i })).toBeDisabled();
+  });
+
+  it("Stop aborts the in-flight request, drops its answer and marks the late message stopped (UAT-CHAT-005)", async () => {
+    apiMock.createConversation.mockResolvedValue({ id: "c1", title: "Q", created_at: "n", updated_at: "n" });
+    let resolveSend!: (value: unknown) => void;
+    let signal: AbortSignal | undefined;
+    apiMock.sendMessage.mockImplementation((...args: unknown[]) => {
+      signal = args[4] as AbortSignal;
+      return new Promise((resolve) => {
+        resolveSend = resolve;
+      });
+    });
+    apiMock.stopMessage.mockResolvedValue({ status: "ok", stop_reason: "user_stopped" });
+    renderChat();
+    await userEvent.type(screen.getByRole("textbox", { name: /ask/i }), "Q");
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /stop/i }));
+    expect(signal?.aborted).toBe(true);
+    expect(await screen.findByText(/generation stopped/i)).toBeInTheDocument();
+    resolveSend({ message_id: "late-1", answer: "Too late answer", citations: [] });
+    await waitFor(() => expect(apiMock.stopMessage).toHaveBeenCalledWith("late-1"));
+    expect(screen.queryByText(/too late answer/i)).not.toBeInTheDocument();
+  });
+
+  it("Stop on a finished answer calls the stop endpoint for the latest assistant message (UAT-CHAT-005)", async () => {
+    apiMock.createConversation.mockResolvedValue({ id: "c1", title: "Q", created_at: "n", updated_at: "n" });
+    apiMock.sendMessage.mockResolvedValue({ message_id: "msg-7", answer: "A", citations: [] });
+    apiMock.stopMessage.mockResolvedValue({ status: "ok", stop_reason: "user_stopped" });
+    renderChat("id");
+    await userEvent.type(screen.getByRole("textbox", { name: /tanya/i }), "Q");
+    await userEvent.click(screen.getByRole("button", { name: /kirim/i }));
+    await screen.findAllByText("A");
+    await userEvent.click(screen.getByRole("button", { name: /berhenti/i }));
+    expect(apiMock.stopMessage).toHaveBeenCalledWith("msg-7");
+    expect(await screen.findByText(/dihentikan/i)).toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/i18n/context";
 import { api, type ChatScope, type Citation, type Conversation } from "@/lib/api-client";
 
@@ -30,6 +30,7 @@ export function ChatScreen() {
   const [status, setStatus] = useState("");
   const [notice, setNotice] = useState("");
   const [sending, setSending] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const scopes: { value: ChatScope; label: string }[] = [
     { value: "all", label: t.chat.scopeAll },
@@ -91,6 +92,8 @@ export function ChatScreen() {
     setSending(true);
     setStatus("");
     setNotice("");
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       let convId = activeId;
       if (!convId) {
@@ -102,15 +105,37 @@ export function ChatScreen() {
       }
       setMessages((items) => [...items, { role: "user", content: trimmed }]);
       setQuestion("");
-      const response = await api.sendMessage(convId, trimmed, scope, undefined);
+      const response = await api.sendMessage(convId, trimmed, scope, undefined, controller.signal);
+      if (controller.signal.aborted) {
+        // Stopped while in flight: drop the answer, but mark the message the server still created.
+        if (response.message_id) await api.stopMessage(response.message_id).catch(() => undefined);
+        return;
+      }
       setMessages((items) => [
         ...items,
         { id: response.message_id, role: "assistant", content: response.answer, citations: response.citations ?? [] },
       ]);
     } catch (error) {
-      setStatus(reason(error, t.chat.requestFailed));
+      if (!controller.signal.aborted) setStatus(reason(error, t.chat.requestFailed));
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       setSending(false);
+    }
+  }
+
+  async function handleStop() {
+    setStatus("");
+    if (sending && abortRef.current) {
+      abortRef.current.abort();
+      setNotice(t.chat.stopped);
+      return;
+    }
+    if (!lastAssistantId) return;
+    try {
+      await api.stopMessage(lastAssistantId);
+      setNotice(t.chat.stopped);
+    } catch {
+      setStatus(t.chat.stopFailed);
     }
   }
 
@@ -233,8 +258,9 @@ export function ChatScreen() {
             </button>
             <button
               type="button"
-              onClick={() => setStatus("Stopped")}
-              className="rounded bg-red-500 px-3 py-2 text-sm font-medium text-white hover:bg-red-600"
+              onClick={() => void handleStop()}
+              disabled={!sending && !lastAssistantId}
+              className="rounded bg-red-500 px-3 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-50"
             >
               {t.chat.stop}
             </button>

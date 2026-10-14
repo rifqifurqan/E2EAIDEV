@@ -94,6 +94,8 @@ const id: Dictionary = {
     send: "Kirim",
     feedbackThanks: "Terima kasih atas masukan Anda.",
     feedbackFailed: "Tidak bisa mengirim masukan.",
+    stopped: "Pembuatan jawaban dihentikan.",
+    stopFailed: "Tidak bisa menghentikan pesan.",
     requestFailed: "Permintaan obrolan gagal",
   },
   eval: {

@@ -92,6 +92,8 @@ const en = {
     send: "Send",
     feedbackThanks: "Thanks for your feedback.",
     feedbackFailed: "Could not send feedback.",
+    stopped: "Generation stopped.",
+    stopFailed: "Could not stop the message.",
     requestFailed: "Chat request failed",
   },
   eval: {

@@ -355,10 +355,11 @@ interface FetchOptions {
   body?: unknown;
   headers?: Record<string, string>;
   csrfToken?: string;
+  signal?: AbortSignal;
 }
 
 async function apiFetch<T>(path: string, opts: FetchOptions = {}): Promise<T> {
-  const { method = "GET", body, headers = {}, csrfToken } = opts;
+  const { method = "GET", body, headers = {}, csrfToken, signal } = opts;
 
   const reqHeaders: Record<string, string> = {
     Accept: "application/json",
@@ -377,6 +378,7 @@ async function apiFetch<T>(path: string, opts: FetchOptions = {}): Promise<T> {
     headers: reqHeaders,
     body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: "same-origin",
+    signal,
   });
 
   if (!res.ok) {
@@ -499,10 +501,12 @@ export const api = {
     question: string,
     scope: ChatScope = "all",
     documentId?: string,
+    signal?: AbortSignal,
   ) =>
     apiFetch<MessageResponse>(ENDPOINTS.messages(convId), {
       method: "POST",
       body: { question, scope, document_id: documentId },
+      signal,
     }),
   listMessages: (convId: string) =>
     apiFetch<{ messages: HistoryMessage[] }>(ENDPOINTS.messages(convId)),
