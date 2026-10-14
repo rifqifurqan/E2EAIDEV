@@ -115,3 +115,56 @@ def test_snapshot_defaults_to_the_admins_own_org_and_rejects_another_org():
     assert {"divisions", "teams", "users"} <= set(r.json())
     other = c.get("/api/v1/admin/org/snapshot", params={"org_id": str(uuid.uuid4())})
     assert other.status_code == 403
+
+
+def _foreign_org():
+    """A second organization with its own division, team, user and project."""
+    from e2eai.db import Division, Organization, Project, Team
+
+    async def run():
+        async with db_sessions()() as s:
+            suffix = uuid.uuid4().hex[:8]
+            org = Organization(name=f"Foreign {suffix}")
+            s.add(org)
+            await s.flush()
+            div = Division(org_id=org.id, name=f"FDiv {suffix}")
+            s.add(div)
+            await s.flush()
+            team = Team(division_id=div.id, name=f"FTeam {suffix}")
+            user = User(org_id=org.id, email=f"foreign-{suffix}@other.example", display_name="Foreign")
+            project = Project(org_id=org.id, name=f"FProj {suffix}")
+            s.add_all([team, user, project])
+            await s.commit()
+            return org.id, div.id, team.id, user.id, project.id
+
+    return asyncio.run(run())
+
+
+def test_admin_cannot_touch_another_organization():
+    _migrate()
+    org_id, andi_id, admin_id = _ids()
+    f_org, f_div, f_team, f_user, f_project = _foreign_org()
+    c = _app(admin_id)
+    base = "/api/v1/admin/org"
+
+    assert c.post(f"{base}/divisions", json={"org_id": str(f_org), "name": "X"}).status_code == 403
+    assert c.post(f"{base}/teams", json={"division_id": str(f_div), "name": "X"}).status_code == 404
+    assert c.post(f"{base}/users", json={"org_id": str(f_org), "email": "a@b.example", "display_name": "A"}).status_code == 403
+    assert (
+        c.post(
+            f"{base}/users",
+            json={"org_id": str(org_id), "email": f"x{uuid.uuid4().hex[:6]}@b.example", "display_name": "A", "division_id": str(f_div)},
+        ).status_code
+        == 404
+    )
+    assert c.post(f"{base}/team-memberships", json={"team_id": str(f_team), "user_id": str(andi_id)}).status_code == 404
+    assert c.post(f"{base}/team-memberships", json={"team_id": str(f_team), "user_id": str(f_user)}).status_code == 404
+    assert c.post(f"{base}/role-grants", json={"user_id": str(f_user), "role_name": "admin"}).status_code == 404
+    assert c.post(f"{base}/projects", json={"org_id": str(f_org), "name": "X"}).status_code == 403
+    assert c.patch(f"{base}/projects/{f_project}/owner", json={"owner_team_id": str(f_team)}).status_code == 404
+
+    async def foreign_user_roles():
+        async with db_sessions()() as s:
+            return await s.scalar(select(func.count()).select_from(UserRole).where(UserRole.user_id == f_user))
+
+    assert asyncio.run(foreign_user_roles()) == 0

@@ -364,28 +364,56 @@ async def _org_admin_user(sess: dict = Depends(current_session), session: AsyncS
     return user
 
 
-async def _org_admin(user: User = Depends(_org_admin_user)) -> str:
-    """Audit actor derived from the session, never from the request body."""
-    return f"user:{user.id}"
+def _same_org_or_403(admin: User, org_id: uuid.UUID) -> None:
+    """An org admin may only write inside their own organization."""
+    if org_id != admin.org_id:
+        raise AppError(403, "Not allowed")
+
+
+async def _owned_or_404(session: AsyncSession, admin: User, model, obj_id: uuid.UUID | None, label: str) -> None:
+    """Referenced ids must belong to the admin's org; foreign and missing ids look the same (404)."""
+    if obj_id is None:
+        return
+    obj = await session.get(model, obj_id)
+    org_id = None
+    if obj is not None:
+        if model is Division or model is User or model is Project:
+            org_id = obj.org_id
+        elif model is Team:
+            division = await session.get(Division, obj.division_id)
+            org_id = division.org_id if division is not None else None
+    if org_id != admin.org_id:
+        raise AppError(404, f"{label} not found")
 
 
 
 @router.post("/divisions")
-async def create_division_route(body: DivisionIn, session: AsyncSession = Depends(get_session), actor: str = Depends(_org_admin)) -> dict:
-    division = await create_division(session, org_id=body.org_id, name=body.name, actor=actor)
+async def create_division_route(
+    body: DivisionIn, session: AsyncSession = Depends(get_session), admin: User = Depends(_org_admin_user)
+) -> dict:
+    _same_org_or_403(admin, body.org_id)
+    division = await create_division(session, org_id=body.org_id, name=body.name, actor=f"user:{admin.id}")
     await session.commit()
     return _division_dict(division)
 
 
 @router.post("/teams")
-async def create_team_route(body: TeamIn, session: AsyncSession = Depends(get_session), actor: str = Depends(_org_admin)) -> dict:
-    team = await create_team(session, division_id=body.division_id, name=body.name, actor=actor)
+async def create_team_route(
+    body: TeamIn, session: AsyncSession = Depends(get_session), admin: User = Depends(_org_admin_user)
+) -> dict:
+    await _owned_or_404(session, admin, Division, body.division_id, "Division")
+    team = await create_team(session, division_id=body.division_id, name=body.name, actor=f"user:{admin.id}")
     await session.commit()
     return _team_dict(team)
 
 
 @router.post("/users")
-async def create_user_route(body: UserIn, session: AsyncSession = Depends(get_session), actor: str = Depends(_org_admin)) -> dict:
+async def create_user_route(
+    body: UserIn, session: AsyncSession = Depends(get_session), admin: User = Depends(_org_admin_user)
+) -> dict:
+    _same_org_or_403(admin, body.org_id)
+    await _owned_or_404(session, admin, Division, body.division_id, "Division")
+    await _owned_or_404(session, admin, User, body.manager_id, "Manager")
     user = await create_user(
         session,
         org_id=body.org_id,
@@ -393,41 +421,54 @@ async def create_user_route(body: UserIn, session: AsyncSession = Depends(get_se
         display_name=body.display_name,
         division_id=body.division_id,
         manager_id=body.manager_id,
-        actor=actor,
+        actor=f"user:{admin.id}",
     )
     await session.commit()
     return _user_dict(user)
 
 
 @router.post("/team-memberships")
-async def add_team_member_route(body: TeamMembershipIn, session: AsyncSession = Depends(get_session), actor: str = Depends(_org_admin)) -> dict:
-    membership = await add_team_member(session, team_id=body.team_id, user_id=body.user_id, actor=actor)
+async def add_team_member_route(
+    body: TeamMembershipIn, session: AsyncSession = Depends(get_session), admin: User = Depends(_org_admin_user)
+) -> dict:
+    await _owned_or_404(session, admin, Team, body.team_id, "Team")
+    await _owned_or_404(session, admin, User, body.user_id, "User")
+    membership = await add_team_member(session, team_id=body.team_id, user_id=body.user_id, actor=f"user:{admin.id}")
     await session.commit()
     return {"team_id": str(membership.team_id), "user_id": str(membership.user_id)}
 
 
 @router.post("/role-grants")
-async def grant_role_route(body: RoleGrantIn, session: AsyncSession = Depends(get_session), actor: str = Depends(_org_admin)) -> dict:
+async def grant_role_route(
+    body: RoleGrantIn, session: AsyncSession = Depends(get_session), admin: User = Depends(_org_admin_user)
+) -> dict:
+    await _owned_or_404(session, admin, User, body.user_id, "User")
+    await _owned_or_404(session, admin, Project, body.project_id, "Project")
     grant = await grant_role(
         session,
         user_id=body.user_id,
         role_name=body.role_name,
         project_id=body.project_id,
-        actor=actor,
+        actor=f"user:{admin.id}",
     )
     await session.commit()
     return {"user_id": str(grant.user_id), "role_name": body.role_name, "project_id": str(grant.project_id) if grant.project_id else None}
 
 
 @router.post("/projects")
-async def create_project_route(body: ProjectIn, session: AsyncSession = Depends(get_session), actor: str = Depends(_org_admin)) -> dict:
+async def create_project_route(
+    body: ProjectIn, session: AsyncSession = Depends(get_session), admin: User = Depends(_org_admin_user)
+) -> dict:
+    _same_org_or_403(admin, body.org_id)
+    await _owned_or_404(session, admin, Team, body.owner_team_id, "Owner team")
+    await _owned_or_404(session, admin, Division, body.owner_division_id, "Owner division")
     project = await create_project(
         session,
         org_id=body.org_id,
         name=body.name,
         owner_team_id=body.owner_team_id,
         owner_division_id=body.owner_division_id,
-        actor=actor,
+        actor=f"user:{admin.id}",
     )
     await session.commit()
     return _project_dict(project)
@@ -435,15 +476,20 @@ async def create_project_route(body: ProjectIn, session: AsyncSession = Depends(
 
 @router.patch("/projects/{project_id}/owner")
 async def update_project_owner_route(
-    project_id: uuid.UUID, body: ProjectOwnerIn, session: AsyncSession = Depends(get_session),
-    actor: str = Depends(_org_admin),
+    project_id: uuid.UUID,
+    body: ProjectOwnerIn,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(_org_admin_user),
 ) -> dict:
+    await _owned_or_404(session, admin, Project, project_id, "Project")
+    await _owned_or_404(session, admin, Team, body.owner_team_id, "Owner team")
+    await _owned_or_404(session, admin, Division, body.owner_division_id, "Owner division")
     project = await update_project_owner(
         session,
         project_id=project_id,
         owner_team_id=body.owner_team_id,
         owner_division_id=body.owner_division_id,
-        actor=actor,
+        actor=f"user:{admin.id}",
     )
     await session.commit()
     return _project_dict(project)
