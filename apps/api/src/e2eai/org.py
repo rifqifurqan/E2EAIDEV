@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import audit
+from .auth import current_session, require_scope
 from .core.errors import AppError
 from .db import Division, Organization, Project, Role, Team, TeamMember, User, UserRole, get_session
 
@@ -348,22 +349,38 @@ class ProjectOwnerIn(BaseModel):
 router = APIRouter(prefix="/api/v1/admin/org", tags=["admin"])
 
 
+async def _org_admin(sess: dict = Depends(current_session), session: AsyncSession = Depends(get_session)) -> str:
+    """Authenticate and require the admin role (FR-F2); returns the audit actor derived from the session."""
+    require_scope(sess, "admin")
+    user = await session.get(User, uuid.UUID(sess["user_id"]))
+    if user is None or user.status != "active":
+        raise AppError(401, "Not authenticated")
+    role = await session.scalar(select(Role).where(Role.name == "admin"))
+    granted = role is not None and await session.scalar(
+        select(UserRole).where(UserRole.user_id == user.id, UserRole.role_id == role.id, UserRole.project_id.is_(None))
+    )
+    if not granted:
+        raise AppError(403, "Not allowed")
+    return f"user:{user.id}"
+
+
+
 @router.post("/divisions")
-async def create_division_route(body: DivisionIn, session: AsyncSession = Depends(get_session)) -> dict:
-    division = await create_division(session, org_id=body.org_id, name=body.name, actor=body.actor)
+async def create_division_route(body: DivisionIn, session: AsyncSession = Depends(get_session), actor: str = Depends(_org_admin)) -> dict:
+    division = await create_division(session, org_id=body.org_id, name=body.name, actor=actor)
     await session.commit()
     return _division_dict(division)
 
 
 @router.post("/teams")
-async def create_team_route(body: TeamIn, session: AsyncSession = Depends(get_session)) -> dict:
-    team = await create_team(session, division_id=body.division_id, name=body.name, actor=body.actor)
+async def create_team_route(body: TeamIn, session: AsyncSession = Depends(get_session), actor: str = Depends(_org_admin)) -> dict:
+    team = await create_team(session, division_id=body.division_id, name=body.name, actor=actor)
     await session.commit()
     return _team_dict(team)
 
 
 @router.post("/users")
-async def create_user_route(body: UserIn, session: AsyncSession = Depends(get_session)) -> dict:
+async def create_user_route(body: UserIn, session: AsyncSession = Depends(get_session), actor: str = Depends(_org_admin)) -> dict:
     user = await create_user(
         session,
         org_id=body.org_id,
@@ -371,41 +388,41 @@ async def create_user_route(body: UserIn, session: AsyncSession = Depends(get_se
         display_name=body.display_name,
         division_id=body.division_id,
         manager_id=body.manager_id,
-        actor=body.actor,
+        actor=actor,
     )
     await session.commit()
     return _user_dict(user)
 
 
 @router.post("/team-memberships")
-async def add_team_member_route(body: TeamMembershipIn, session: AsyncSession = Depends(get_session)) -> dict:
-    membership = await add_team_member(session, team_id=body.team_id, user_id=body.user_id, actor=body.actor)
+async def add_team_member_route(body: TeamMembershipIn, session: AsyncSession = Depends(get_session), actor: str = Depends(_org_admin)) -> dict:
+    membership = await add_team_member(session, team_id=body.team_id, user_id=body.user_id, actor=actor)
     await session.commit()
     return {"team_id": str(membership.team_id), "user_id": str(membership.user_id)}
 
 
 @router.post("/role-grants")
-async def grant_role_route(body: RoleGrantIn, session: AsyncSession = Depends(get_session)) -> dict:
+async def grant_role_route(body: RoleGrantIn, session: AsyncSession = Depends(get_session), actor: str = Depends(_org_admin)) -> dict:
     grant = await grant_role(
         session,
         user_id=body.user_id,
         role_name=body.role_name,
         project_id=body.project_id,
-        actor=body.actor,
+        actor=actor,
     )
     await session.commit()
     return {"user_id": str(grant.user_id), "role_name": body.role_name, "project_id": str(grant.project_id) if grant.project_id else None}
 
 
 @router.post("/projects")
-async def create_project_route(body: ProjectIn, session: AsyncSession = Depends(get_session)) -> dict:
+async def create_project_route(body: ProjectIn, session: AsyncSession = Depends(get_session), actor: str = Depends(_org_admin)) -> dict:
     project = await create_project(
         session,
         org_id=body.org_id,
         name=body.name,
         owner_team_id=body.owner_team_id,
         owner_division_id=body.owner_division_id,
-        actor=body.actor,
+        actor=actor,
     )
     await session.commit()
     return _project_dict(project)
@@ -413,19 +430,20 @@ async def create_project_route(body: ProjectIn, session: AsyncSession = Depends(
 
 @router.patch("/projects/{project_id}/owner")
 async def update_project_owner_route(
-    project_id: uuid.UUID, body: ProjectOwnerIn, session: AsyncSession = Depends(get_session)
+    project_id: uuid.UUID, body: ProjectOwnerIn, session: AsyncSession = Depends(get_session),
+    actor: str = Depends(_org_admin),
 ) -> dict:
     project = await update_project_owner(
         session,
         project_id=project_id,
         owner_team_id=body.owner_team_id,
         owner_division_id=body.owner_division_id,
-        actor=body.actor,
+        actor=actor,
     )
     await session.commit()
     return _project_dict(project)
 
 
 @router.get("/snapshot")
-async def org_snapshot_route(org_id: uuid.UUID, project_id: uuid.UUID | None = None, session: AsyncSession = Depends(get_session)) -> dict:
+async def org_snapshot_route(org_id: uuid.UUID, project_id: uuid.UUID | None = None, session: AsyncSession = Depends(get_session), actor: str = Depends(_org_admin)) -> dict:
     return await org_snapshot(session, org_id=org_id, project_id=project_id)
