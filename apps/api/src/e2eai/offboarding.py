@@ -45,13 +45,14 @@ async def deactivate_user(
         raise AppError(400, "Cannot deactivate yourself")
 
     target = await session.get(User, target_user_id)
-    if target is None:
+    # A user of another organization answers exactly like a missing one (NFR-18: no cross-tenant probing).
+    if target is None or target.org_id != admin.org_id:
         raise AppError(404, "User not found")
     if target.status != "active":
         raise AppError(409, "User is already disabled")
 
     transfer_to = await session.get(User, transfer_to_id)
-    if transfer_to is None or transfer_to.status != "active":
+    if transfer_to is None or transfer_to.status != "active" or transfer_to.org_id != admin.org_id:
         raise AppError(400, "Transfer target must be an active user")
 
     # ── 1. Disable the user ──────────────────────────────────────────────
