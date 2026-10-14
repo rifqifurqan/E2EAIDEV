@@ -182,6 +182,11 @@ const en = {
     classifyRisk: "Classify risk",
     riskClassified: "Risk classified",
     classifyFailed: "Could not classify the bot risk.",
+    inventoryTitle: "AI inventory",
+    inventoryLoading: "Loading...",
+    inventoryEmpty: "No AI inventory entries yet.",
+    inventoryAdminOnly: "The AI inventory is available to users with governance access only.",
+    inventoryLoadFailed: "Could not load data.",
   },
   build: {
     title: "Model registry",

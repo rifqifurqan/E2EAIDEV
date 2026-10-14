@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { useI18n } from "@/i18n/context";
-import { api, type EuAiActTier } from "@/lib/api-client";
+import { api, type AIInventoryEntry, type EuAiActTier } from "@/lib/api-client";
+import { useAdminData } from "@/lib/use-admin-data";
+import { useLoadMore } from "@/lib/use-load-more";
+import { LoadMore } from "./load-more";
 import { WhyItMattersPanel } from "./why-it-matters-panel";
 
 function splitList(value: string, separators: RegExp): string[] {
@@ -14,6 +17,17 @@ function splitList(value: string, separators: RegExp): string[] {
 
 const INPUT = "mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm";
 const LABEL = "text-sm font-medium text-gray-700";
+
+function InventoryRow({ entry }: { entry: AIInventoryEntry }) {
+  return (
+    <li className="rounded border border-gray-200 p-2">
+      <span className="mr-2 font-medium">{entry.name}</span>
+      <span className="font-mono text-xs text-gray-500">
+        {entry.kind} · {entry.risk_tier} · {entry.status} · {entry.approval_status}
+      </span>
+    </li>
+  );
+}
 
 export function PlanScreen() {
   const { t } = useI18n();
@@ -36,6 +50,15 @@ export function PlanScreen() {
   const [riskBusy, setRiskBusy] = useState(false);
   const [riskResult, setRiskResult] = useState<string | null>(null);
   const [riskFailed, setRiskFailed] = useState(false);
+  const inventory = useAdminData(() => api.listInventory());
+  const moreInventory = useLoadMore(
+    inventory.kind === "ready" ? inventory.data.items : undefined,
+    inventory.kind === "ready" ? inventory.data.next_cursor : null,
+    async (cursor: string) => {
+      const page = await api.listInventoryPage(cursor);
+      return { items: page.items, next_cursor: page.next_cursor };
+    },
+  );
 
   const userList = splitList(users, /,/);
   const ready =
@@ -225,6 +248,39 @@ export function PlanScreen() {
           </p>
         ) : null}
       </form>
+      <section className="mb-6 rounded-lg border border-gray-200 bg-white p-4 text-left">
+        <h2 className="mb-3 text-lg font-semibold text-gray-900">{t.plan.inventoryTitle}</h2>
+        {inventory.kind === "loading" ? <p className="text-sm text-gray-600">{t.plan.inventoryLoading}</p> : null}
+        {inventory.kind === "forbidden" ? (
+          <p role="alert" className="text-sm text-amber-700">
+            {t.plan.inventoryAdminOnly}
+          </p>
+        ) : null}
+        {inventory.kind === "error" ? (
+          <p role="alert" className="text-sm text-red-700">
+            {t.plan.inventoryLoadFailed}
+          </p>
+        ) : null}
+        {inventory.kind === "ready" ? (
+          moreInventory.items.length === 0 ? (
+            <p className="text-sm text-gray-600">{t.plan.inventoryEmpty}</p>
+          ) : (
+            <>
+              <ul className="space-y-2">
+                {moreInventory.items.map((entry) => (
+                  <InventoryRow key={entry.id} entry={entry} />
+                ))}
+              </ul>
+              <LoadMore
+                hasMore={moreInventory.hasMore}
+                busy={moreInventory.busy}
+                failed={moreInventory.failed}
+                onLoadMore={moreInventory.loadMore}
+              />
+            </>
+          )
+        ) : null}
+      </section>
       <WhyItMattersPanel stage="plan" />
     </section>
   );

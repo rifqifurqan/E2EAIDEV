@@ -236,6 +236,20 @@ export interface BotApprovalList {
   next_cursor: string | null;
 }
 
+export interface AIInventoryEntry {
+  id: string;
+  kind: "bot" | "model" | string;
+  name: string;
+  risk_tier: string | null;
+  status: string;
+  approval_status: string;
+}
+
+export interface AIInventoryList {
+  items: AIInventoryEntry[];
+  next_cursor: string | null;
+}
+
 export interface EvalRunSummary {
   id: string;
   dataset_id: string | null;
@@ -370,6 +384,7 @@ export const ENDPOINTS = {
     `/model-registry/${encodeURIComponent(name)}/${encodeURIComponent(version)}/eval-runs`,
   botApprovals: "/governance/bot-approvals",
   botApprovalDecision: (approvalId: string) => `/governance/bot-approvals/${approvalId}/decisions`,
+  aiInventory: "/governance/ai-inventory",
 } as const;
 
 // ─── Client functions ───────────────────────────────────────────────────
@@ -488,6 +503,9 @@ export const api = {
       method: "POST",
       body: input,
     }),
+  listInventory: () => apiFetch<AIInventoryList>(ENDPOINTS.aiInventory),
+  listInventoryPage: (cursor: string) =>
+    apiFetch<AIInventoryList>(`${ENDPOINTS.aiInventory}?cursor=${encodeURIComponent(cursor)}`),
 
   // Evals
   createDataset: (name: string, source: string, items: unknown[]) =>

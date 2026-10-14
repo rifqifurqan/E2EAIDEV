@@ -184,6 +184,11 @@ const id: Dictionary = {
     classifyRisk: "Klasifikasikan risiko",
     riskClassified: "Risiko terklasifikasi",
     classifyFailed: "Gagal mengklasifikasikan risiko bot.",
+    inventoryTitle: "Inventaris AI",
+    inventoryLoading: "Memuat...",
+    inventoryEmpty: "Belum ada inventaris AI.",
+    inventoryAdminOnly: "Inventaris AI hanya tersedia untuk pengguna dengan akses tata kelola.",
+    inventoryLoadFailed: "Gagal memuat data.",
   },
   build: {
     title: "Registri model",

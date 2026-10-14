@@ -7,6 +7,8 @@ import { I18nProvider } from "@/i18n/context";
 const apiMock = vi.hoisted(() => ({
   createUseCase: vi.fn(),
   classifyBotRisk: vi.fn(),
+  listInventory: vi.fn(),
+  listInventoryPage: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -35,6 +37,9 @@ describe("PlanScreen", () => {
   beforeEach(() => {
     apiMock.createUseCase.mockReset();
     apiMock.classifyBotRisk.mockReset();
+    apiMock.listInventory.mockReset();
+    apiMock.listInventoryPage.mockReset();
+    apiMock.listInventory.mockResolvedValue({ items: [], next_cursor: null });
   });
 
   it("submits the intake with real success metrics, users, sources and systems", async () => {
@@ -112,10 +117,56 @@ describe("PlanScreen", () => {
     expect(alert).not.toHaveTextContent(/token|not found/i);
   });
 
+  it("loads AI inventory entries and appends the next page", async () => {
+    apiMock.listInventory.mockResolvedValueOnce({
+      items: [
+        {
+          id: "inv-1",
+          kind: "bot",
+          name: "HR assistant",
+          risk_tier: "high",
+          status: "active",
+          approval_status: "approved",
+        },
+      ],
+      next_cursor: "page-2",
+    });
+    apiMock.listInventoryPage.mockResolvedValueOnce({
+      items: [
+        {
+          id: "inv-2",
+          kind: "model",
+          name: "support-llm",
+          risk_tier: "minimal",
+          status: "draft",
+          approval_status: "pending",
+        },
+      ],
+      next_cursor: null,
+    });
+    renderPlan();
+
+    expect(await screen.findByText("HR assistant")).toBeInTheDocument();
+    expect(screen.getByText(/bot.*high.*active.*approved/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /load more/i }));
+    expect(await screen.findByText("support-llm")).toBeInTheDocument();
+    expect(apiMock.listInventoryPage).toHaveBeenCalledWith("page-2");
+  });
+
+  it("shows an admin notice when AI inventory is forbidden", async () => {
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.listInventory.mockRejectedValueOnce(new ApiError(403, "Forbidden", "internal policy name"));
+    renderPlan();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/governance access/i);
+    expect(alert).not.toHaveTextContent(/internal policy/i);
+  });
+
   it("renders in Indonesian with the why-it-matters panel", async () => {
     renderPlan("id");
     expect(screen.getByLabelText(/judul kasus penggunaan/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /kirim kasus penggunaan/i })).toBeInTheDocument();
+    expect(await screen.findByText(/belum ada inventaris ai/i)).toBeInTheDocument();
     expect(screen.getByRole("region", { name: /mengapa penting/i })).toBeInTheDocument();
   });
 });
