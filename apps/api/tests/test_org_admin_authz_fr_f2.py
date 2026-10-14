@@ -38,21 +38,42 @@ def _app(user_id: uuid.UUID | None) -> TestClient:
 
 
 def _ids():
+    """(demo org id, andi id, a fresh admin of the Demo org). The admin is NOT the install-level bootstrap admin."""
+
     async def run():
         async with db_sessions()() as s:
             await seed_demo(s, password="TestPassword_123456789")
             org = await s.scalar(select(Organization).where(Organization.name == "Demo"))
             andi = await s.scalar(select(User).where(func.lower(User.email) == "andi@demo.e2eai"))
-            admin = await s.scalar(select(User).where(func.lower(User.email) == "admin@local"))
-            if admin is None:  # demo seed has no admin: promote a fresh user
-                from e2eai.db import Role
-                role = await s.scalar(select(Role).where(Role.name == "admin"))
-                admin = User(org_id=org.id, email=f"org-admin-{uuid.uuid4().hex[:8]}@demo.e2eai", display_name="Org Admin")
-                s.add(admin)
-                await s.flush()
-                s.add(UserRole(user_id=admin.id, role_id=role.id))
-                await s.commit()
-            return admin.org_id, andi.id, admin.id
+            from e2eai.db import Role
+
+            role = await s.scalar(select(Role).where(Role.name == "admin"))
+            admin = User(org_id=org.id, email=f"org-admin-{uuid.uuid4().hex[:8]}@demo.e2eai", display_name="Org Admin")
+            s.add(admin)
+            await s.flush()
+            s.add(UserRole(user_id=admin.id, role_id=role.id))
+            await s.commit()
+            return org.id, andi.id, admin.id
+
+    return asyncio.run(run())
+
+
+def _org_id_of(user_id):
+    async def run():
+        async with db_sessions()() as s:
+            return (await s.get(User, user_id)).org_id
+
+    return run()
+
+
+def _platform_admin_id():
+    """The break-glass admin created by bootstrap (org "System")."""
+    from e2eai.seed import ADMIN_EMAIL, bootstrap_admin
+
+    async def run():
+        async with db_sessions()() as s:
+            await bootstrap_admin(s, password="TestPassword_123456789")
+            return (await s.scalar(select(User).where(func.lower(User.email) == ADMIN_EMAIL))).id
 
     return asyncio.run(run())
 
@@ -168,3 +189,19 @@ def test_admin_cannot_touch_another_organization():
             return await s.scalar(select(func.count()).select_from(UserRole).where(UserRole.user_id == f_user))
 
     assert asyncio.run(foreign_user_roles()) == 0
+
+
+def test_install_level_admin_manages_other_organizations_but_audit_actor_stays_the_session_user():
+    """The bootstrap admin lives in org "System" and must still be able to administer the Demo org."""
+    _migrate()
+    org_id, _, _ = _ids()
+    platform_id = _platform_admin_id()
+    c = _app(platform_id)
+    assert c.get("/api/v1/admin/org/snapshot", params={"org_id": str(org_id)}).json()["org_id"] == str(org_id)
+    name = f"Platform Div {uuid.uuid4().hex[:8]}"
+    r = c.post("/api/v1/admin/org/divisions", json={"org_id": str(org_id), "name": name})
+    assert r.status_code == 200, r.text
+    default = c.get("/api/v1/admin/org/snapshot")
+    assert default.status_code == 200, default.text
+    system_org = asyncio.run(_org_id_of(platform_id))
+    assert default.json()["org_id"] != str(system_org)  # defaults to the main org, not the empty System org

@@ -364,9 +364,22 @@ async def _org_admin_user(sess: dict = Depends(current_session), session: AsyncS
     return user
 
 
-def _same_org_or_403(admin: User, org_id: uuid.UUID) -> None:
-    """An org admin may only write inside their own organization."""
-    if org_id != admin.org_id:
+SYSTEM_ORG_NAME = "System"  # the bootstrap (break-glass) admin lives here; see seed.bootstrap_admin
+
+
+async def is_install_admin(session: AsyncSession, admin: User) -> bool:
+    """Admins of the bootstrap "System" organization run the whole install and may act in any organization."""
+    org = await session.get(Organization, admin.org_id)
+    return org is not None and org.name == SYSTEM_ORG_NAME
+
+
+async def _org_allowed(session: AsyncSession, admin: User, org_id: uuid.UUID) -> bool:
+    return org_id == admin.org_id or await is_install_admin(session, admin)
+
+
+async def _same_org_or_403(session: AsyncSession, admin: User, org_id: uuid.UUID) -> None:
+    """An org admin may only write inside their own organization (install admins: any)."""
+    if not await _org_allowed(session, admin, org_id):
         raise AppError(403, "Not allowed")
 
 
@@ -382,16 +395,15 @@ async def _owned_or_404(session: AsyncSession, admin: User, model, obj_id: uuid.
         elif model is Team:
             division = await session.get(Division, obj.division_id)
             org_id = division.org_id if division is not None else None
-    if org_id != admin.org_id:
+    if org_id is None or not await _org_allowed(session, admin, org_id):
         raise AppError(404, f"{label} not found")
-
 
 
 @router.post("/divisions")
 async def create_division_route(
     body: DivisionIn, session: AsyncSession = Depends(get_session), admin: User = Depends(_org_admin_user)
 ) -> dict:
-    _same_org_or_403(admin, body.org_id)
+    await _same_org_or_403(session, admin, body.org_id)
     division = await create_division(session, org_id=body.org_id, name=body.name, actor=f"user:{admin.id}")
     await session.commit()
     return _division_dict(division)
@@ -411,7 +423,7 @@ async def create_team_route(
 async def create_user_route(
     body: UserIn, session: AsyncSession = Depends(get_session), admin: User = Depends(_org_admin_user)
 ) -> dict:
-    _same_org_or_403(admin, body.org_id)
+    await _same_org_or_403(session, admin, body.org_id)
     await _owned_or_404(session, admin, Division, body.division_id, "Division")
     await _owned_or_404(session, admin, User, body.manager_id, "Manager")
     user = await create_user(
@@ -459,7 +471,7 @@ async def grant_role_route(
 async def create_project_route(
     body: ProjectIn, session: AsyncSession = Depends(get_session), admin: User = Depends(_org_admin_user)
 ) -> dict:
-    _same_org_or_403(admin, body.org_id)
+    await _same_org_or_403(session, admin, body.org_id)
     await _owned_or_404(session, admin, Team, body.owner_team_id, "Owner team")
     await _owned_or_404(session, admin, Division, body.owner_division_id, "Owner division")
     project = await create_project(
@@ -502,7 +514,18 @@ async def org_snapshot_route(
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(_org_admin_user),
 ) -> dict:
-    """Org snapshot; ``org_id`` defaults to the admin's own organization and may not name another."""
-    if org_id is not None and org_id != admin.org_id:
+    """Org snapshot; ``org_id`` defaults to the admin's own organization (install admins: the install's main
+    organization, i.e. the oldest one that is not "System"). Other admins may not name another org."""
+    if org_id is None:
+        org_id = admin.org_id
+        if await is_install_admin(session, admin):
+            main = await session.scalar(
+                select(Organization.id)
+                .where(Organization.name != SYSTEM_ORG_NAME)
+                .order_by(Organization.created_at, Organization.id)
+                .limit(1)
+            )
+            org_id = main or admin.org_id
+    elif not await _org_allowed(session, admin, org_id):
         raise AppError(403, "Not allowed")
-    return await org_snapshot(session, org_id=admin.org_id, project_id=project_id)
+    return await org_snapshot(session, org_id=org_id, project_id=project_id)

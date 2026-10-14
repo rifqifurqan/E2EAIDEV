@@ -56,16 +56,22 @@ def _setup():
             outsider2 = User(org_id=foreign.id, email=f"off-out2-{suffix}@other.example", display_name="Outsider2")
             s.add_all([admin, mate, target, outsider, outsider2])
             await s.commit()
-            return {k: v.id for k, v in dict(admin=admin, mate=mate, target=target, outsider=outsider, outsider2=outsider2).items()}
+            from e2eai.seed import ADMIN_EMAIL, bootstrap_admin
+
+            await bootstrap_admin(s, password="TestPassword_123456789")
+            platform = await s.scalar(select(User).where(func.lower(User.email) == ADMIN_EMAIL))
+            ids = {k: v.id for k, v in dict(admin=admin, mate=mate, target=target, outsider=outsider, outsider2=outsider2).items()}
+            ids["platform"] = platform.id
+            return ids
 
     return asyncio.run(run())
 
 
-async def _call(ids, *, target, transfer_to):
+async def _call(ids, *, target, transfer_to, admin="admin"):
     from e2eai.offboarding import deactivate_user
 
     async with db_sessions()() as s:
-        admin = await s.get(User, ids["admin"])
+        admin = await s.get(User, ids[admin])
         return await deactivate_user(s, _Redis(), _Authz(), admin=admin, target_user_id=ids[target], transfer_to_id=ids[transfer_to])
 
 
@@ -98,6 +104,22 @@ def test_same_organization_offboarding_still_works():
     result = asyncio.run(_call(ids, target="target", transfer_to="mate"))
     assert result["status"] == "disabled"
     assert asyncio.run(_status(ids["target"])) == "disabled"
+
+
+def test_install_level_admin_can_offboard_within_the_target_organization():
+    _migrate()
+    ids = _setup()
+    result = asyncio.run(_call(ids, target="target", transfer_to="mate", admin="platform"))
+    assert result["status"] == "disabled"
+
+
+def test_install_level_admin_still_cannot_move_assets_into_a_different_organization():
+    _migrate()
+    ids = _setup()
+    with pytest.raises(AppError) as ei:
+        asyncio.run(_call(ids, target="target", transfer_to="outsider", admin="platform"))
+    assert ei.value.status == 400
+    assert asyncio.run(_status(ids["target"])) == "active"
 
 
 def teardown_module(module):
