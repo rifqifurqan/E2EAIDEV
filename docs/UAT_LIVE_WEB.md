@@ -1,7 +1,7 @@
 # Live Web UAT — E2EAIDEV
 
-Date: 2026-10-14 (run 3, cron)
-Tester: Hermes Agent, headed Playwright / Chrome (non-headless, slowMo 60)
+Date: 2026-10-14 (run 4, cron)
+Tester: Hermes Agent + Claude Code review, headed Playwright / Chrome (non-headless, slowMo 50–60)
 Target web: http://127.0.0.1:13000 · Target API: http://127.0.0.1:8000
 Demo user: `andi@demo.e2eai` (not an org admin). Its local password lives only in Hermes scratch, never in the repo.
 
@@ -12,6 +12,7 @@ Demo user: `andi@demo.e2eai` (not an org admin). Its local password lives only i
 - Run 2 after fixes, v3 script: `e2eaidev-uat3-1791960461338` (**36 pass / 0 fail**), screenshots `01-…24-*.png`
 - Run 2 after fixes, original script: `e2eaidev-uat-1791960549558` (**22 pass / 0 fail**)
 - Run 3 after UAT-CHAT-005 fix, v4 script: `e2eaidev-uat4-1791961850058` (**37 pass / 0 fail**), screenshots `01-…25-*.png`; visual spot-check `08-chat-stop.png` shows the green "Generation stopped." notice and the expected `cuti-uat.txt · page 1` citation.
+- Run 4 after UAT-NAV-001 fix: full v4 script `e2eaidev-uat4-1791963285993` (**37 pass / 0 fail**) plus mobile-nav script `e2eaidev-uat-mobile-1791963402626` (**9 pass / 0 fail**), screenshots `01-mobile-home-nav.png` through `04-mobile-admin.png`; visual spot-check `01-mobile-home-nav.png` shows Documents / Chat / Admin visible on a 390 px-wide viewport.
 - Scripts: `e2eaidev_uat_live.js` (happy path), `e2eaidev_uat_v2.js` (negative paths, found run-2 bugs), `e2eaidev_uat_v3.js` (run-2 regression), `e2eaidev_uat_v4.js` (run-3 Stop regression). Not yet committed as a repo suite (they need the scratch-held demo password).
 
 ## Prerequisites verified
@@ -43,10 +44,11 @@ Chat
 - PASS Yes/No feedback sends `POST /messages/{id}/feedback` and confirms
 - PASS Stop sends `POST /messages/{id}/stop` for the latest assistant message and shows the localized stop notice (run 3 v4); component test also covers in-flight abort/drop.
 
-Locale / a11y
+Locale / a11y / responsive navigation
 - PASS Indonesian choice survives full-page navigation (localStorage), `<html lang>` follows it
 - PASS header status, Sign out, upload status are localized
 - PASS first Tab stop is the skip link
+- PASS mobile-width (390 px) feature navigation keeps Documents, Chat and Admin visible and navigable; ID labels also localize (`Dokumen`, `Obrolan`, `Admin`)
 
 Lifecycle pages (Plan, Data, Build, Test, Release, Operate, Improve, Admin)
 - PASS all render in ID without error; a non-admin sees admin-only notices instead of dead forms
@@ -57,6 +59,8 @@ Health
 
 ## Fixes made from this run (all TDD, see UAT_BUGS.md)
 
+Run 4: Mobile feature navigation is now reachable below the `md` breakpoint. App shell renders a dedicated mobile feature nav for Documents / Chat / Admin above the main content while keeping the desktop sidebar at `md` and up; EN/ID landmark labels and link labels are covered by component tests and a headed 390 px Playwright UAT.
+
 Run 3: Chat Stop is now wired to real behavior. The web client creates an `AbortController` for each send, disables Stop when nothing can be stopped, drops a late answer after an abort, calls `api.stopMessage(message_id)` when a stopped/finished assistant message id exists, and uses localized EN/ID status text.
 
 Run 2:
@@ -65,6 +69,10 @@ API: principal validation before share; minimum-relevance floor (0.30, `retrieva
 Web: Sign out and hidden login form; "Move to Trash" label, Trash tab with Restore; chat conversation list/history/feedback; localized status text; locale persistence; sign-in hint for signed-out visitors; API reason shown on share failure.
 
 ## Verification gates (this run)
+
+- Run 4: TDD RED `cd apps/web && pnpm vitest run src/components/app-shell.test.tsx` -> 1 failed (`mobile feature navigation` missing). GREEN after the fix -> 15 passed.
+- Run 4: Claude Code review of the diff completed successfully; it found no functional regression. Hermes also visually spot-checked `e2eaidev-uat-mobile-1791963402626/01-mobile-home-nav.png`.
+- Run 4: headed Playwright v4 UAT (`NODE_PATH=.../e2eaidev-playwright-runtime/node_modules node .../e2eaidev_uat_v4.js`) -> 37 passed / 0 failed; headed mobile-nav UAT (`node .../e2eaidev_uat_mobile_nav.js`) -> 9 passed / 0 failed; no unexpected 5xx/4xx/console errors.
 
 - Run 3: `cd apps/web && pnpm vitest run src/components/chat-screen.test.tsx src/lib/api-client.test.ts` -> 2 files / 32 tests passed.
 - Run 3: `cd apps/web && pnpm run typecheck` -> ok.
@@ -79,6 +87,6 @@ Web: Sign out and hidden login form; "Move to Trash" label, Trash tab with Resto
 ## Not tested
 
 - Admin mutations (org forms, offboarding, flywheel triage, incident report): Andi is not an admin and no admin demo login exists, so only the admin-only notices were verified.
-- Drag-and-drop upload, files over quota, real PDF/DOCX (Docling not installed), mobile/narrow viewport (sidebar and conversation list are hidden below `md`), screen-reader walkthrough, concurrent sessions, session idle expiry.
+- Drag-and-drop upload, files over quota, real PDF/DOCX (Docling not installed), screen-reader walkthrough, concurrent sessions, session idle expiry.
 - Production server (`pnpm start`); UAT ran against `pnpm dev`.
 - Browser UX for rate-limit / token-quota 429 responses.

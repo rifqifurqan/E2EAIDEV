@@ -58,6 +58,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const lifecycleLabel = locale === "id" ? "Navigasi siklus hidup" : "Lifecycle navigation";
   const featuresLabel = t.nav.features;
+  const mobileFeaturesLabel = locale === "id" ? "Navigasi fitur seluler" : "Mobile feature navigation";
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -157,6 +158,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className="inline-block rounded px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-white hover:text-blue-700"
               >
                 {t.nav[stage]}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      <nav aria-label={mobileFeaturesLabel} className="border-b border-gray-100 bg-white px-4 md:hidden">
+        <ul className="flex flex-wrap gap-1 py-2">
+          {FEATURE_LINKS.map((feat) => (
+            <li key={feat}>
+              <a
+                href={FEATURE_PATHS[feat]}
+                className="inline-block rounded px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-700"
+              >
+                {t.nav[feat]}
               </a>
             </li>
           ))}

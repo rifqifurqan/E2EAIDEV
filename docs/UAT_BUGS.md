@@ -1,13 +1,18 @@
 # UAT Bug List — E2EAIDEV Live Web
 
-Date: 2026-10-14 (run 3)
-Latest result: **v4 37/0**. Evidence `e2eaidev-uat4-1791961850058` under Hermes scratch (`C:/Users/riqan/AppData/Local/hermes/cache/scratch/`). Previous passing evidence: `e2eaidev-uat3-1791960461338` and `e2eaidev-uat-1791960549558`. Before-fix evidence: `e2eaidev-uat2-1791957806874`.
+Date: 2026-10-14 (run 4)
+Latest result: full v4 **37/0** plus mobile-nav **9/0**. Evidence `e2eaidev-uat4-1791963285993` and `e2eaidev-uat-mobile-1791963402626` under Hermes scratch (`C:/Users/riqan/AppData/Local/hermes/cache/scratch/`). Previous passing evidence: `e2eaidev-uat4-1791961850058`, `e2eaidev-uat3-1791960461338` and `e2eaidev-uat-1791960549558`. Before-fix evidence: `e2eaidev-uat2-1791957806874`.
 
 ## Open (prioritized)
 
 1. **UAT-ADMIN-001 — No admin demo account, so admin mutation flows cannot be UAT'd.** Severity: Medium (coverage gap). Add a documented admin login path for UAT.
-2. **UAT-NAV-001 — Sidebar and conversation list are hidden below the `md` breakpoint.** Severity: Low–Medium (not exercised on a phone this run). Documents/Chat/Admin links disappear on narrow screens.
-3. **UAT-CHAT-006 — Citations panel is a flat list across the whole conversation.** Severity: Low. After several answers it repeats documents; it should be per answer. (The "no citation for an unrelated question" case is correct and verified.)
+2. **UAT-CHAT-006 — Citations panel is a flat list across the whole conversation.** Severity: Low. After several answers it repeats documents; it should be per answer. (The "no citation for an unrelated question" case is correct and verified.)
+
+## Fixed in run 4
+
+| ID | Sev | Problem (reproduced live) | Fix | Proof |
+|---|---|---|---|---|
+| UAT-NAV-001 | Low–Medium | On narrow/mobile widths the desktop sidebar is hidden below `md`, so Documents / Chat / Admin navigation disappeared from the viewport | App shell now renders a dedicated mobile feature nav for Documents / Chat / Admin above main content below `md`, with EN/ID labels; desktop sidebar remains for `md` and up | `app-shell.test.tsx` RED then GREEN; headed mobile Playwright UAT at 390 px (`e2eaidev-uat-mobile-1791963402626`) 9/0; full v4 UAT still 37/0 |
 
 ## Fixed in run 3
 

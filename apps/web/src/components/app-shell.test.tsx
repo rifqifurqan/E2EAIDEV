@@ -73,9 +73,20 @@ describe("AppShell", () => {
 
   it("renders sidebar nav with feature links", () => {
     renderShell();
-    expect(screen.getByRole("link", { name: "Documents" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Chat" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Admin" })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: /^features$/i });
+    expect(within(nav).getByRole("link", { name: "Documents" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Chat" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Admin" })).toBeInTheDocument();
+  });
+
+  it("keeps feature navigation reachable on mobile widths (UAT-NAV-001)", () => {
+    renderShell();
+    const nav = screen.getByRole("navigation", { name: /mobile feature navigation/i });
+    expect(nav).toHaveClass("md:hidden");
+    expect(nav).not.toHaveClass("hidden");
+    expect(within(nav).getByRole("link", { name: "Documents" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Chat" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Admin" })).toBeInTheDocument();
   });
 
   it("renders language switch button", () => {
@@ -92,8 +103,8 @@ describe("AppShell", () => {
     expect(
       screen.getByRole("button", { name: /english/i }),
     ).toBeInTheDocument();
-    // Nav should show Indonesian labels
-    expect(screen.getByRole("link", { name: "Dokumen" })).toBeInTheDocument();
+    // Both desktop and mobile feature navs should show Indonesian labels.
+    expect(screen.getAllByRole("link", { name: "Dokumen" }).length).toBeGreaterThanOrEqual(2);
   });
 
   it("renders main content area with landmark", () => {
@@ -114,7 +125,8 @@ describe("AppShell", () => {
 
   it("localizes the feature navigation landmark label", () => {
     renderShell("id");
-    expect(screen.getByRole("navigation", { name: /fitur/i })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: /^Fitur$/i })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: /fitur seluler/i })).toBeInTheDocument();
   });
 
   it("has banner landmark for header", () => {
