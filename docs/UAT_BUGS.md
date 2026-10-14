@@ -1,11 +1,17 @@
 # UAT Bug List — E2EAIDEV Live Web
 
-Date: 2026-10-14 (run 5)
-Latest result: full v4 **37/0**, mobile-nav **9/0**, and admin-mutation **9/0**. Evidence `e2eaidev-uat4-1791966120479`, `e2eaidev-uat-mobile-1791966218787`, and `e2eaidev-uat-admin-1791966227548` under Hermes scratch (`C:/Users/riqan/AppData/Local/hermes/cache/scratch/`). Previous passing evidence: `e2eaidev-uat4-1791963285993`, `e2eaidev-uat4-1791961850058`, `e2eaidev-uat3-1791960461338` and `e2eaidev-uat-1791960549558`. Before-fix evidence: `e2eaidev-uat2-1791957806874`.
+Date: 2026-10-14 (run 6)
+Latest result: full v5 **37/0**, mobile-nav **9/0**, and admin-mutation **9/0**. Evidence `e2eaidev-uat5-1791967780471`, `e2eaidev-uat-mobile-1791967554354`, and `e2eaidev-uat-admin-1791967877237` under Hermes scratch (`C:/Users/riqan/AppData/Local/hermes/cache/scratch/`). Previous: `e2eaidev-uat4-1791966120479`, `e2eaidev-uat-mobile-1791966218787`, `e2eaidev-uat-admin-1791966227548`. Previous passing evidence: `e2eaidev-uat4-1791963285993`, `e2eaidev-uat4-1791961850058`, `e2eaidev-uat3-1791960461338` and `e2eaidev-uat-1791960549558`. Before-fix evidence: `e2eaidev-uat2-1791957806874`.
 
 ## Open (prioritized)
 
-1. **UAT-CHAT-006 — Citations panel is a flat list across the whole conversation.** Severity: Low. After several answers it repeats documents; it should be per answer. (The "no citation for an unrelated question" case is correct and verified.)
+None verified open. Candidates not yet exercised in a headed run: see "Not tested" in UAT_LIVE_WEB.md.
+
+## Fixed in run 6
+
+| ID | Sev | Problem (reproduced live) | Fix | Proof |
+|---|---|---|---|---|
+| UAT-CHAT-006 | Low | Citations panel was a flat list of every citation across the whole conversation, repeating documents after several answers | Panel shows only the newest assistant answer's citations; earlier assistant answers keep their own citations inline under that answer (so history citations are not lost) | `chat-screen.test.tsx` RED (1 failed) then GREEN (20 passed); live v5 `chat-citations-panel-shows-latest-answer-only` and `chat-history-keeps-citation` PASS (the first v5 run caught that dropping history citations made `chat-history-keeps-citation` FAIL, hence the inline rendering) |
 
 ## Fixed in run 5
 

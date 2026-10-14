@@ -201,6 +201,53 @@ describe("ChatScreen", () => {
     expect(screen.queryByText(/too late answer/i)).not.toBeInTheDocument();
   });
 
+  it("citations panel shows only the latest assistant answer's citations, not all previous answers (UAT-CHAT-006)", async () => {
+    apiMock.createConversation.mockResolvedValue({ id: "c1", title: "Q1", created_at: "n", updated_at: "n" });
+    apiMock.sendMessage
+      .mockResolvedValueOnce({
+        message_id: "m1",
+        answer: "First answer.",
+        citations: [{ document: "doc-alpha.pdf", page: 1, section: "" }],
+      })
+      .mockResolvedValueOnce({
+        message_id: "m2",
+        answer: "Second answer.",
+        citations: [{ document: "doc-beta.pdf", page: 3, section: "" }],
+      });
+    renderChat();
+    const box = screen.getByRole("textbox", { name: /ask/i });
+    await userEvent.type(box, "Q1");
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+    await screen.findByText("First answer.");
+    await userEvent.type(box, "Q2");
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+    await screen.findByText("Second answer.");
+    const citationsPanel = screen.getByRole("region", { name: /citations/i });
+    expect(within(citationsPanel).getByText(/doc-beta\.pdf/i)).toBeInTheDocument();
+    expect(within(citationsPanel).queryByText(/doc-alpha\.pdf/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps each earlier answer's own citations visible next to that answer (UAT-CHAT-006)", async () => {
+    apiMock.listConversations.mockResolvedValue({
+      conversations: [{ id: "conv-1", title: "History", created_at: "n", updated_at: "n" }],
+      next_cursor: null,
+    });
+    apiMock.listMessages.mockResolvedValue({
+      messages: [
+        { id: "u1", role: "user", content: "Q1", stop_reason: null, created_at: "n", citations: [] },
+        { id: "a1", role: "assistant", content: "Answer one.", stop_reason: null, created_at: "n", citations: [{ document: "doc-alpha.pdf", page: 1, section: null }] },
+        { id: "u2", role: "user", content: "Q2", stop_reason: null, created_at: "n", citations: [] },
+        { id: "a2", role: "assistant", content: "Answer two.", stop_reason: null, created_at: "n", citations: [] },
+      ],
+    });
+    renderChat();
+    await userEvent.click(await screen.findByRole("button", { name: "History" }));
+    const answerOne = (await screen.findByText("Answer one.")).closest("li") as HTMLElement;
+    expect(within(answerOne).getByText(/doc-alpha\.pdf/i)).toBeInTheDocument();
+    const panel = screen.getByRole("region", { name: /citations/i });
+    expect(within(panel).queryByText(/doc-alpha\.pdf/i)).not.toBeInTheDocument();
+  });
+
   it("Stop on a finished answer calls the stop endpoint for the latest assistant message (UAT-CHAT-005)", async () => {
     apiMock.createConversation.mockResolvedValue({ id: "c1", title: "Q", created_at: "n", updated_at: "n" });
     apiMock.sendMessage.mockResolvedValue({ message_id: "msg-7", answer: "A", citations: [] });

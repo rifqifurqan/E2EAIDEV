@@ -57,6 +57,8 @@ export function ChatScreen() {
   }, []);
 
   const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant" && m.id)?.id;
+  // Index of the newest assistant answer: its citations live in the Citations panel; earlier answers keep theirs inline.
+  const latestAssistantIndex = messages.map((m) => m.role).lastIndexOf("assistant");
 
   async function handleNewConversation() {
     setStatus("");
@@ -220,6 +222,16 @@ export function ChatScreen() {
                   >
                     <p className="text-sm font-semibold capitalize">{message.role}</p>
                     <p className="text-sm">{message.content}</p>
+                    {message.role === "assistant" && message.citations?.length && index !== latestAssistantIndex ? (
+                      <ul className="mt-1 space-y-0.5 text-xs text-gray-500" aria-label={t.chat.citations}>
+                        {message.citations.map((citation, cIndex) => (
+                          <li key={`${citation.document ?? citation.document_id}-${citation.chunk_id ?? cIndex}-${cIndex}`}>
+                            {citation.document ?? citation.document_id ?? "document"} · page {citation.page ?? "?"}
+                            {citation.section ? ` · ${citation.section}` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </li>
                 ))}
               </ol>
@@ -295,18 +307,21 @@ export function ChatScreen() {
             className="mt-3 rounded border border-gray-200 bg-white p-3"
           >
             <h3 className="mb-1 text-sm font-medium text-gray-700">{t.chat.citations}</h3>
-            {messages.some((message) => message.citations?.length) ? (
-              <ul className="space-y-1 text-sm text-gray-600">
-                {messages.flatMap((message) => message.citations ?? []).map((citation, index) => (
-                  <li key={`${citation.document ?? citation.document_id}-${citation.chunk_id ?? index}-${index}`}>
-                    {citation.document ?? citation.document_id ?? "document"} · page {citation.page ?? "?"}
-                    {citation.section ? ` · ${citation.section}` : ""}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-gray-400">{t.chat.noCitations}</p>
-            )}
+            {(() => {
+              const latestCitations = [...messages].reverse().find((m) => m.role === "assistant")?.citations ?? [];
+              return latestCitations.length ? (
+                <ul className="space-y-1 text-sm text-gray-600">
+                  {latestCitations.map((citation, index) => (
+                    <li key={`${citation.document ?? citation.document_id}-${citation.chunk_id ?? index}-${index}`}>
+                      {citation.document ?? citation.document_id ?? "document"} · page {citation.page ?? "?"}
+                      {citation.section ? ` · ${citation.section}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-400">{t.chat.noCitations}</p>
+              );
+            })()}
           </div>
         </div>
       </div>
