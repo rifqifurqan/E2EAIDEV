@@ -2603,3 +2603,9 @@ HOW TO RESUME
   - Hermes worked manually. Codex unused. Follow-up to the DSR tenant fix: `list_requests_page` and `send_deadline_reminders` now join the request to its subject and keep only requests about people of the calling admin's organization (`_scope_to_org`); install-level admins (bootstrap "System" org) still see and remind about all of them. Before, any org admin saw the whole install's DSR ledger (ids, kinds, deadlines).
   - TDD / RED: `uv run pytest -q tests/test_dsr_tenant_nfr18.py` -> 2 failed (foreign request visible in the list and in reminders). GREEN: that file + `test_data_subject_nfr10.py` + `test_dsr_ledger_nfr10.py` + `test_dsr_reminders_nfr10.py` + `test_dsr_self_service_nfr10.py` + `test_dsr_erase_flywheel_nfr10.py` -> 21 passed. Web untouched.
   - Not done: reminder recipients are still every active admin of the install (notifications carry request ids only, no personal data); other admin lists not audited for org scoping.
+
+- Backlog external-env deferrals made explicit (NFR-3/NFR-4/NFR-5/NFR-15/NFR-9) (2026-10-14, cron):
+  - Backlog audit found no unchecked active items, and `progress_2026-10-05.txt` already recorded the remaining non-code PRD validation gaps: hardware/load/HA targets need GPU/reference/Kubernetes infrastructure, and nightly adapter smoke / CI vulnerability scanning / signed artifacts need CI-deploy setup and release-signing decisions.
+  - `PRD_CRON_BACKLOG.md` now lists those as explicit deferred items 169 and 170 under section Z, so future cron runs do not keep re-auditing them as unfinished active work.
+  - Verification: `python - <<'PY' ...` backlog check -> no unchecked items; deferred items 169/170 present. No product code changed, so no API/web tests were run.
+
