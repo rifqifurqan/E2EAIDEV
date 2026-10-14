@@ -901,6 +901,32 @@ class AccessRequestIn(BaseModel):
 router = APIRouter(prefix="/api/v1", tags=["documents"])
 
 
+@router.get("/documents")
+async def list_documents_api(
+    view: str = "my_documents",
+    sess: dict = Depends(current_session),
+    db: AsyncSession = Depends(get_session),
+) -> dict:
+    """Permission-filtered document metadata list for the web document library."""
+    require_scope(sess, "documents")
+    user = await _current_user(db, sess)
+    rows = await list_documents_view(db, user=user, view=view)
+    return {
+        "documents": [
+            {
+                "document_id": row.get("document_id") or row["id"],
+                "title": row["title"],
+                "sensitivity": row.get("sensitivity") or "internal",
+                "status": row.get("status") or "active",
+                "parse_status": row.get("parse_status") or "available",
+                "scan_status": row.get("scan_status") or "unknown",
+            }
+            for row in rows
+        ],
+        "next_cursor": None,
+    }
+
+
 @router.post("/documents")
 async def upload_document(
     file: UploadFile = File(...),

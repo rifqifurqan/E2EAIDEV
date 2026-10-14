@@ -2609,3 +2609,13 @@ HOW TO RESUME
   - `PRD_CRON_BACKLOG.md` now lists those as explicit deferred items 169 and 170 under section Z, so future cron runs do not keep re-auditing them as unfinished active work.
   - Verification: `python - <<'PY' ...` backlog check -> no unchecked items; deferred items 169/170 present. No product code changed, so no API/web tests were run.
 
+
+- Live UAT remediation (2026-10-14, manual):
+  - Cron `faa6ca1a401a` prompt changed from PRD-only continuation to live UAT bug discovery/fix loop, then paused during this manual remediation to avoid overlapping writes.
+  - Restarted API/web from current `main`, verified API/web/proxy health 200.
+  - Ran headed Playwright UAT in real Chrome. Initial run found: Documents did not reload persisted docs, search/tabs were local-only, and Operate showed a dead incident report form to a non-admin user. Evidence kept in Hermes scratch under `e2eaidev-uat-*`.
+  - TDD RED: `cd apps/web && pnpm vitest run src/components/documents-screen.test.tsx src/components/operate-screen.test.tsx` -> 4 failed for backend-backed Documents and Operate forbidden form. API RED: `cd apps/api && uv run pytest -q tests/test_documents_list_endpoint_uat.py` -> failed because GET `/api/v1/documents` was not exposed.
+  - Fix: added backend `GET /api/v1/documents`; added web client `listDocuments`/`searchDocuments`; rewired `DocumentsScreen` to fetch on mount/tab/search and preserve uploaded documents after reload; hid Operate incident report form unless incident list is accessible.
+  - Docs: added `docs/UAT_LIVE_WEB.md` and `docs/UAT_BUGS.md` with UAT evidence, pass matrix, fixed bug list, scope and follow-ups.
+  - Final headed Playwright UAT: 22 passed / 0 failed / 0 issues, result JSON `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev-uat-1791957118046/uat-results.json`.
+  - Verification: `cd apps/web && pnpm vitest run && pnpm run typecheck && pnpm lint && pnpm build` -> 20 files / 301 tests passed, typecheck ok, lint ok, production build ok. `cd apps/api && uv run pytest -q tests/test_documents_list_endpoint_uat.py tests/test_us_sharing_views_notifications.py tests/test_us_share_expiry_access_requests_p1.py` -> 14 passed.

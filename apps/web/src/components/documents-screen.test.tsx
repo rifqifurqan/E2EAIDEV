@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DocumentsScreen } from "./documents-screen";
 import { I18nProvider } from "@/i18n/context";
 
 const apiMock = vi.hoisted(() => ({
+  listDocuments: vi.fn(),
+  searchDocuments: vi.fn(),
   uploadDocument: vi.fn(),
   shareDocument: vi.fn(),
   trashDocument: vi.fn(),
@@ -24,6 +26,10 @@ function renderDocs(locale: "en" | "id" = "en") {
 
 describe("DocumentsScreen", () => {
   beforeEach(() => {
+    apiMock.listDocuments.mockReset();
+    apiMock.listDocuments.mockResolvedValue({ documents: [], next_cursor: null });
+    apiMock.searchDocuments.mockReset();
+    apiMock.searchDocuments.mockResolvedValue({ results: [], next_cursor: null });
     apiMock.uploadDocument.mockReset();
     apiMock.shareDocument.mockReset();
     apiMock.trashDocument.mockReset();
@@ -71,6 +77,37 @@ describe("DocumentsScreen", () => {
     await userEvent.upload(screen.getByLabelText(/upload document/i), file);
     expect(apiMock.uploadDocument).toHaveBeenCalledWith(file);
     expect(await screen.findByText(/policy\.pdf/i)).toBeInTheDocument();
+  });
+
+  it("loads persisted documents from the API on mount", async () => {
+    apiMock.listDocuments.mockResolvedValueOnce({
+      documents: [{ document_id: "doc1", title: "persisted-policy.txt", status: "active", sensitivity: "internal", parse_status: "parsed", scan_status: "clean" }],
+      next_cursor: null,
+    });
+    renderDocs();
+    expect(await screen.findByText(/persisted-policy\.txt/i)).toBeInTheDocument();
+    expect(apiMock.listDocuments).toHaveBeenCalledWith("my_documents");
+  });
+
+  it("switches tabs by loading the matching backend document view", async () => {
+    const user = userEvent.setup();
+    renderDocs();
+    await user.click(screen.getByRole("tab", { name: /shared with me/i }));
+    await waitFor(() => expect(apiMock.listDocuments).toHaveBeenLastCalledWith("shared_with_me"));
+    await user.click(screen.getByRole("tab", { name: /my team/i }));
+    await waitFor(() => expect(apiMock.listDocuments).toHaveBeenLastCalledWith("my_team"));
+  });
+
+  it("searches documents through the backend within the selected view", async () => {
+    const user = userEvent.setup();
+    apiMock.searchDocuments.mockResolvedValueOnce({
+      results: [{ document_id: "doc2", title: "search-hit.txt", status: "active", sensitivity: "internal", parse_status: "parsed", scan_status: "clean" }],
+      next_cursor: null,
+    });
+    renderDocs();
+    await user.type(screen.getByRole("searchbox"), "search-hit");
+    await waitFor(() => expect(apiMock.searchDocuments).toHaveBeenCalledWith("search-hit", "my_documents"));
+    expect(await screen.findByText(/search-hit\.txt/i)).toBeInTheDocument();
   });
 
   it("share and revoke actions call document APIs when a document exists", async () => {

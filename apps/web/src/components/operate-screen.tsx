@@ -235,7 +235,6 @@ export function OperateScreen() {
         <h2 id="ai-incidents-heading" className="mb-3 text-lg font-semibold">
           {t.operate.incidentsTitle}
         </h2>
-        <ReportIncidentForm onDone={() => setReloadKey((key) => key + 1)} />
         {state.kind === "loading" ? <p>{t.operate.loading}</p> : null}
         {state.kind === "forbidden" ? (
           <p role="alert" className="rounded border border-yellow-300 bg-yellow-50 p-3 text-sm">
@@ -248,15 +247,18 @@ export function OperateScreen() {
           </p>
         ) : null}
         {state.kind === "ready" ? (
-          more.items.length === 0 ? (
-            <p className="text-sm text-gray-500">{t.operate.noIncidents}</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {more.items.map((incident) => (
-                <IncidentRow key={incident.id} incident={incident} onTransition={() => setReloadKey((key) => key + 1)} />
-              ))}
-            </ul>
-          )
+          <>
+            <ReportIncidentForm onDone={() => setReloadKey((key) => key + 1)} />
+            {more.items.length === 0 ? (
+              <p className="text-sm text-gray-500">{t.operate.noIncidents}</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {more.items.map((incident) => (
+                  <IncidentRow key={incident.id} incident={incident} onTransition={() => setReloadKey((key) => key + 1)} />
+                ))}
+              </ul>
+            )}
+          </>
         ) : null}
         {state.kind === "ready" ? (
           <LoadMore hasMore={more.hasMore} busy={more.busy} failed={more.failed} onLoadMore={more.loadMore} />

@@ -71,6 +71,18 @@ export interface Document {
   scan_status: string;
 }
 
+export interface DocumentList {
+  documents: Document[];
+  next_cursor: string | null;
+}
+
+export interface DocumentSearchResponse {
+  results: Document[];
+  next_cursor: string | null;
+}
+
+export type DocViewParam = "my_documents" | "shared_with_me" | "my_team" | "all" | "everything";
+
 export interface BotGrantInput {
   principal: string;
   level: "user" | "admin";
@@ -381,6 +393,7 @@ export const ENDPOINTS = {
   stop: (msgId: string) => `/messages/${msgId}/stop`,
   ask: "/chat/ask",
   documents: "/documents",
+  documentSearch: "/documents/search",
   document: (id: string) => `/documents/${id}`,
   documentShares: (id: string) => `/documents/${id}/shares`,
   documentSensitivity: (id: string) => `/documents/${id}/sensitivity`,
@@ -494,6 +507,12 @@ export const api = {
     }),
 
   // Documents
+  listDocuments: (view: DocViewParam = "my_documents") =>
+    apiFetch<DocumentList>(`${ENDPOINTS.documents}?view=${encodeURIComponent(view)}`),
+  searchDocuments: (query: string, view: DocViewParam = "my_documents") =>
+    apiFetch<DocumentSearchResponse>(
+      `${ENDPOINTS.documentSearch}?q=${encodeURIComponent(query)}&view=${encodeURIComponent(view)}`,
+    ),
   uploadDocument: async (file: File): Promise<Document> => {
     const formData = new FormData();
     formData.append("file", file);

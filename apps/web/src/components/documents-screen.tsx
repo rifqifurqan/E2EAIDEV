@@ -1,10 +1,17 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/i18n/context";
 import { api, type Document } from "@/lib/api-client";
 
 type DocView = "my" | "shared" | "team";
+type ApiDocView = "my_documents" | "shared_with_me" | "my_team";
+
+const VIEW_TO_API: Record<DocView, ApiDocView> = {
+  my: "my_documents",
+  shared: "shared_with_me",
+  team: "my_team",
+};
 
 export function DocumentsScreen() {
   const { t } = useI18n();
@@ -13,7 +20,10 @@ export function DocumentsScreen() {
   const [selectedId, setSelectedId] = useState("");
   const [sharePrincipal, setSharePrincipal] = useState("");
   const [status, setStatus] = useState("");
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const requestIdRef = useRef(0);
 
   const tabs: { key: DocView; label: string }[] = [
     { key: "my", label: t.documents.myDocuments },
@@ -23,12 +33,40 @@ export function DocumentsScreen() {
 
   const selectedDocument = documents.find((doc) => doc.document_id === selectedId) ?? documents[0];
 
+  useEffect(() => {
+    const requestId = ++requestIdRef.current;
+    const timer = window.setTimeout(() => {
+      const view = VIEW_TO_API[activeView];
+      const trimmed = query.trim();
+      setLoading(true);
+      setStatus((current) => (current === "Could not load documents" ? "" : current));
+      const task = trimmed === "" ? api.listDocuments(view) : api.searchDocuments(trimmed, view);
+      task
+        .then((result) => {
+          if (requestId !== requestIdRef.current) return;
+          const nextDocs = "documents" in result ? result.documents : result.results;
+          setDocuments(nextDocs);
+          setSelectedId((current) => (nextDocs.some((doc) => doc.document_id === current) ? current : ""));
+        })
+        .catch(() => {
+          if (requestId !== requestIdRef.current) return;
+          setDocuments([]);
+          setSelectedId("");
+          setStatus("Could not load documents");
+        })
+        .finally(() => {
+          if (requestId === requestIdRef.current) setLoading(false);
+        });
+    }, trimmedDelay(query));
+    return () => window.clearTimeout(timer);
+  }, [activeView, query]);
+
   async function handleUpload(file: File | undefined) {
     if (!file) return;
     setStatus("Uploading...");
     try {
       const doc = await api.uploadDocument(file);
-      setDocuments((items) => [doc, ...items]);
+      setDocuments((items) => [doc, ...items.filter((item) => item.document_id !== doc.document_id)]);
       setSelectedId(doc.document_id);
       setStatus("Upload complete");
     } catch (error) {
@@ -87,6 +125,8 @@ export function DocumentsScreen() {
           <input
             type="search"
             role="searchbox"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
             placeholder={t.documents.search}
             className="rounded border border-gray-300 px-3 py-1.5 text-sm"
           />
@@ -138,7 +178,8 @@ export function DocumentsScreen() {
       {status ? <p role="status" className="mb-3 text-sm text-gray-700">{status}</p> : null}
 
       <div className="rounded-lg border border-gray-200 p-8 text-center text-gray-500">
-        {documents.length ? (
+        {loading ? <p>Loading documents...</p> : null}
+        {!loading && documents.length ? (
           <ul className="space-y-2 text-left">
             {documents.map((doc) => (
               <li key={doc.document_id}>
@@ -153,10 +194,13 @@ export function DocumentsScreen() {
               </li>
             ))}
           </ul>
-        ) : (
-          t.documents.noDocuments
-        )}
+        ) : null}
+        {!loading && documents.length === 0 ? t.documents.noDocuments : null}
       </div>
     </section>
   );
+}
+
+function trimmedDelay(query: string): number {
+  return query.trim() === "" ? 0 : 250;
 }

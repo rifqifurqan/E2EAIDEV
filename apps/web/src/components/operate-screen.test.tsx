@@ -242,11 +242,12 @@ describe("OperateScreen", () => {
     );
   });
 
-  it("still offers the report form to non-admins when the list is forbidden", async () => {
+  it("hides the incident report form from non-admins when the list is forbidden", async () => {
     const { ApiError } = await import("@/lib/api-client");
     apiMock.listIncidents.mockRejectedValue(new ApiError(403, "Forbidden"));
     renderOperate();
-    expect(await screen.findByRole("button", { name: /report incident/i })).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/administrator/i);
+    expect(screen.queryByRole("button", { name: /report incident/i })).not.toBeInTheDocument();
   });
 
   it("shows a generic error without server text when reporting fails", async () => {
