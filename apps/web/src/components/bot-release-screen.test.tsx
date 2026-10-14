@@ -12,6 +12,8 @@ const apiMock = vi.hoisted(() => ({
   createBot: vi.fn(),
   grantBotAccess: vi.fn(),
   setBotScope: vi.fn(),
+  releaseBundle: vi.fn(),
+  rollbackBundle: vi.fn(),
 }));
 
 vi.mock("@/lib/api-client", async () => {
@@ -37,6 +39,8 @@ describe("BotReleaseScreen", () => {
     apiMock.createBot.mockReset();
     apiMock.grantBotAccess.mockReset();
     apiMock.setBotScope.mockReset();
+    apiMock.releaseBundle.mockReset();
+    apiMock.rollbackBundle.mockReset();
   });
 
   it("lists bot approval requests with risk tier and status", async () => {
@@ -363,6 +367,91 @@ describe("BotReleaseScreen", () => {
     await screen.findByRole("status");
     expect(screen.getByLabelText(/bot cakupan/i)).toHaveValue(BOT_ID);
     expect(screen.getByRole("button", { name: /^atur cakupan$/i })).toBeInTheDocument();
+  });
+
+  const BUNDLE_ID = "dddddddd-1b7e-4c1d-9a55-0d2f6a9b7c11";
+
+  it("releases a bundle from a JSON object and shows the new version", async () => {
+    const user = userEvent.setup();
+    apiMock.releaseBundle.mockResolvedValue({ id: BUNDLE_ID, version: 4, status: "production" });
+    renderBots();
+    await screen.findByText(/no approval requests yet/i);
+    expect(screen.queryByLabelText(/bundle json/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^release bundle$/i }));
+    await user.type(screen.getByLabelText(/release bot/i), BOT_ID);
+    const bundle = screen.getByLabelText(/bundle json/i);
+    await user.click(bundle);
+    await user.paste('{"chat_model":"m1","index":"i1"}');
+    await user.click(screen.getByRole("button", { name: /^confirm release$/i }));
+    await waitFor(() => expect(apiMock.releaseBundle).toHaveBeenCalledWith(BOT_ID, { chat_model: "m1", index: "i1" }));
+    expect(await screen.findByText(/bundle released.*v4/i)).toBeInTheDocument();
+  });
+
+  it("keeps confirm release disabled for invalid JSON, arrays and non-UUID bots", async () => {
+    const user = userEvent.setup();
+    renderBots();
+    await screen.findByText(/no approval requests yet/i);
+    await user.click(screen.getByRole("button", { name: /^release bundle$/i }));
+    const confirm = screen.getByRole("button", { name: /^confirm release$/i });
+    await user.type(screen.getByLabelText(/release bot/i), BOT_ID);
+    await user.click(screen.getByLabelText(/bundle json/i));
+    await user.paste("{not json");
+    expect(confirm).toBeDisabled();
+    await user.clear(screen.getByLabelText(/bundle json/i));
+    await user.paste("[1,2]");
+    expect(confirm).toBeDisabled();
+    await user.clear(screen.getByLabelText(/bundle json/i));
+    await user.paste("{}");
+    expect(confirm).toBeEnabled();
+    await user.clear(screen.getByLabelText(/release bot/i));
+    await user.type(screen.getByLabelText(/release bot/i), "nope");
+    expect(confirm).toBeDisabled();
+  });
+
+  it("shows a generic error without server text when the release fails", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.releaseBundle.mockRejectedValue(new ApiError(422, "Release blocked by failed gates", "stack detail"));
+    renderBots();
+    await screen.findByText(/no approval requests yet/i);
+    await user.click(screen.getByRole("button", { name: /^release bundle$/i }));
+    await user.type(screen.getByLabelText(/release bot/i), BOT_ID);
+    await user.click(screen.getByLabelText(/bundle json/i));
+    await user.paste("{}");
+    await user.click(screen.getByRole("button", { name: /^confirm release$/i }));
+    expect(await screen.findByText(/could not release the bundle/i)).toBeInTheDocument();
+    expect(screen.queryByText(/stack detail|failed gates/i)).not.toBeInTheDocument();
+  });
+
+  it("rolls a bot back to a previous bundle id", async () => {
+    const user = userEvent.setup();
+    apiMock.rollbackBundle.mockResolvedValue({ id: BUNDLE_ID, version: 2, status: "production" });
+    renderBots();
+    await screen.findByText(/no approval requests yet/i);
+    await user.click(screen.getByRole("button", { name: /^rollback$/i }));
+    const confirm = screen.getByRole("button", { name: /^confirm rollback$/i });
+    expect(confirm).toBeDisabled();
+    await user.type(screen.getByLabelText(/rollback bot/i), BOT_ID);
+    await user.type(screen.getByLabelText(/target bundle id/i), BUNDLE_ID);
+    await user.click(confirm);
+    await waitFor(() => expect(apiMock.rollbackBundle).toHaveBeenCalledWith(BOT_ID, BUNDLE_ID));
+    expect(await screen.findByText(/rolled back.*v2/i)).toBeInTheDocument();
+  });
+
+  it("shows a generic error when the rollback fails, and labels the forms in Indonesian", async () => {
+    const user = userEvent.setup();
+    const { ApiError } = await import("@/lib/api-client");
+    apiMock.rollbackBundle.mockRejectedValue(new ApiError(404, "Bundle not found", "stack detail"));
+    renderBots("id");
+    await screen.findByText(/belum ada permintaan persetujuan/i);
+    await user.click(screen.getByRole("button", { name: /^kembalikan$/i }));
+    await user.type(screen.getByLabelText(/bot pengembalian/i), BOT_ID);
+    await user.type(screen.getByLabelText(/id bundel target/i), BUNDLE_ID);
+    await user.click(screen.getByRole("button", { name: /^konfirmasi pengembalian$/i }));
+    expect(await screen.findByText(/gagal mengembalikan bundel/i)).toBeInTheDocument();
+    expect(screen.queryByText(/stack detail/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^rilis bundel$/i }));
+    expect(screen.getByRole("button", { name: /^konfirmasi rilis$/i })).toBeInTheDocument();
   });
 
   it("loads more approval requests with the next cursor", async () => {

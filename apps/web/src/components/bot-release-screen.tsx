@@ -10,6 +10,18 @@ import { LoadMore } from "./load-more";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PRINCIPAL_RE = /^(user|team|division|role|org):\S+$/;
 
+/** Parses a bundle JSON text; only a JSON object is a valid bundle (not an array, string or null). */
+function parseBundle(text: string): Record<string, unknown> | null {
+  try {
+    const value: unknown = JSON.parse(text);
+    return typeof value === "object" && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function splitIds(value: string): string[] {
   return value
     .split(/[\s,;]+/)
@@ -52,6 +64,55 @@ export function BotReleaseScreen() {
   const [scopeSaving, setScopeSaving] = useState(false);
   const [scopeSaved, setScopeSaved] = useState<string | null>(null);
   const [scopeFailed, setScopeFailed] = useState(false);
+
+  const [showRelease, setShowRelease] = useState(false);
+  const [releaseBotId, setReleaseBotId] = useState("");
+  const [bundleText, setBundleText] = useState("");
+  const [releasing, setReleasing] = useState(false);
+  const [releasedVersion, setReleasedVersion] = useState<number | null>(null);
+  const [releaseFailed, setReleaseFailed] = useState(false);
+  const parsedBundle = parseBundle(bundleText);
+  const releaseValid = UUID_RE.test(releaseBotId.trim()) && parsedBundle !== null;
+
+  async function releaseBundle(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!releaseValid || parsedBundle === null || releasing) return;
+    setReleaseFailed(false);
+    setReleasedVersion(null);
+    setReleasing(true);
+    try {
+      const bundle = await api.releaseBundle(releaseBotId.trim(), parsedBundle);
+      setReleasedVersion(bundle.version);
+    } catch {
+      setReleaseFailed(true);
+    } finally {
+      setReleasing(false);
+    }
+  }
+
+  const [showRollback, setShowRollback] = useState(false);
+  const [rollbackBotId, setRollbackBotId] = useState("");
+  const [rollbackBundleId, setRollbackBundleId] = useState("");
+  const [rollingBack, setRollingBack] = useState(false);
+  const [rolledBackVersion, setRolledBackVersion] = useState<number | null>(null);
+  const [rollbackFailed, setRollbackFailed] = useState(false);
+  const rollbackValid = UUID_RE.test(rollbackBotId.trim()) && UUID_RE.test(rollbackBundleId.trim());
+
+  async function rollback(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!rollbackValid || rollingBack) return;
+    setRollbackFailed(false);
+    setRolledBackVersion(null);
+    setRollingBack(true);
+    try {
+      const bundle = await api.rollbackBundle(rollbackBotId.trim(), rollbackBundleId.trim());
+      setRolledBackVersion(bundle.version);
+    } catch {
+      setRollbackFailed(true);
+    } finally {
+      setRollingBack(false);
+    }
+  }
 
   const scopeDocIds = splitIds(scopeDocs);
   const scopeFolderIds = splitIds(scopeFolders);
@@ -108,6 +169,8 @@ export function BotReleaseScreen() {
       setBotId(bot.id);
       setGrantBotId(bot.id);
       setScopeBotId(bot.id);
+      setReleaseBotId(bot.id);
+      setRollbackBotId(bot.id);
       setCreatedName(bot.name);
     } catch {
       setCreateFailed(true);
@@ -159,17 +222,99 @@ export function BotReleaseScreen() {
         </button>
         <button
           type="button"
+          onClick={() => setShowRelease((open) => !open)}
           className="rounded border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
         >
           {t.bots.release}
         </button>
         <button
           type="button"
+          onClick={() => setShowRollback((open) => !open)}
           className="rounded border border-orange-300 px-4 py-2 text-sm font-medium text-orange-700 hover:bg-orange-50"
         >
           {t.bots.rollback}
         </button>
       </div>
+
+      {showRelease ? (
+        <form onSubmit={releaseBundle} className="mb-4 flex flex-col gap-2 text-sm">
+          <label htmlFor="release-bot-id">
+            <span className="mr-1">{t.bots.releaseBot}</span>
+            <input
+              id="release-bot-id"
+              value={releaseBotId}
+              onChange={(event) => setReleaseBotId(event.target.value)}
+              className="rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+            />
+          </label>
+          <label htmlFor="release-bundle-json">
+            <span className="mr-1">{t.bots.bundleJson}</span>
+            <textarea
+              id="release-bundle-json"
+              value={bundleText}
+              onChange={(event) => setBundleText(event.target.value)}
+              className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={releasing || !releaseValid}
+            className="self-start rounded border border-blue-400 px-3 py-1 text-sm text-blue-700 disabled:opacity-50"
+          >
+            {t.bots.confirmRelease}
+          </button>
+          {releasedVersion !== null ? (
+            <p role="status" className="text-sm text-green-700">
+              {`${t.bots.bundleReleased}: v${releasedVersion}`}
+            </p>
+          ) : null}
+          {releaseFailed ? (
+            <p role="alert" className="text-sm text-red-700">
+              {t.bots.releaseFailed}
+            </p>
+          ) : null}
+        </form>
+      ) : null}
+
+      {showRollback ? (
+        <form onSubmit={rollback} className="mb-4 flex flex-wrap items-end gap-3 text-sm">
+          <label htmlFor="rollback-bot-id">
+            <span className="mr-1">{t.bots.rollbackBot}</span>
+            <input
+              id="rollback-bot-id"
+              value={rollbackBotId}
+              onChange={(event) => setRollbackBotId(event.target.value)}
+              className="rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+            />
+          </label>
+          <label htmlFor="rollback-bundle-id">
+            <span className="mr-1">{t.bots.targetBundle}</span>
+            <input
+              id="rollback-bundle-id"
+              value={rollbackBundleId}
+              onChange={(event) => setRollbackBundleId(event.target.value)}
+              className="rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={rollingBack || !rollbackValid}
+            className="rounded border border-orange-400 px-3 py-1 text-sm text-orange-700 disabled:opacity-50"
+          >
+            {t.bots.confirmRollback}
+          </button>
+          {rolledBackVersion !== null ? (
+            <p role="status" className="w-full text-sm text-green-700">
+              {`${t.bots.bundleRolledBack}: v${rolledBackVersion}`}
+            </p>
+          ) : null}
+          {rollbackFailed ? (
+            <p role="alert" className="w-full text-sm text-red-700">
+              {t.bots.rollbackFailed}
+            </p>
+          ) : null}
+        </form>
+      ) : null}
 
       {showNewBot ? (
         <form onSubmit={createBot} className="mb-4 flex flex-wrap items-end gap-3 text-sm">

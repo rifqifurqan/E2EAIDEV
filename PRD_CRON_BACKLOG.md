@@ -287,6 +287,8 @@ Rules for every cron tick:
 
 157. [x] [FR-RL7] Release web stage Knowledge Scope form: sets a bot's document/folder scope via `PUT /api/v1/bots/{id}/scope`; the API replaces the whole scope, so submit requires a bot UUID, at least one id and only well-formed UUIDs (a typo cannot clear the scope); target bot prefilled after New Bot; generic EN/ID errors. Web suite 266 passed; see progress_2026-10-05.txt.
 
+158. [x] [FR-RL1/FR-RL5] Release web stage bundle Release and Rollback forms: the previously inert "Release Bundle" / "Rollback" buttons toggle forms calling `POST /api/v1/bots/{id}/bundles` (bundle must be a valid JSON object; arrays/invalid JSON/non-UUID bot keep submit disabled) and `POST /api/v1/bots/{id}/bundles/{bundle_id}/rollback` (both UUIDs required); success shows the version; release-gate failures (422) and other errors show a generic EN/ID message with no server text; bot id prefilled after New Bot. Web suite 271 passed; see progress_2026-10-05.txt.
+
 ### Z. Deferred until external setup / CI-deploy is available
 75. [x] [DEFERRED] [FR-RL3] CI integration for eval suites in GitHub Actions / GitLab CI. Deferred per user because current development should not be blocked by workflow permission/CI setup, and this GitHub token lacks `workflow` scope. Saved local backup branch `deferred/fr-rl3-ci-workflow` and patch `C:/Users/riqan/AppData/Local/hermes/cache/scratch/e2eaidev_fr_rl3_ci_deferred.patch`.
 76. [x] [DEFERRED] [FR-X3] Real external OAuth provider / token exchange integration. Deferred because it requires an external IdP/OAuth provider setup and credentials; keep the deterministic delegated-identity/token-exchange boundary as the testable local implementation until integration credentials are available.
