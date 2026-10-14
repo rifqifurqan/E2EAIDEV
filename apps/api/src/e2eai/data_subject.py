@@ -49,10 +49,17 @@ async def _require_admin(session: AsyncSession, admin: User) -> None:
         raise AppError(403, "Not allowed")
 
 
-async def _subject(session: AsyncSession, subject_id: uuid.UUID) -> User:
+async def _subject(session: AsyncSession, subject_id: uuid.UUID, admin: User) -> User:
+    """Load the data subject. A person of another organization answers like a missing one (NFR-18), unless the
+    caller is an install-level admin (bootstrap "System" org), who runs the whole install."""
     subject = await session.get(User, subject_id)
     if subject is None:
         raise AppError(404, "User not found")
+    if subject.org_id != admin.org_id:
+        from .org import is_install_admin
+
+        if not await is_install_admin(session, admin):
+            raise AppError(404, "User not found")
     return subject
 
 
@@ -92,7 +99,7 @@ async def open_request(
     await _require_admin(session, admin)
     if kind not in DSR_KINDS:
         raise AppError(422, "Unknown request kind", "Use export or erase.")
-    subject = await _subject(session, subject_id)
+    subject = await _subject(session, subject_id, admin)
     req = await _create_request(session, subject=subject, kind=kind, opened_by=f"user:{admin.id}",
                                 received_at=received_at)
     await session.commit()
@@ -247,7 +254,7 @@ def _export_counts(data: dict[str, Any]) -> dict[str, int]:
 
 async def export_subject_data(session: AsyncSession, *, admin: User, subject_id: uuid.UUID) -> dict[str, Any]:
     await _require_admin(session, admin)
-    subject = await _subject(session, subject_id)
+    subject = await _subject(session, subject_id, admin)
     data = await _collect_export(session, subject)
     await audit.record(session, f"user:{admin.id}", "dsr.export", f"user:{subject.id}", _export_counts(data))
     await _complete_open_requests(session, subject.id, "export")
@@ -267,7 +274,7 @@ async def export_own_data(session: AsyncSession, *, user: User) -> dict[str, Any
 
 async def erase_subject_data(session: AsyncSession, *, admin: User, subject_id: uuid.UUID) -> dict[str, Any]:
     await _require_admin(session, admin)
-    subject = await _subject(session, subject_id)
+    subject = await _subject(session, subject_id, admin)
     if subject.status != "disabled":
         raise AppError(409, "User must be offboarded first",
                        "Deactivate the user (offboarding) before erasing their data.")

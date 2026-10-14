@@ -10,7 +10,7 @@ import asyncio
 import os
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 if os.environ.get("E2EAI_SKIP_DB_TESTS"):
     import e2eai.db as _db
@@ -45,8 +45,10 @@ async def _restore_erased_demo_user() -> None:
     from e2eai.db import User, sessions
 
     async with sessions()() as session:
-        for user in (await session.scalars(select(User).where(User.email.like("erased-%@erased.invalid")))).all():
-            user.email, user.display_name, user.status = "andi@demo.e2eai", "Andi", "active"
+        andi_exists = await session.scalar(select(User.id).where(func.lower(User.email) == "andi@demo.e2eai"))
+        if andi_exists is None:  # a stale erased row must not be renamed onto an existing Andi (unique email)
+            for user in (await session.scalars(select(User).where(User.email.like("erased-%@erased.invalid")).limit(1))).all():
+                user.email, user.display_name, user.status = "andi@demo.e2eai", "Andi", "active"
         # offboarding tests disable demo users and may not re-enable them
         for user in (await session.scalars(select(User).where(User.email.like("%@demo.e2eai")))).all():
             user.status = "active"
