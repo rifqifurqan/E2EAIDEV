@@ -171,4 +171,57 @@ describe("DocumentsScreen", () => {
     expect(await screen.findByText(/invalid principal/i)).toBeInTheDocument();
     expect(screen.queryByText(/^shared a\.txt/i)).not.toBeInTheDocument();
   });
+  describe("parse status for async ingestion (FR-D3, FR-F20)", () => {
+    const doc = (parse_status: string, title = "mitra.pdf") => ({
+      document_id: "p1", title, status: "active", sensitivity: "internal", parse_status, scan_status: "clean",
+    });
+
+    it("shows a processing badge while a rich document is still being parsed", async () => {
+      apiMock.listDocuments.mockResolvedValue({ documents: [doc("pending")], next_cursor: null });
+      renderDocs();
+      expect(await screen.findByText(/^processing/i)).toBeInTheDocument();
+    });
+
+    it("keeps showing 'processing' while the document is being indexed (parsed, not yet searchable)", async () => {
+      apiMock.listDocuments.mockResolvedValue({ documents: [doc("indexing")], next_cursor: null });
+      renderDocs();
+      expect(await screen.findByText(/^processing/i)).toBeInTheDocument();
+    });
+
+    it("shows a failed badge in Indonesian when parsing failed", async () => {
+      apiMock.listDocuments.mockResolvedValue({ documents: [doc("failed")], next_cursor: null });
+      renderDocs("id");
+      expect(await screen.findByText(/gagal diproses/i)).toBeInTheDocument();
+    });
+
+    it("shows no badge for a ready document", async () => {
+      apiMock.listDocuments.mockResolvedValue({ documents: [doc("ready")], next_cursor: null });
+      renderDocs();
+      await screen.findByText(/mitra\.pdf/i);
+      expect(screen.queryByText(/^processing/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/could not be processed/i)).not.toBeInTheDocument();
+    });
+
+    it("tells the user an uploaded PDF is being processed", async () => {
+      const user = userEvent.setup();
+      apiMock.uploadDocument.mockResolvedValueOnce(doc("pending"));
+      renderDocs();
+      await user.upload(screen.getByLabelText(/upload document/i), new File(["%PDF"], "mitra.pdf", { type: "application/pdf" }));
+      expect(await screen.findByText(/upload received.*processing/i)).toBeInTheDocument();
+    });
+
+    it("refreshes the list until the document is ready, then stops polling", async () => {
+      apiMock.listDocuments
+        .mockResolvedValueOnce({ documents: [doc("pending")], next_cursor: null })
+        .mockResolvedValueOnce({ documents: [doc("pending")], next_cursor: null })
+        .mockResolvedValue({ documents: [doc("ready")], next_cursor: null });
+      renderDocs();
+      expect(await screen.findByText(/^processing/i)).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByText(/^processing/i)).not.toBeInTheDocument(), { timeout: 12000 });
+      const calls = apiMock.listDocuments.mock.calls.length;
+      expect(calls).toBeGreaterThanOrEqual(3);
+      await new Promise((resolve) => setTimeout(resolve, 3500));
+      expect(apiMock.listDocuments.mock.calls.length).toBe(calls); // nothing pending: no more polling
+    }, 20000);
+  });
 });

@@ -179,7 +179,7 @@ def make_celery_engine() -> JobEngine:
     """Build a Celery-backed JobEngine, or NullJobEngine when Celery is not installed."""
     try:
         from e2eai.celery_app import celery_app  # type: ignore[import]
-    except ImportError:
+    except (ImportError, RuntimeError):  # not installed, or no .env yet (hosted CI)
         return NullJobEngine()
 
     class CeleryJobEngine:

@@ -83,6 +83,8 @@ class Settings:
     default_language: str
     time_zone: str
     s3_bucket: str = "e2eai"
+    celery_broker_url: str = ""  # FR-F20: own Valkey database, apart from sessions
+    celery_result_url: str = ""
     auth_provider: str = "local"
     oidc_authorization_endpoint: str = ""
     oidc_token_endpoint: str = ""
@@ -123,6 +125,8 @@ def get_settings() -> Settings:
         s3_access_key=e["S3_ACCESS_KEY"],
         s3_secret_key=e["S3_SECRET_KEY"],
         s3_bucket=e.get("S3_BUCKET", "e2eai"),
+        celery_broker_url=f"redis://:{e['VALKEY_PASSWORD']}@{host}:{e['VALKEY_PORT']}/{e.get('E2EAI_CELERY_BROKER_DB', '2')}",
+        celery_result_url=f"redis://:{e['VALKEY_PASSWORD']}@{host}:{e['VALKEY_PORT']}/{e.get('E2EAI_CELERY_RESULT_DB', '3')}",
         tei_api_key=e.get("TEI_API_KEY", ""),
         tei_rerank_port=int(e.get("TEI_RERANK_PORT", "18082")),
         default_language=cfg.get("locale", {}).get("default_language", "id"),

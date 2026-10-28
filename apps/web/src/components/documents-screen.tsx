@@ -73,6 +73,25 @@ export function DocumentsScreen() {
     return () => window.clearTimeout(timer);
   }, [activeView, query, t.documents.signInRequired, t.documents.loadFailed]);
 
+  // Rich files (PDF/DOCX/...) are parsed by the background worker: refresh until nothing is pending (FR-D3, FR-F20).
+  const hasPending = documents.some((doc) => isProcessing(doc.parse_status));
+  useEffect(() => {
+    if (!hasPending || inTrash) return;
+    const timer = window.setInterval(() => {
+      const requestId = requestIdRef.current;
+      const view = VIEW_TO_API[activeView];
+      const trimmed = query.trim();
+      const task = trimmed === "" ? api.listDocuments(view) : api.searchDocuments(trimmed, view);
+      task
+        .then((result) => {
+          if (requestId !== requestIdRef.current) return; // a newer tab/search load owns the list
+          setDocuments("documents" in result ? result.documents : result.results);
+        })
+        .catch(() => undefined); // transient: the next tick retries
+    }, PARSE_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [hasPending, inTrash, activeView, query]);
+
   async function handleUpload(file: File | undefined) {
     if (!file) return;
     setStatus(t.documents.uploading);
@@ -82,7 +101,7 @@ export function DocumentsScreen() {
         setDocuments((items) => [doc, ...items.filter((item) => item.document_id !== doc.document_id)]);
         setSelectedId(doc.document_id);
       }
-      setStatus(t.documents.uploadComplete);
+      setStatus(isProcessing(doc.parse_status) ? t.documents.uploadProcessing : t.documents.uploadComplete);
     } catch (error) {
       setStatus(reason(error, t.documents.uploadFailed));
     }
@@ -231,6 +250,11 @@ export function DocumentsScreen() {
                 >
                   <span className="font-medium text-gray-900">{doc.title}</span>
                   <span className="ml-2 text-xs text-gray-500">{doc.status}</span>
+                  {parseBadge(doc.parse_status, t.documents) ? (
+                    <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900">
+                      {parseBadge(doc.parse_status, t.documents)}
+                    </span>
+                  ) : null}
                 </button>
               </li>
             ))}
@@ -240,6 +264,20 @@ export function DocumentsScreen() {
       </div>
     </section>
   );
+}
+
+const PARSE_POLL_MS = 3000;
+
+// "pending" = queued for the worker; "indexing" = parsed but not searchable yet. Both mean: not ready, check again soon.
+function isProcessing(parseStatus: string): boolean {
+  return parseStatus === "pending" || parseStatus === "indexing";
+}
+
+function parseBadge(parseStatus: string, labels: { parsePending: string; parseFailed: string; parseBlocked: string }): string {
+  if (isProcessing(parseStatus)) return labels.parsePending;
+  if (parseStatus === "failed") return labels.parseFailed;
+  if (parseStatus === "skipped") return labels.parseBlocked;
+  return "";
 }
 
 function trimmedDelay(query: string): number {

@@ -491,6 +491,14 @@ def _visible_document_clause(principal_list: list[str]):
     return or_(direct, folder)
 
 
+# Ingest status of each document's CURRENT version, so the library can show pending -> ready / failed (FR-D3, FR-F20).
+_VERSION_COLUMNS = (DocumentVersion.parse_status, DocumentVersion.scan_status, DocumentVersion.parse_confidence)
+
+
+def _version_fields(parse_status, scan_status, parse_confidence) -> dict:
+    return {"parse_status": parse_status, "scan_status": scan_status, "parse_confidence": parse_confidence}
+
+
 async def list_documents_view(session: AsyncSession, *, user: User, view: str = "all") -> list[dict]:
     """Permission-filtered document metadata views (FR-S6).
 
@@ -502,14 +510,17 @@ async def list_documents_view(session: AsyncSession, *, user: User, view: str = 
     if not principal_list:
         return []
     if view == "trash":  # UAT-DOC-006: only the owner's own trashed documents, so they can be restored
-        trash_stmt = select(Document.id, Document.title, Document.owner_id, Document.sensitivity, Document.status).where(
+        trash_stmt = select(Document.id, Document.title, Document.owner_id, Document.sensitivity, Document.status,
+                            *_VERSION_COLUMNS).outerjoin(DocumentVersion, DocumentVersion.id == Document.current_version_id).where(
             Document.status == "trashed", Document.owner_id == user.id,
         ).order_by(Document.title)
         return [
-            {"id": str(doc_id), "title": title, "owner_id": str(owner_id), "sensitivity": sensitivity, "status": status}
-            for doc_id, title, owner_id, sensitivity, status in (await session.execute(trash_stmt)).all()
+            {"id": str(doc_id), "title": title, "owner_id": str(owner_id), "sensitivity": sensitivity, "status": status,
+             **_version_fields(ps, ss, pc)}
+            for doc_id, title, owner_id, sensitivity, status, ps, ss, pc in (await session.execute(trash_stmt)).all()
         ]
-    stmt = select(Document.id, Document.title, Document.owner_id, Document.sensitivity, Document.status).where(
+    stmt = select(Document.id, Document.title, Document.owner_id, Document.sensitivity, Document.status,
+                  *_VERSION_COLUMNS).outerjoin(DocumentVersion, DocumentVersion.id == Document.current_version_id).where(
         Document.status == "active",
         or_(Document.expires_at.is_(None), Document.expires_at > func.now()),  # FR-D8
         _visible_document_clause(principal_list),
@@ -536,8 +547,9 @@ async def list_documents_view(session: AsyncSession, *, user: User, view: str = 
         raise AppError(400, "Invalid document view")
     stmt = stmt.order_by(Document.title)
     return [
-        {"id": str(doc_id), "title": title, "owner_id": str(owner_id), "sensitivity": sensitivity, "status": status}
-        for doc_id, title, owner_id, sensitivity, status in (await session.execute(stmt)).all()
+        {"id": str(doc_id), "title": title, "owner_id": str(owner_id), "sensitivity": sensitivity, "status": status,
+         **_version_fields(ps, ss, pc)}
+        for doc_id, title, owner_id, sensitivity, status, ps, ss, pc in (await session.execute(stmt)).all()
     ]
 
 
@@ -621,7 +633,9 @@ async def search_documents(
             Document.status,
             Document.owner_id,
             match_kind_expr.label("match_kind"),
+            *_VERSION_COLUMNS,
         )
+        .outerjoin(DocumentVersion, DocumentVersion.id == Document.current_version_id)
         .where(*filters)
         .order_by(Document.title)
     )
@@ -634,8 +648,9 @@ async def search_documents(
             "status": st,
             "owner_id": str(owner_id),
             "match_kind": mk,
+            **_version_fields(ps, ss, pc),
         }
-        for doc_id, title, sens, st, owner_id, mk in (await session.execute(stmt)).all()
+        for doc_id, title, sens, st, owner_id, mk, ps, ss, pc in (await session.execute(stmt)).all()
     ]
 
 
@@ -711,7 +726,9 @@ async def search_documents_page(
             Document.owner_id,
             Document.created_at,
             match_kind_expr.label("match_kind"),
+            *_VERSION_COLUMNS,
         )
+        .outerjoin(DocumentVersion, DocumentVersion.id == Document.current_version_id)
         .where(*filters)
         .order_by(Document.created_at.desc(), Document.id.desc())
         .limit(size + 1)
@@ -725,6 +742,7 @@ async def search_documents_page(
             "status": row.status,
             "owner_id": str(row.owner_id),
             "match_kind": row.match_kind,
+            **_version_fields(row.parse_status, row.scan_status, row.parse_confidence),
         }
         for row in items
     ], next_cursor
@@ -929,6 +947,7 @@ async def list_documents_api(
                 "status": row.get("status") or "active",
                 "parse_status": row.get("parse_status") or "available",
                 "scan_status": row.get("scan_status") or "unknown",
+                "parse_confidence": row.get("parse_confidence"),
             }
             for row in rows
         ],
@@ -944,7 +963,7 @@ async def upload_document(
     storage: ObjectStorage = Depends(get_storage),
 ) -> dict:
     from .auth import redis_client
-    from .ingest import ingest_version
+    from .ingest_dispatch import dispatch_ingest
     from .quotas import enforce_request_quota, enforce_storage_quota, get_effective_policy
     from .retrieval import LiteLLMEmbedder
 
@@ -967,7 +986,9 @@ async def upload_document(
         mime=file.content_type or "application/octet-stream",
         storage=storage,
     )
-    result = await ingest_version(db, embedder=LiteLLMEmbedder.from_settings(), version_id=doc.current_version_id, storage=storage)
+    # Text is ingested inline; rich files are queued for the worker when one is listening (FR-D3, FR-F20).
+    result = await dispatch_ingest(db, version_id=doc.current_version_id, mime=file.content_type or "application/octet-stream",
+                                   embedder=LiteLLMEmbedder.from_settings(), storage=storage)
     return {"document_id": str(doc.id), "title": doc.title, "parse_status": result["status"],
             "scan_status": result.get("scan_status"), "chunks": result["chunks"]}
 

@@ -11,7 +11,7 @@ path. Retrieval filtering is unchanged: it stays permission-filtered before scor
 import re
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from sqlalchemy import delete
@@ -36,6 +36,8 @@ class ParsedChunk:
     page: int | None
     section_path: str
     kind: str = "text"
+    table_json: dict | None = None      # tables: {"caption": str, "rows": [[str]]} (first row = header)
+    confidence: float | None = None     # 0..1 per page when the parser knows it (OCR / layout quality)
 
 
 class Parser(Protocol):
@@ -86,24 +88,22 @@ class TextMarkdownParser:
 
 @dataclass(frozen=True)
 class DoclingParser:
-    """Adapter boundary for rich documents (PDF/DOCX/PPTX/XLSX/images), FR-D3.
+    """Rich documents (PDF/DOCX/PPTX/XLSX/HTML/images), FR-D3, through Docling.
 
-    If Docling is installed we convert to markdown and reuse the text parser; otherwise we raise a
-    clear AppError so the ingest step records a failed parse. Real Docling wiring lands with the
-    worker image (out of scope here: the 5 GB Docker VM can't host it yet)."""
+    Docling and PyTorch live in the worker environment (`workers/`), not in the API's. Where it is not installed this
+    raises a clear AppError so the ingest step records a failed parse instead of losing the upload; when a worker is
+    online, `dispatch_ingest` sends rich files there and this runs inside the worker."""
 
     def parse(self, data: bytes, *, mime: str = "application/octet-stream") -> list[ParsedChunk]:
         try:
-            from docling.document_converter import DocumentConverter  # noqa: F401
+            from .docling_runtime import convert_bytes
         except ImportError as exc:
             raise AppError(
                 503,
                 "Rich document parser unavailable",
-                "Parsing PDF/DOCX/PPTX/XLSX/image files needs the Docling worker, not installed in this deployment.",
+                "Parsing PDF/DOCX/PPTX/XLSX/image files needs the Docling worker, which is not running or installed.",
             ) from exc
-        # ponytail: Docling present but worker not wired. Defer real conversion to the worker image
-        # milestone rather than download parser models on this 5 GB VM.
-        raise AppError(503, "Rich document parser not wired", "Docling is installed but the ingest worker is not wired yet.")
+        return convert_bytes(data, mime)
 
 
 def select_parser(mime: str) -> Parser:
@@ -183,7 +183,7 @@ async def ingest_version(
             for typ, count in pii_counts(findings).items():
                 aggregate[typ] = aggregate.get(typ, 0) + count
             text = mask_text(pc.text, findings) if pii_policy.redact_document_text and findings else pc.text
-            redacted.append(ParsedChunk(text=text, page=pc.page, section_path=pc.section_path, kind=pc.kind))
+            redacted.append(replace(pc, text=text))  # keeps kind, table_json and confidence
         parsed = redacted
         if pii_total:
             # Only counts/types and policy decisions are audited — never raw matched values (FR-O12).
@@ -195,9 +195,10 @@ async def ingest_version(
     await session.execute(delete(Chunk).where(Chunk.version_id == version_id))
     for ordinal, pc in enumerate(parsed):
         session.add(Chunk(document_id=version.document_id, version_id=version_id, ordinal=ordinal,
-                          kind=pc.kind, text=pc.text, page=pc.page, section_path=pc.section_path))
-    version.parse_status = "ready"
-    version.parse_confidence = 1.0
+                          kind=pc.kind, text=pc.text, page=pc.page, section_path=pc.section_path, table_json=pc.table_json))
+    version.parse_status = "indexing"  # parsed and stored, but not searchable until the embeddings exist
+    scores = [pc.confidence for pc in parsed if pc.confidence is not None]
+    version.parse_confidence = min(scores) if scores else 1.0  # the worst page decides: low = "low-confidence parse"
     await audit.record(session, "system:ingest", "document.parse", target,
                        {"version_id": str(version_id), "chunks": len(parsed)})
     await session.commit()
@@ -210,5 +211,7 @@ async def ingest_version(
         parser=type(parser).__name__, chunker="structure-aware",
         embedding_model=embedder.model, chunk_count=len(parsed),
     )
+    version.parse_status = "ready"  # only now can a user's question find this document
+    await session.commit()
     return {"status": "ready", "scan_status": "clean", "chunks": len(parsed), "indexed": indexed,
             "pii_findings": pii_total}
