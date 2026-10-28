@@ -28,7 +28,7 @@ LITELLM_KEY_ALIAS_PATTERN = "^[a-z0-9]+(-[a-z0-9]+)*$"
 
 REQUIRED_ENV_KEYS = (
     ["COMPOSE_PROJECT_NAME", "COMPOSE_PROFILES", "COMPOSE_FILE", "COMPOSE_PATH_SEPARATOR", "BIND_ADDRESS",
-     "OLLAMA_BASE_URL", "TEI_EMBED_MODEL", "TEI_RERANK_MODEL", "VLLM_MODEL"]
+     "WEB_UPSTREAM", "OLLAMA_BASE_URL", "TEI_EMBED_MODEL", "TEI_RERANK_MODEL", "VLLM_MODEL"]
     + [s.port_env for s in SERVICES] + list(USERS) + list(SECRETS)
 )
 
@@ -55,7 +55,7 @@ def default_answers(tier: str, ports: dict[str, int], host_ollama: bool, gpu: bo
         "bind": "127.0.0.1",
         "gpu": gpu,
         "host_ollama": host_ollama,
-        "optional": {"ollama": not host_ollama, "vllm": False, "tei-embed": False, "tei-rerank": False, "keycloak": tier != "lite", "qdrant": False},
+        "optional": {"ollama": not host_ollama, "vllm": False, "tei-embed": False, "tei-rerank": False, "keycloak": tier != "lite", "qdrant": False, "caddy": False},
         "tei_models": {"tei-embed": "", "tei-rerank": ""},
         "vllm_model": "",
         "ports": dict(ports),
@@ -82,6 +82,7 @@ def render_env(a: dict, images: dict[str, str]) -> str:
         "COMPOSE_PATH_SEPARATOR=,",
         f"COMPOSE_FILE={','.join(files)}",
         f"BIND_ADDRESS={a['bind']}",
+        "WEB_UPSTREAM=host.docker.internal:13000",  # Caddy -> web dev server on the host; API stays private behind it
         "OLLAMA_BASE_URL=" + ("http://host.docker.internal:11434" if a["host_ollama"] else "http://ollama:11434"),
         f"TEI_EMBED_MODEL={a['tei_models']['tei-embed']}",
         f"TEI_RERANK_MODEL={a['tei_models']['tei-rerank']}",
@@ -214,7 +215,7 @@ def load_answers(root: Path) -> dict:
         "bind": env["BIND_ADDRESS"],
         "gpu": "compose.gpu.yaml" in env["COMPOSE_FILE"],
         "host_ollama": "host.docker.internal" in env["OLLAMA_BASE_URL"],
-        "optional": {n: n in profiles for n in ("ollama", "vllm", "tei-embed", "tei-rerank", "keycloak", "qdrant")},
+        "optional": {n: n in profiles for n in ("ollama", "vllm", "tei-embed", "tei-rerank", "keycloak", "qdrant", "caddy")},
         "tei_models": {"tei-embed": env["TEI_EMBED_MODEL"], "tei-rerank": env["TEI_RERANK_MODEL"]},
         "vllm_model": env.get("VLLM_MODEL", ""),
         "ports": {s.name: int(env.get(s.port_env, s.default_port)) for s in SERVICES},

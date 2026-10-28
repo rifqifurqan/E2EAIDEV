@@ -25,6 +25,7 @@ SERVICES = (
     Service("tei-rerank", "TEI reranker", 18082, "TEI_RERANK_PORT", profile="tei-rerank"),
     Service("keycloak", "Keycloak (SSO)", 18180, "KEYCLOAK_PORT", profile="keycloak"),
     Service("qdrant", "Qdrant (vector store, P1)", 16333, "QDRANT_PORT", profile="qdrant"),
+    Service("caddy", "Caddy (HTTPS front door, local CA)", 18443, "CADDY_PORT", profile="caddy"),
 )
 BY_NAME = {s.name: s for s in SERVICES}
 

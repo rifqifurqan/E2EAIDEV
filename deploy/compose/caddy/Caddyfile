@@ -1,0 +1,22 @@
+# Generated for the e2eai Caddy profile (PRD T1). Local CA: browsers must trust Caddy's root certificate once.
+{
+	admin off
+	local_certs
+	auto_https disable_redirects
+	default_sni localhost
+}
+
+# Named sites: Caddy issues certificates per name (a site with no host name gets none and every handshake fails).
+# To reach this install by another name (a LAN host name), add it to this list and restart the caddy service.
+https://localhost:8443, https://127.0.0.1:8443 {
+	tls internal
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	reverse_proxy {$WEB_UPSTREAM}
+}

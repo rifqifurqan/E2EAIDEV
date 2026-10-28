@@ -243,6 +243,7 @@ def init(
     out.print("\n[bold]3/6 Services[/bold]  always installed: " + ", ".join(s.name for s in SERVICES if s.profile is None))
     if not yes:
         a["optional"]["keycloak"] = typer.confirm("  Keycloak SSO (heavier; usually Standard tier)?", default=a["optional"]["keycloak"])
+        a["optional"]["caddy"] = typer.confirm("  Caddy HTTPS front door (local CA; proxies the web app on port 13000)?", default=False)
 
     out.print("\n[bold]4/6[/bold]", end="")
     _model_step(a, hw, root, yes)

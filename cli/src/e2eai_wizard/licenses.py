@@ -35,6 +35,7 @@ TOOL_LICENSES: dict[str, ToolLicense] = {
     "tei-rerank": ToolLicense("Text Embeddings Inference", "Apache-2.0", "permissive"),
     "keycloak": ToolLicense("Keycloak", "Apache-2.0", "permissive"),
     "qdrant": ToolLicense("Qdrant", "Apache-2.0", "permissive"),
+    "caddy": ToolLicense("Caddy", "Apache-2.0", "permissive"),
 }
 
 _REVERIFY = ("Tool licenses were entered from general knowledge and not re-checked against upstream at build time; "

@@ -140,6 +140,21 @@ services:
     ports: ["${BIND_ADDRESS}:${QDRANT_PORT}:6333"]
     restart: unless-stopped
 
+  caddy:
+    # PRD T1: the single HTTPS front door (local CA on Lite). Proxies only the web app; the API is reached through
+    # the web app's /api proxy and is never published here. Admin API is off in the Caddyfile.
+    profiles: [caddy]
+    image: ${E2EAI_IMAGE_CADDY:-}
+    environment:
+      WEB_UPSTREAM: ${WEB_UPSTREAM}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    ports: ["${BIND_ADDRESS}:${CADDY_PORT}:8443"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    restart: unless-stopped
+
   keycloak:
     profiles: [keycloak]
     image: ${E2EAI_IMAGE_KEYCLOAK:-}
@@ -164,3 +179,5 @@ volumes:
   vllmcache:
   teidata:
   qdrantdata:
+  caddydata:
+  caddyconfig:
