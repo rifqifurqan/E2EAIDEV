@@ -8,8 +8,10 @@ Self-hosted **End-to-End Enterprise AI Development Lab**. It covers each lifecyc
 3. `AGENTS.md`: created in Phase 0 (PRD §17.7). It holds setup and conventions plus the **Progress** and **Decisions** sections. Read it at the start of each session.
 
 ## Current status
-- **Planning done, no code yet.** Next: **Phase 0** (PRD §13): repo skeleton, **Lite tier first** (PRD §12; this PC is Lite-class), CLI install wizard with model selection, OIDC, org model, OpenFGA, adapter framework, audit log.
-- Update this section when a phase completes.
+- **Phases 0-3 are coded and the core path works end to end** (evidence: `AGENTS.md` -> Progress; chronological log: `progress_2026-10-05.txt`; ordered task list: `PRD_CRON_BACKLOG.md`).
+- **Real:** Ragas as a Lab tool (`adapters/eval/ragas`), wizard, pinned Docker stack, API (auth, sharing, permission-aware retrieval, chat, bots, governance), web UI (EN/ID), Celery worker + Docling (PDF/DOCX/PPTX/XLSX/images with OCR, tables, page anchors), optional Caddy HTTPS profile.
+- **Not real yet:** every Lab stage except Ragas (`security-red-team.local`, `load-test.local`, ... are deterministic offline slices, not DeepEval/Phoenix/promptfoo/garak/k6/Langfuse), Temporal, real external connectors and OAuth token exchange, CI workflows, HA and scale validation.
+- Update this section when that changes.
 
 ## Build rules (summary of PRD §17; read the full section)
 - **Strict phase order.** Build only the current phase's priority (P0 = Phase 0–1). Don't start later-phase features early, even partially.
@@ -30,22 +32,26 @@ Self-hosted **End-to-End Enterprise AI Development Lab**. It covers each lifecyc
 `apps/api` (FastAPI, Python 3.12, uv) · `apps/web` (Next.js, TypeScript, pnpm) · `workers/` · `adapters/<stage>/<tool>/` · `cli/` (wizard, Typer) · `catalog/{models,tools}.yaml` · `deploy/{compose,helm,versions.lock}` · `tests/e2e/` (one test per user story, e.g. `test_us03_budi_sees_nothing.py`) · `docs/`
 
 ## Commands
-- `cd cli && uv run e2eai`: install wizard (services, ports, usernames/passwords → `deploy/compose/.env`, `e2eai.yaml`). `--yes` accepts defaults; `--force` replaces an existing `.env` (a backup is kept).
-- `cd cli && uv run pytest -q`: wizard tests.
-- `cd deploy/compose && docker compose config --quiet`: validate; `docker compose up -d`: start infra (check ports/servers first, per global rules).
-- Planned: `make verify-phase-N` (no `make` on the owner's Windows PC yet; use uv scripts until decided).
+- `cd cli && uv run e2eai init` (full setup) / `uv run e2eai models` (change models, keep passwords): install wizard → `deploy/compose/.env`, `e2eai.yaml`. `--yes` accepts defaults; `--force` replaces an existing `.env` (a backup is kept). `uv run pytest -q`: wizard tests.
+- `cd deploy/compose && docker compose up -d`: infrastructure (check ports/servers first, per global rules). Optional profiles: `ollama`, `tei-embed`, `tei-rerank`, `vllm`, `qdrant`, `keycloak`, `caddy`.
+- API: `cd apps/api && uv run uvicorn e2eai.main:app --host 127.0.0.1 --port 18000 --proxy-headers --forwarded-allow-ips 127.0.0.1`. Web: `cd apps/web && pnpm dev` (proxies `/api/v1` to `E2EAI_API_ORIGIN`, default `http://127.0.0.1:18000`; never assume port 8000, other local projects use it).
+- Worker, in its own environment OUTSIDE the repo (see `workers/README.md`): `UV_PROJECT_ENVIRONMENT=<dir> uv run --project workers e2eai-worker`.
+- **API tests delete table contents. Run them against the dedicated test database, never the dev one:** in `apps/api`, `E2EAI_DB_NAME=e2eai_test E2EAI_VALKEY_DB=1 E2EAI_OPENFGA_STORE=e2eai-test uv run pytest -q` (create the database with the `vector` extension and run `alembic upgrade head` once; `tests/conftest.py` empties it per module and never touches `e2eai`).
+- Web gate: `cd apps/web && pnpm vitest run && pnpm run typecheck && pnpm lint`.
+- `uv run e2eai-api verify-phase-0` (apps/api) checks the Phase 0 stack. `make verify-phase-N` is not available (no `make` on the owner's Windows PC).
 
 ## Dev machine (owner's PC)
 - Windows 11, Docker Desktop with WSL2 (Ubuntu), 16 threads, ~22 GB RAM.
-- Raise the WSL memory limit to ~14 GB in `%USERPROFILE%\.wslconfig` before running the full `core` profile.
+- Docker is limited to **5 GB RAM / 4 CPUs** in `%USERPROFILE%\.wslconfig` on purpose (shared with other projects): do not change it. Heavy things (Docling worker, API, web) run natively on the host.
+- **Disk and memory are tight.** `D:` (repo, the Docker VM disk and the Windows pagefile) was ~99% full, and RAM commit was near its limit; `C:` has room. Keep big environments on `C:` (the worker venv lives in `C:\Users\<you>\.e2eai\`), and do not run Next dev, the Docling worker and a full test run at the same time.
 - **GPU: RTX 3060 Laptop, 6 GB VRAM.** Ollama with small quantized models works. **vLLM doesn't fit**: test the GPU profile on a rented cloud GPU.
 - System Python is 3.10. Use `uv` to get 3.12 per project; never change the system Python. Node 20 is available.
 - Langfuse (ClickHouse) is heavy: keep it in its own profile on this machine.
 
 ## Working with the owner
-- Git: never commit or push unless explicitly asked. No Claude/Anthropic attribution in commits (see global CLAUDE.md).
+- Git: outside the build, never commit or push unless explicitly asked. During the build the owner authorized commit + push after each milestone whose tests pass (`AGENTS.md` → Owner instructions). Never commit secrets. No Claude/Anthropic attribution in commits (see global CLAUDE.md).
 - **Push auth:** git's saved HTTPS credential is a different account (`jihanint`), and SSH only works for the `ieko-media` org. Push with:
   `git -c credential.helper= -c "credential.helper=!gh auth git-credential" push`
 - Remote: https://github.com/rifqifurqan/E2EAIDEV
-- The everything-claude-code plugin hook blocks the Write tool from creating `.md`/`.txt` files other than README/CLAUDE/AGENTS/CONTRIBUTING. Progress and decisions therefore live inside `AGENTS.md`, by owner decision (no separate PROGRESS/DECISIONS files).
+- The everything-claude-code plugin hook blocks the Write tool from creating `.md`/`.txt` files other than README/CLAUDE/AGENTS/CONTRIBUTING. Progress and decisions therefore live inside `AGENTS.md`; dated progress files (`progress_<date>.txt`) are written through the shell, by owner request.
 - The owner writes in English or Indonesian; reply in the language they used.

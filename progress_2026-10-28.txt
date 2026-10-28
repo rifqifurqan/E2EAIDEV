@@ -1,0 +1,67 @@
+E2EAIDEV - PROGRESS 2026-10-28
+==============================
+For: the project owner and any builder (human or AI). Earlier history: progress_2026-10-05.txt.
+Current state in short: AGENTS.md -> Progress. Rules and commands: CLAUDE.md.
+
+WHAT WAS ASKED
+Fix the five findings of the status check: (1) Docker stack dead, (2) Docling was a stub, (3) the Lab was local-only
+(*.local), (4) no real worker / Caddy / Temporal, (5) stale documents.
+
+1. DOCKER STACK                                   DONE
+   - Cause of "dead after reboot": postgres, valkey and seaweedfs had restart policy "no" (compose says unless-stopped).
+     Fixed with docker update; all six containers now restart by themselves. Data was intact (migration head 0035).
+   - Found: the web proxy was hard-coded to port 8000, which another local project uses; documented API port is 18000.
+     Now E2EAI_API_ORIGIN, default 18000.
+
+2. DOCLING                                        DONE (proven end to end)
+   - Real conversion: headings, page anchors, structured tables with caption, figure captions, OCR for scans,
+     per-page confidence, file-type sniffing (browsers send application/octet-stream).
+   - Runs in workers/ (own environment on C:, outside the repo), not in the API venv.
+   - Live check with real API + worker + PDF: upload answers "pending" in about a second; the worker parses it; once ready
+     it is shared; the colleague's answer cites page 2 (table, "2. Commercial terms") and page 3 ("3. Term"); a user it
+     was not shared with gets nothing (no citation, no title, no hint).
+   - Bugs found by that check and fixed: the document list never returned the real parse_status; "ready" was committed
+     before the embeddings existed (now pending -> indexing -> ready); a heading-only document (a scanned form) was
+     dropped as empty.
+
+3. LAB TOOLS                                      PARTLY DONE (Ragas is real; the other stages are not)
+   - Ragas is real, as a separate service (adapters/eval/ragas, own environment on C:, contract GET /info, GET /health,
+     POST /run). The platform reaches it through ragas_http_adapter.py with a per-run gateway key (never the master key).
+   - Local judge (qwen3.5:4b through LiteLLM): faithful answer scored 1.0, invented answer scored 0.0.
+   - Found: Ragas defaults (max_tokens 1024, temperature 0.01) cut a thinking model off mid-JSON; now temperature 0,
+     max_tokens 4096, thinking off. langchain-community had to be pinned below 0.4.
+   - NOT done: DeepEval, Phoenix, promptfoo, garak, k6, Langfuse. The *.local slices remain for those stages.
+
+4. WORKER / CADDY / TEMPORAL                      WORKER and CADDY done, TEMPORAL not done
+   - Celery is the real job engine (retries, failure marker, worker probe); Caddy is an optional HTTPS profile pinned by
+     digest (named sites; a site without a host name gets no certificate - found live).
+   - Temporal: only the boundary exists. It needs a server container, the SDK and workflow definitions; Celery is the
+     default and is verified, so this was left for a later session.
+
+5. DOCUMENTS                                      DONE
+   - CLAUDE.md and AGENTS.md rewritten to match reality (they said "no code yet" / Phase 0), with Decisions.
+
+ALSO FOUND AND FIXED
+   - API tests deleted table contents on the development database. They now run on a dedicated e2eai_test database
+     (conftest refuses the dev database). 32 failing tests became 931 passing; the cause was shared state and 2 stale tests.
+   - Web tests: locale leaked between tests (6 failures); 5 s timeout failed under load.
+   - Log redaction nulled record.args and broke uvicorn's access log on every request.
+
+TEST STATUS (2026-10-28, final run)
+   api 949 passed, 1 skipped, 0 failed (isolated test database, nothing else touching it)
+   cli 94 passed | web 334 passed + typecheck + lint | workers 12 passed (real Docling) | ragas adapter 13 passed
+   live: PDF upload -> worker -> share -> cited answer (all checks passed); Ragas through the platform API (6 of 6 scored)
+   Earlier in the day one API test failed once because a second pytest run cleared the same test database at the same time.
+
+RISKS ON THIS PC (need the owner)
+   - D: is almost full: it holds the Docker VM disk (docker_data.vhdx ~133 GB, ~85 GB of it unused images from other
+     projects) and the Windows pagefile (d:\pagefile.sys). Memory commit reached its limit and a Next dev server crashed.
+     Options: move the pagefile to C: (72 GB free), prune unused Docker images, or move the Docker data disk.
+   - On 2026-10-28 D: reached 0 bytes free while this work was finishing: a failed write emptied AGENTS.md (rewritten),
+     and a Next dev server had already crashed. A full D: can also corrupt the Docker volumes (Postgres).
+   - Behind Caddy on Docker Desktop every client shows as the Docker gateway IP, so the per-IP login limit is shared.
+
+NEXT
+   1. DeepEval adapter in the same shape (telemetry must be switched off), then Phoenix, promptfoo, k6.
+   2. Temporal behind JobEngine; Langfuse as an optional tracing profile.
+   3. CI workflow once the GitHub token has the workflow scope.
