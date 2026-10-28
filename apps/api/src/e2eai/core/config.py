@@ -57,6 +57,24 @@ def validate_components(cfg: dict) -> dict[str, str]:
     return {key: raw.get(key, default) for key, default in _COMPONENT_DEFAULTS.items()}
 
 
+DEFAULT_RAGAS_URL = "http://127.0.0.1:18701"
+
+
+def lab_settings(cfg: dict) -> dict:
+    """Where the Lab tools live and which models judge (PRD T6, FR-T3). Defaults: the first chat and embedding model
+    chosen in the wizard, and the standard adapter port. Override under `lab:` in e2eai.yaml."""
+    lab = cfg.get("lab") or {}
+    models = cfg.get("models") or {}
+    chat = (models.get("chat") or [""])[0]
+    embedding = (models.get("embedding") or [""])[0]
+    tools = lab.get("tools") or {}
+    return {
+        "ragas_url": (tools.get("ragas") or DEFAULT_RAGAS_URL).rstrip("/"),
+        "judge_model": lab.get("judge_model") or chat,
+        "embedding_model": lab.get("embedding_model") or embedding,
+    }
+
+
 def _resolve_secret_ref(value: str, env_values: dict[str, str]) -> str:
     """Resolve optional secret references without storing secret values in e2eai.yaml."""
     if not value:
@@ -85,6 +103,9 @@ class Settings:
     s3_bucket: str = "e2eai"
     celery_broker_url: str = ""  # FR-F20: own Valkey database, apart from sessions
     celery_result_url: str = ""
+    lab_ragas_url: str = DEFAULT_RAGAS_URL  # Lab tool adapters (PRD T6)
+    lab_judge_model: str = ""
+    lab_embedding_model: str = ""
     auth_provider: str = "local"
     oidc_authorization_endpoint: str = ""
     oidc_token_endpoint: str = ""
@@ -108,6 +129,7 @@ def get_settings() -> Settings:
     e = _env(root)
     cfg = yaml.safe_load((root / "e2eai.yaml").read_text(encoding="utf-8"))
     components = validate_components(cfg)
+    lab = lab_settings(cfg)
     auth_cfg = cfg.get("auth", {})
     oidc_cfg = auth_cfg.get("oidc", {})
     host = "127.0.0.1"
@@ -127,6 +149,9 @@ def get_settings() -> Settings:
         s3_bucket=e.get("S3_BUCKET", "e2eai"),
         celery_broker_url=f"redis://:{e['VALKEY_PASSWORD']}@{host}:{e['VALKEY_PORT']}/{e.get('E2EAI_CELERY_BROKER_DB', '2')}",
         celery_result_url=f"redis://:{e['VALKEY_PASSWORD']}@{host}:{e['VALKEY_PORT']}/{e.get('E2EAI_CELERY_RESULT_DB', '3')}",
+        lab_ragas_url=lab["ragas_url"],
+        lab_judge_model=lab["judge_model"],
+        lab_embedding_model=lab["embedding_model"],
         tei_api_key=e.get("TEI_API_KEY", ""),
         tei_rerank_port=int(e.get("TEI_RERANK_PORT", "18082")),
         default_language=cfg.get("locale", {}).get("default_language", "id"),

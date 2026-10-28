@@ -957,6 +957,7 @@ class DatasetAnnotationsIn(BaseModel):
 class RunIn(BaseModel):
     dataset_id: uuid.UUID
     adapter: str = "ragas.local"
+    metrics: list[str] | None = None  # real adapters only; default faithfulness + answer_relevancy
 
 
 class CostEstimateIn(BaseModel):
@@ -1132,6 +1133,18 @@ async def list_runs_api(
     return {"runs": runs, "next_cursor": next_cursor}
 
 
+async def resolve_eval_adapter(name: str, *, metrics: list[str] | None = None) -> EvalAdapter:
+    """`ragas.local` is the offline deterministic adapter (tests, quick checks); `ragas` is the real Ragas service (PRD T6)."""
+    if name == "ragas.local":
+        return LocalRagasAdapter()
+    if name == "ragas":
+        from .core.config import get_settings
+        from .ragas_http_adapter import build_ragas_adapter
+
+        return await build_ragas_adapter(get_settings(), run_id=uuid.uuid4().hex, metrics=metrics)
+    raise AppError(400, "Unsupported eval adapter", "Use ragas.local (offline) or ragas (the real Ragas service).")
+
+
 @router.post("/runs")
 async def run_eval_api(body: RunIn, sess: dict = Depends(current_session), db: AsyncSession = Depends(get_session)) -> dict:
     from .auth import redis_client
@@ -1144,9 +1157,8 @@ async def run_eval_api(body: RunIn, sess: dict = Depends(current_session), db: A
     policy = await get_effective_policy(db, user=user)
     await enforce_request_quota(redis_client(), user_id=sess["user_id"], endpoint="evals", policy=policy)
 
-    if body.adapter != "ragas.local":
-        raise AppError(400, "Unsupported eval adapter", "Only ragas.local is wired in P0.")
-    run = await run_evaluation(db, dataset_id=body.dataset_id, adapter=LocalRagasAdapter(), created_by=f"user:{user.id}")
+    adapter = await resolve_eval_adapter(body.adapter, metrics=body.metrics)
+    run = await run_evaluation(db, dataset_id=body.dataset_id, adapter=adapter, created_by=f"user:{user.id}")
     return {"id": str(run.id), "adapter": run.adapter, "metrics": run.metrics}
 
 
