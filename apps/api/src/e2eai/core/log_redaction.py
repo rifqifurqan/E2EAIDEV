@@ -36,7 +36,14 @@ class RedactingFilter(logging.Filter):
             message = record.getMessage()
         except Exception:
             message = str(record.msg)
-        record.msg = redact_secrets(message)
+        redacted = redact_secrets(message)
+        if redacted == message:
+            return True  # nothing to hide: leave msg/args alone, because formatters such as uvicorn's read record.args
+        if record.name == "uvicorn.access" and isinstance(record.args, tuple) and len(record.args) == 5:
+            client, method, path, http_version, status = record.args  # keep the 5-tuple shape its formatter unpacks
+            record.args = (client, method, redact_secrets(str(path)), http_version, status)
+            return True
+        record.msg = redacted
         record.args = None
         return True
 

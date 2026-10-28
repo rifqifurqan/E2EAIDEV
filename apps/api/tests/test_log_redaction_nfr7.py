@@ -95,3 +95,35 @@ def test_with_retry_enforces_per_attempt_timeout():
 
     with pytest.raises(RetryExhausted):
         asyncio.run(with_retry(slow, attempts=2, timeout=0.05, sleep=nosleep, jitter=0))
+
+
+# --- uvicorn's access formatter reads record.args as a 5-tuple: the filter must not break it -----------------------
+
+def _access_record(path: str) -> logging.LogRecord:
+    return logging.LogRecord("uvicorn.access", logging.INFO, __file__, 1, '%s - "%s %s HTTP/%s" %d',
+                             ("127.0.0.1:5000", "GET", path, "1.1", 200), None)
+
+
+def test_a_clean_access_log_line_keeps_its_args_so_uvicorn_can_format_it():
+    from uvicorn.logging import AccessFormatter
+
+    record = _access_record("/api/v1/health")
+    assert RedactingFilter().filter(record) is True
+    assert record.args == ("127.0.0.1:5000", "GET", "/api/v1/health", "1.1", 200)
+    assert "GET /api/v1/health HTTP/1.1" in AccessFormatter(use_colors=False).format(record)  # used to raise
+
+
+def test_a_secret_in_the_request_path_is_redacted_without_breaking_the_five_tuple():
+    from uvicorn.logging import AccessFormatter
+
+    record = _access_record("/auth/oidc/callback?code=1&token=SUPERSECRETVALUE123")
+    RedactingFilter().filter(record)
+    assert isinstance(record.args, tuple) and len(record.args) == 5
+    out = AccessFormatter(use_colors=False).format(record)
+    assert "SUPERSECRETVALUE123" not in out and "[REDACTED]" in out
+
+
+def test_other_loggers_with_secrets_are_still_rendered_and_redacted():
+    record = logging.LogRecord("e2eai", logging.INFO, __file__, 1, "connect password=%s ok", ("hunter2secret",), None)
+    RedactingFilter().filter(record)
+    assert "hunter2secret" not in record.getMessage() and record.args is None

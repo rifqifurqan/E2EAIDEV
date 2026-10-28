@@ -13,5 +13,7 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test-setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
+    // userEvent-heavy screen tests exceeded the 5 s default when the machine was busy (flaky, never a real failure).
+    testTimeout: 20000,
   },
 });

@@ -50,8 +50,10 @@ async def _setup(session):
     await seed_demo(session, password="TestPassword_123456789")
     await bootstrap_admin(session, password="TestPassword_123456789")
     await _cleanup(session)
-    org = await session.scalar(select(Organization))
     admin = await session.scalar(select(User).where(User.email == ADMIN_EMAIL))
+    # SCIM maps departments only inside the acting admin's own organization (NFR-18, org confinement),
+    # so the divisions under test must live in the admin's org, not in whichever org sorts first.
+    org = await session.get(Organization, admin.org_id)
     sales = Division(org_id=org.id, name="SCIM Sales")
     hr = Division(org_id=org.id, name="SCIM HR")
     session.add_all([sales, hr])

@@ -41,6 +41,48 @@ if os.environ.get("E2EAI_SKIP_DB_TESTS"):
             report.longrepr = (str(item.path), item.location[1] or 0, "Skipped: no live stack (E2EAI_SKIP_DB_TESTS)")
 
 
+async def _truncate_dedicated_test_state() -> None:
+    """Empty every table (except alembic_version) and the Valkey database of a DEDICATED test install."""
+    from redis.asyncio import Redis
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    from e2eai.core.config import get_settings
+
+    settings = get_settings()
+    engine = create_async_engine(settings.database_url)
+    try:
+        async with engine.begin() as conn:
+            names = (await conn.execute(text(
+                "select tablename from pg_tables where schemaname = 'public' and tablename <> 'alembic_version'"))).scalars().all()
+            if names:
+                await conn.execute(text("TRUNCATE " + ", ".join(f'"{n}"' for n in names) + " RESTART IDENTITY CASCADE"))
+    finally:
+        await engine.dispose()
+    redis = Redis.from_url(settings.valkey_url)
+    try:
+        await redis.flushdb()  # sessions / rate-limit counters of the test database only (never database 0)
+    finally:
+        await redis.aclose()
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _every_module_starts_from_an_empty_test_install():
+    """Order independence: many tests wipe tables themselves and assume nobody left rows behind (e.g. message_citations
+    from an earlier module). On a dedicated `*_test` database each module starts empty. The development database
+    (`e2eai`, Valkey database 0) is never touched: run the suite with
+    E2EAI_DB_NAME=e2eai_test E2EAI_VALKEY_DB=1 E2EAI_OPENFGA_STORE=e2eai-test (see AGENTS.md)."""
+    if os.environ.get("E2EAI_SKIP_DB_TESTS"):
+        yield
+        return
+    from e2eai.core.config import get_settings
+
+    url = get_settings().database_url
+    if url.rsplit("/", 1)[-1].endswith("_test") and not get_settings().valkey_url.endswith("/0"):
+        asyncio.run(_truncate_dedicated_test_state())
+    yield
+
+
 async def _restore_erased_demo_user() -> None:
     from e2eai.db import User, sessions
 

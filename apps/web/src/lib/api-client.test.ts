@@ -64,19 +64,26 @@ describe("API client endpoint paths", () => {
 });
 
 describe("Next runtime wiring", () => {
-  it("proxies /api/v1 requests to the local backend", async () => {
+  async function proxyDestination(): Promise<string> {
     const rewritesFn = nextConfig.rewrites;
     expect(rewritesFn).toBeTypeOf("function");
     if (typeof rewritesFn !== "function") throw new Error("rewrites must be a function");
-    const rewrites = await rewritesFn();
-    expect(rewrites).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          source: "/api/v1/:path*",
-          destination: "http://127.0.0.1:8000/api/v1/:path*",
-        }),
-      ]),
-    );
+    const rewrites = (await rewritesFn()) as { source: string; destination: string }[];
+    return rewrites.find((r) => r.source === "/api/v1/:path*")?.destination ?? "";
+  }
+
+  it("proxies /api/v1 requests to the API's documented port (18000), not generic 8000 that other projects use", async () => {
+    delete process.env.E2EAI_API_ORIGIN;
+    expect(await proxyDestination()).toBe("http://127.0.0.1:18000/api/v1/:path*");
+  });
+
+  it("lets E2EAI_API_ORIGIN point the proxy somewhere else, without a trailing slash problem", async () => {
+    process.env.E2EAI_API_ORIGIN = "http://127.0.0.1:9100/";
+    try {
+      expect(await proxyDestination()).toBe("http://127.0.0.1:9100/api/v1/:path*");
+    } finally {
+      delete process.env.E2EAI_API_ORIGIN;
+    }
   });
 
   it("allows Next hydration scripts in CSP while keeping external scripts blocked", () => {

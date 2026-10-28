@@ -162,7 +162,7 @@ def test_send_message_returns_combined_citations():
 
             doc = await create_seeded_document(
                 session, owner=owner,
-                title="HR Policy", text="The HR policy covers employee benefits.", page=1,
+                title="HR Policy", text="The HR policy covers employees and their benefits.", page=1,  # shares the "employees" axis, so it clears the relevance floor
             )
             await share_document(session, _Authz(), actor=owner,
                                  document_id=doc.id, principal=f"user:{andi.id}")
